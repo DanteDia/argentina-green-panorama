@@ -201,13 +201,19 @@ def backfill(limit: int | None = None, dry_run: bool = False, min_connections: i
                 try:
                     insert_resp = sb.table("nodes").insert(row).execute()
                     if insert_resp.data:
+                        new_node_id = insert_resp.data[0]["id"]
+                        edge_ok = insert_edge_direct(sb, nombre, classified.nombre, rel_type)
+                        if not edge_ok:
+                            # Rollback: delete orphan node
+                            sb.table("nodes").delete().eq("id", new_node_id).execute()
+                            log.warning(f"  Rolled back orphan node {classified.nombre} (edge failed)")
+                            continue
+
                         stats["new_nodes"] += 1
+                        stats["new_edges"] += 1
                         agent_count += 1
                         all_names.append(partner_name)
                         all_names_lower.add(partner_name.lower())
-
-                        if insert_edge_direct(sb, nombre, classified.nombre, rel_type):
-                            stats["new_edges"] += 1
                         log.info(f"  + New node + edge: {nombre} --{rel_type}--> {classified.nombre} [{evidence[:60]}]")
                 except Exception as e:
                     log.error(f"  Insert failed for {partner_name}: {e}")

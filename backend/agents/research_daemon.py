@@ -202,6 +202,26 @@ def insert_edge(source_name: str, target_name: str, rel_type: str, discovery_met
     return False
 
 
+def insert_node_with_edge(node, discovered_from: str, source_name: str, rel_type: str,
+                          depth: int = 1, discovered_by_id: str | None = None,
+                          discovery_method: str = "llm", confidence: float = 0.8) -> tuple[str | None, bool]:
+    """Insert node AND its edge atomically. Deletes node if edge fails. No orphans."""
+    node_id = insert_node(node, discovered_from, depth, discovered_by_id)
+    if not node_id:
+        return None, False
+
+    edge_ok = insert_edge(source_name, node.nombre, rel_type,
+                          discovery_method=discovery_method, confidence=confidence)
+    if not edge_ok:
+        # Rollback: delete the orphan node
+        sb = get_supabase()
+        sb.table("nodes").delete().eq("id", node_id).execute()
+        log.warning(f"  Rolled back orphan node {node.nombre} (edge to {source_name} failed)")
+        return None, False
+
+    return node_id, True
+
+
 MAX_VERIFICATION_ATTEMPTS = 3
 
 
@@ -572,16 +592,18 @@ async def run_deep_discovery_pass(max_nodes: int = MAX_DEEP_DISCOVERY_PER_PASS) 
             # Research and classify the new company
             classified = research_company(partner_name, partner_url)
             if classified:
-                node_id = insert_node(classified, discovered_from=nombre,
-                                     depth=min((node.get("depth") or 0) + 1, MAX_DEPTH))
+                node_id, edge_ok = insert_node_with_edge(
+                    classified, discovered_from=nombre, source_name=nombre,
+                    rel_type=rel_type,
+                    depth=min((node.get("depth") or 0) + 1, MAX_DEPTH),
+                    discovery_method="perplexity_deep", confidence=0.7,
+                )
                 if node_id:
                     results["new_nodes"] += 1
                     budget_remaining -= 1
                     all_known.append(partner_name)
                     all_known_set.add(partner_name.lower())
-
-                    if insert_edge(nombre, partner_name, rel_type,
-                                  discovery_method="perplexity_deep", confidence=0.7):
+                    if edge_ok:
                         results["new_edges"] += 1
                     log.info(f"    + New node from deep discovery: {partner_name} [evidence: {evidence[:60]}]")
 
@@ -593,6 +615,88 @@ async def run_deep_discovery_pass(max_nodes: int = MAX_DEEP_DISCOVERY_PER_PASS) 
              f"{results['new_nodes']} new nodes, {results['new_edges']} new edges")
     log_event("deep_discovery_pass", **results)
     return results
+
+
+async def fix_orphan_nodes():
+    """Find and fix orphan nodes (0 connections). No orphans ever.
+
+    For each orphan:
+    1. Try Perplexity to find at least 1 relationship
+    2. If found → create edge (to existing node or skip)
+    3. If NOT found → delete the orphan node
+    """
+    sb = get_supabase()
+    nodes_resp = sb.table("nodes").select("id, nombre, link, source").execute()
+    edges_resp = sb.table("edges").select("source_id, target_id").execute()
+
+    # Find connected node IDs
+    connected_ids = set()
+    for e in edges_resp.data:
+        connected_ids.add(e["source_id"])
+        connected_ids.add(e["target_id"])
+
+    # Find orphans
+    orphans = [n for n in nodes_resp.data if n["id"] not in connected_ids]
+
+    if not orphans:
+        log.info("  No orphan nodes found")
+        return
+
+    log.info(f"  Found {len(orphans)} orphan nodes, attempting to fix...")
+
+    all_names = [n["nombre"] for n in nodes_resp.data]
+    all_names_lower = {n.lower() for n in all_names}
+    fixed = 0
+    deleted = 0
+
+    for orphan in orphans:
+        nombre = orphan["nombre"]
+        url = orphan.get("link")
+
+        # Try Perplexity to find at least 1 connection
+        relationships = discover_relationships_deep(nombre, url)
+
+        edge_created = False
+        for rel in (relationships or []):
+            partner_name = rel.get("name", "").strip()
+            if not partner_name:
+                continue
+
+            relationship = rel.get("relationship", "partner")
+            rel_type = "partners_with"
+            if relationship in ("funder", "investor", "co_investor", "backed_by"):
+                rel_type = "funds"
+            elif relationship in ("client", "customer"):
+                rel_type = "client_of"
+
+            # Only connect to existing nodes (don't create more potential orphans)
+            if partner_name.lower() in all_names_lower:
+                exact_name = next((n for n in all_names if n.lower() == partner_name.lower()), partner_name)
+                if insert_edge(nombre, exact_name, rel_type,
+                              discovery_method="perplexity_deep", confidence=0.7):
+                    log.info(f"    Fixed orphan: {nombre} --{rel_type}--> {exact_name}")
+                    edge_created = True
+                    break  # One connection is enough
+
+            # Try fuzzy match
+            is_dup, match, score = check_duplicate(partner_name, all_names)
+            if is_dup:
+                if insert_edge(nombre, match, rel_type,
+                              discovery_method="perplexity_deep", confidence=0.7):
+                    log.info(f"    Fixed orphan: {nombre} --{rel_type}--> {match} (fuzzy)")
+                    edge_created = True
+                    break
+
+        if edge_created:
+            fixed += 1
+        else:
+            # No connection found — delete the orphan
+            sb.table("nodes").delete().eq("id", orphan["id"]).execute()
+            log.info(f"    Deleted orphan: {nombre} (no connections found)")
+            deleted += 1
+
+    log.info(f"  Orphan cleanup: {fixed} fixed, {deleted} deleted")
+    log_event("orphan_cleanup", fixed=fixed, deleted=deleted, total_orphans=len(orphans))
 
 
 async def run_one_cycle() -> dict:
@@ -676,18 +780,20 @@ async def run_one_cycle() -> dict:
             summary["duplicates_skipped"] += 1
             continue
 
-        # Insert node with depth propagation
-        node_id = insert_node(node, discovered_from=name, depth=child_depth, discovered_by_id=source_node_id)
+        # Insert node + edge atomically (rollback node if edge fails)
+        node_id, edge_ok = insert_node_with_edge(
+            node, discovered_from=name, source_name=name,
+            rel_type=node.relationship_type,
+            depth=child_depth, discovered_by_id=source_node_id,
+            discovery_method=getattr(node, "discovery_method", "llm"),
+            confidence=getattr(node, "confidence", 0.8),
+        )
         if node_id:
             summary["new_nodes"] += 1
             budget_remaining -= 1
             all_known.append(node.nombre)
             newly_inserted_pairs.append((node, node_id))
-
-            # Insert edge with discovery method and confidence
-            if insert_edge(name, node.nombre, node.relationship_type,
-                          discovery_method=getattr(node, "discovery_method", "llm"),
-                          confidence=getattr(node, "confidence", 0.8)):
+            if edge_ok:
                 summary["new_edges"] += 1
 
     # Step 3b: Funding research via Perplexity for newly inserted nodes
@@ -809,6 +915,11 @@ async def daemon_loop(interval: int = 600):
             if cycle_count % DEEP_DISCOVERY_EVERY_N_CYCLES == 0:
                 log.info("Deep relationship discovery pass (newsletters, social media, press)...")
                 await run_deep_discovery_pass(max_nodes=MAX_DEEP_DISCOVERY_PER_PASS)
+
+            # Every 5th cycle, sweep for orphan nodes (0 connections)
+            if cycle_count % 5 == 0:
+                log.info("Orphan node cleanup...")
+                await fix_orphan_nodes()
 
         except Exception as e:
             log.error(f"Cycle {cycle_count} failed: {e}")
