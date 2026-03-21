@@ -38,8 +38,8 @@ from agents.db_helpers import (
 )
 import aiohttp
 
-from agents.research_agent import spider_company
-from agents.funding_researcher import research_funding
+from agents.research_agent import spider_company, research_company
+from agents.funding_researcher import research_funding, discover_relationships_deep
 
 # Vercel-hosted frontend API for GenLayer verification
 VERIFY_API_BASE = os.environ.get("VERIFY_API_BASE", "https://green-panorama-ar.vercel.app")
@@ -50,6 +50,8 @@ MAX_AGENT_NODES = 500   # Global budget: max agent-discovered nodes total
 
 # --- Perplexity cost management ---
 MAX_FUNDING_QUERIES_PER_CYCLE = 3  # Max Perplexity API calls per research cycle
+MAX_DEEP_DISCOVERY_PER_PASS = 2    # Max nodes to deep-research per pass
+DEEP_DISCOVERY_EVERY_N_CYCLES = 3  # Run deep discovery every N cycles
 
 logging.basicConfig(
     level=logging.INFO,
@@ -484,6 +486,115 @@ def get_source_node_id(name: str) -> str | None:
     return resp.data[0]["id"] if resp.data else None
 
 
+async def run_deep_discovery_pass(max_nodes: int = MAX_DEEP_DISCOVERY_PER_PASS) -> dict:
+    """Deep relationship discovery using Perplexity on already-visited nodes.
+
+    Searches newsletters, press releases, social media, event reports for
+    relationships that official website scraping missed. Creates new edges
+    and potentially new nodes from these discoveries.
+    """
+    sb = get_supabase()
+    state = load_state()
+    visited = set(state.get("visited", []))
+    deep_searched = set(state.get("deep_searched", []))
+
+    # Pick visited nodes that haven't been deep-searched yet
+    # Prioritize seed nodes (depth=0) first
+    resp = sb.table("nodes").select("id, nombre, link, cluster, depth").execute()
+    candidates = [
+        n for n in resp.data
+        if n["nombre"] in visited
+        and n["nombre"] not in deep_searched
+        and n.get("link")
+        and "instagram.com" not in (n["link"] or "")
+    ]
+    # Sort: seeds first, then depth-1
+    candidates.sort(key=lambda n: n.get("depth") or 0)
+
+    if not candidates:
+        log.info("Deep discovery: all visited nodes already deep-searched")
+        return {"deep_searched": 0, "new_edges": 0, "new_nodes": 0}
+
+    results = {"deep_searched": 0, "new_edges": 0, "new_nodes": 0}
+    all_known = get_all_names()
+    all_known_set = {n.lower() for n in all_known}
+    agent_count = get_agent_node_count()
+    budget_remaining = MAX_AGENT_NODES - agent_count
+
+    for node in candidates[:max_nodes]:
+        nombre = node["nombre"]
+        url = node.get("link")
+        log.info(f"  Deep discovery: {nombre} (depth={node.get('depth', 0)})")
+
+        relationships = discover_relationships_deep(nombre, url)
+        results["deep_searched"] += 1
+
+        for rel in relationships:
+            partner_name = rel.get("name", "").strip()
+            if not partner_name:
+                continue
+
+            partner_url = rel.get("link")
+            relationship = rel.get("relationship", "partner")
+            evidence = rel.get("evidence", "")
+
+            # Map relationship type
+            rel_type = "partners_with"
+            if relationship in ("funder", "investor", "co_investor", "backed_by"):
+                rel_type = "funds"
+            elif relationship in ("client", "customer"):
+                rel_type = "client_of"
+            elif relationship in ("portfolio", "portfolio_company"):
+                rel_type = "portfolio"
+
+            # Check if partner already exists as a node
+            if partner_name.lower() in all_known_set:
+                # Just create the edge if it doesn't exist
+                if insert_edge(nombre, partner_name, rel_type,
+                              discovery_method="perplexity_deep", confidence=0.7):
+                    results["new_edges"] += 1
+                    log.info(f"    + Edge: {nombre} --{rel_type}--> {partner_name} [evidence: {evidence[:60]}]")
+                continue
+
+            # New company — check budget and research it
+            if budget_remaining <= 0:
+                continue
+
+            # Check fuzzy dedup
+            is_dup, match, score = check_duplicate(partner_name, all_known)
+            if is_dup:
+                # Create edge to the matched existing node instead
+                if insert_edge(nombre, match, rel_type,
+                              discovery_method="perplexity_deep", confidence=0.7):
+                    results["new_edges"] += 1
+                continue
+
+            # Research and classify the new company
+            classified = research_company(partner_name, partner_url)
+            if classified:
+                node_id = insert_node(classified, discovered_from=nombre,
+                                     depth=min((node.get("depth") or 0) + 1, MAX_DEPTH))
+                if node_id:
+                    results["new_nodes"] += 1
+                    budget_remaining -= 1
+                    all_known.append(partner_name)
+                    all_known_set.add(partner_name.lower())
+
+                    if insert_edge(nombre, partner_name, rel_type,
+                                  discovery_method="perplexity_deep", confidence=0.7):
+                        results["new_edges"] += 1
+                    log.info(f"    + New node from deep discovery: {partner_name} [evidence: {evidence[:60]}]")
+
+        # Mark as deep-searched
+        state.setdefault("deep_searched", []).append(nombre)
+        save_state(state)
+
+    log.info(f"  Deep discovery pass: {results['deep_searched']} nodes searched, "
+             f"{results['new_nodes']} new nodes, {results['new_edges']} new edges")
+    log_event("deep_discovery_pass", **results)
+    return results
+
+
 async def run_one_cycle() -> dict:
     """Run a single research cycle on one company.
 
@@ -670,8 +781,9 @@ async def daemon_loop(interval: int = 600):
             summary = await run_one_cycle()
 
             if "budget_exhausted" in summary.get("errors", []):
-                log.info("Node budget exhausted. Running verification pass only...")
+                log.info("Node budget exhausted. Running verification + deep discovery...")
                 await verify_unverified_batch(max_nodes=5)
+                await run_deep_discovery_pass(max_nodes=MAX_DEEP_DISCOVERY_PER_PASS)
                 for _ in range(interval * 3):
                     if not _running:
                         break
@@ -679,8 +791,9 @@ async def daemon_loop(interval: int = 600):
                 continue
 
             if "exhausted" in summary.get("errors", []):
-                log.info("All companies visited. Running verification pass on unverified nodes...")
+                log.info("All companies visited. Running verification + deep discovery...")
                 await verify_unverified_batch(max_nodes=5)
+                await run_deep_discovery_pass(max_nodes=MAX_DEEP_DISCOVERY_PER_PASS)
                 for _ in range(interval * 3):
                     if not _running:
                         break
@@ -691,6 +804,11 @@ async def daemon_loop(interval: int = 600):
             if cycle_count % 3 == 0:
                 log.info("Periodic verification pass...")
                 await verify_unverified_batch(max_nodes=3)
+
+            # Every Nth cycle, run deep relationship discovery (newsletters, social media, press)
+            if cycle_count % DEEP_DISCOVERY_EVERY_N_CYCLES == 0:
+                log.info("Deep relationship discovery pass (newsletters, social media, press)...")
+                await run_deep_discovery_pass(max_nodes=MAX_DEEP_DISCOVERY_PER_PASS)
 
         except Exception as e:
             log.error(f"Cycle {cycle_count} failed: {e}")

@@ -338,8 +338,8 @@ async def spider_company(
             node.relationship_to_source = f"{company_name} -> {partner_name}"
             node.relationship_type = rel_type
             node.discovery_method = discovery_method
-            # Confidence tiers: website=0.8, perplexity=0.7, llm=0.4
-            confidence_map = {"website": 0.8, "perplexity": 0.7, "llm": 0.4}
+            # Confidence tiers: website=0.8, perplexity/deep=0.7, llm=0.4
+            confidence_map = {"website": 0.8, "perplexity": 0.7, "perplexity_deep": 0.7, "llm": 0.4}
             node.confidence = confidence_map.get(discovery_method, 0.5)
             result.discovered_nodes.append(node)
             existing_names.add(partner_name)

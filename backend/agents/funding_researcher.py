@@ -223,3 +223,69 @@ If no funding info found, return: []"""
     except Exception as e:
         log.error(f"HTML funding extraction failed for {company_name}: {e}")
     return []
+
+
+def discover_relationships_deep(company_name: str, url: str | None = None) -> list[dict]:
+    """Use Perplexity Sonar to find relationships from non-website sources.
+
+    Specifically targets: newsletters, press releases, LinkedIn announcements,
+    social media posts, event reports, conference panels, MoU signings,
+    accelerator cohort lists — sources that official websites often miss.
+
+    Cost: ~$0.010 per query via OpenRouter (sonar-pro for better recall).
+    """
+    if not os.getenv("OPENROUTER_API_KEY"):
+        return []
+
+    url_context = f" (website: {url})" if url else ""
+
+    prompt = f"""Search for recent partnerships, collaborations, alliances, and business relationships
+involving "{company_name}"{url_context} in Argentina's green/environmental/sustainability sector.
+
+IMPORTANT: Focus on sources OUTSIDE the company's official website:
+- Press releases and news articles
+- LinkedIn posts and announcements
+- Newsletter mentions
+- Conference/event panel appearances together with other organizations
+- Accelerator cohort announcements
+- MoU (Memorandum of Understanding) signings
+- Joint project announcements
+- Social media announcements (Twitter/X, Instagram business posts)
+- Government gazette entries for joint programs
+- Industry reports mentioning partnerships
+
+For each relationship found, provide:
+- name: the partner/allied organization name
+- link: their website URL if available
+- relationship: partner, funder, client, portfolio_company, ally, co_investor, project_partner
+- evidence: ONE sentence describing where this relationship was announced (e.g. "Announced in LinkedIn post March 2025", "Listed in BYMA accelerator cohort 2024")
+
+CONSTRAINTS:
+- Only real, verifiable relationships with evidence
+- Only organizations connected to green/environmental/sustainability in Argentina
+- Maximum 12 organizations
+- Do NOT include relationships already obvious from {company_name}'s official website
+
+Respond ONLY as a JSON array:
+[{{"name": "Org X", "link": "https://...", "relationship": "partner", "evidence": "..."}}]
+
+If no relationships found outside official website, return: []"""
+
+    try:
+        response = client.chat.completions.create(
+            model=SONAR_PRO_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=3000,
+        )
+        content = response.choices[0].message.content or "[]"
+
+        json_match = re.search(r'\[.*\]', content, re.DOTALL)
+        if json_match:
+            results = json.loads(json_match.group())
+            for r in results:
+                r["_source"] = "perplexity_deep"
+            return results[:12]
+    except Exception as e:
+        log.error(f"Deep relationship discovery failed for {company_name}: {e}")
+    return []
