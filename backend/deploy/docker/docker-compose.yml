@@ -1,0 +1,19 @@
+services:
+  research-agent:
+    build:
+      context: ../../../
+      dockerfile: backend/deploy/docker/Dockerfile
+    container_name: green-panorama-research
+    restart: always
+    env_file:
+      - ../../../backend/.env
+    volumes:
+      - research-data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  research-data:

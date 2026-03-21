@@ -35,7 +35,7 @@ def get_supabase():
     global _supabase
     if _supabase is None:
         url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+        key = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY")
         if url and key:
             from supabase import create_client
 
@@ -156,6 +156,49 @@ def get_stats():
         "total_edges": len(edges),
         "verified_nodes": verified_count,
         "cluster_counts": cluster_counts,
+    }
+
+
+@app.get("/api/agents/status")
+def get_agent_status():
+    """Return KiloClaw agent status and statistics."""
+    state_file = Path(__file__).parent / "data" / "kiloclaw_state.json"
+    log_file = Path(__file__).parent / "data" / "kiloclaw_log.jsonl"
+
+    state = {}
+    if state_file.exists():
+        with open(state_file) as f:
+            state = json.load(f)
+
+    # Read last 20 log entries
+    recent_logs = []
+    if log_file.exists():
+        with open(log_file) as f:
+            lines = f.readlines()
+            for line in lines[-20:]:
+                try:
+                    recent_logs.append(json.loads(line.strip()))
+                except Exception:
+                    pass
+
+    # Get agent-discovered counts from Supabase
+    supabase = get_supabase()
+    agent_nodes = 0
+    agent_edges = 0
+    if supabase:
+        try:
+            nodes_resp = supabase.table("nodes").select("id").eq("source", "agent").execute()
+            edges_resp = supabase.table("edges").select("id").eq("source", "agent").execute()
+            agent_nodes = len(nodes_resp.data)
+            agent_edges = len(edges_resp.data)
+        except Exception:
+            pass
+
+    return {
+        "visited_companies": len(state.get("visited", [])),
+        "agent_nodes_added": agent_nodes,
+        "agent_edges_added": agent_edges,
+        "recent_activity": recent_logs,
     }
 
 
