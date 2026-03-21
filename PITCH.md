@@ -39,49 +39,72 @@ An interactive node graph that maps Argentina's entire green/carbon market ecosy
 
 ## Hero Steps (Demo Flow)
 
-### Step 1: The Graph
+### Step 1: Welcome & Onboarding
 - Open green-panorama-ar.vercel.app
-- 79 nodes representing real companies/institutions in Argentina's green sector
-- 47 edges showing real relationships (funding, partnerships, clients)
+- First-time visitors see a welcome overlay explaining:
+  - What Green Panorama is (interactive map of 79+ green organizations)
+  - How nodes and connections work
+  - What blockchain verification means
+- Two entry points: "Explorar el Mapa" or "Preguntar al Ecosistema"
+
+### Step 2: The Graph
+- 79+ nodes representing real companies/institutions in Argentina's green sector
+- 49+ edges showing real relationships (funding, partnerships, clients)
 - Color-coded by cluster: Funds (green), Startups (lime), NGOs (orange), Private (blue), Accelerators (purple), Government (red), International (cyan)
 - Force-directed physics — nodes cluster naturally by relationships
+- Edge type legend with toggle filters (Fondea, Aliados, Clientes, Portfolio, Regula)
 
-### Step 2: Explore a Node
+### Step 3: AI Chat — "Pregunta al Ecosistema"
+- Click the green chat bubble (bottom-right)
+- Ask natural language questions in Spanish or English:
+  - "Quienes son los principales fondos verdes?" → lists all green funds
+  - "Que empresas fondea Antom?" → traces funding relationships
+  - "Startups de bonos de carbono" → filters by sector
+  - "Como se conecta Kilimo con organizaciones internacionales?" → path analysis
+- Powered by Gemini 2.0 Flash via OpenRouter with full graph context
+- Clickable node tags in responses — click to navigate to that node on the graph
+- Node highlighting: mentioned companies glow on the graph for 10 seconds
+
+### Step 4: Explore a Node
 - Click any node (e.g., Antom, Ruuts, Kilimo)
 - Detail panel shows: cluster, category, website, followers, description, funding sources, partners, clients
 - See all connections — who funds them, who they partner with, who their clients are
 - Navigate the graph by clicking connected nodes
+- Search with autocomplete dropdown — type 2+ characters to see matching nodes
 
-### Step 3: On-Chain Verification with GenLayer
+### Step 5: On-Chain Verification with GenLayer
 - Click "Verificar en GenLayer" on any unverified node
 - The GenLayer intelligent contract:
   1. Fetches the company's website in real-time
-  2. Uses AI (multi-validator consensus with different LLMs) to verify:
+  2. Uses AI (multi-validator consensus with 5 different LLMs) to verify:
      - Does the company exist?
      - Is it related to Argentina?
      - Is it in the green sector?
      - Is the description accurate?
   3. Stores the result on-chain with a transaction hash
-- Validators: Claude Sonnet 4.5, GPT-5.1, Gemini 3 Flash, Mistral Large, Kimi K2
-- Result: green badge on the node + verification details in the panel
+- Validators use different LLMs for diversity of judgment
+- Result: green badge on the node + verification details in the panel + Supabase updated
 
-### Step 4: Social Media Audit
+### Step 6: Social Media Audit
 - For nodes with social media links (Instagram, LinkedIn, Twitter)
 - Click "Auditar Redes Sociales"
 - Contract verifies: is the account real? Does it belong to this company? Are follower counts accurate? Is the account active or dead?
 - Result: per-platform audit with follower match indicators
 
-### Step 5: Batch Verification
+### Step 7: Batch Verification
 - Click "Verificar Nodos" in the sidebar
 - Automatically verifies 5 nodes at once
 - Watch the graph light up with pulsing amber badges (pending) turning green (verified)
 
-### Step 6: AI Research Agents (24/7)
-- Research agent spiders company websites
-- Discovers new partners, clients, and funders
+### Step 8: AI Research Agents (24/7)
+- Research daemon runs continuously (every 10 minutes)
+- Spiders company websites using LLM to discover new partners, clients, and funders
 - Extracts structured data: name, cluster, category, description, relationships
-- Adds new nodes and edges to the graph automatically
-- Each new discovery gets auto-verified via GenLayer
+- Deduplicates against existing nodes using fuzzy name matching
+- Adds new nodes and edges to Supabase with `source="agent"`
+- **Auto-verification**: after adding new nodes, automatically submits to GenLayer for verification
+- Periodic verification pass: every 3rd cycle, verifies any remaining unverified nodes
+- Feedback loop: failed verifications are logged for manual review and data improvement
 
 ---
 
@@ -154,6 +177,37 @@ An interactive node graph that maps Argentina's entire green/carbon market ecosy
 
 ---
 
+## Build Process — Step by Step
+
+This documents the chronological build order for the hackathon pitch:
+
+1. **Research Phase** — Manual investigation of 79 companies in Argentina's green sector, stored in spreadsheet with columns: nombre, link, followers, cluster, categoria, quien_fondea, aliados_portfolio, clientes, descripcion
+2. **Supabase Setup** — PostgreSQL schema with nodes/edges tables, seeded with manual research data
+3. **Frontend v1** — Next.js + react-force-graph-2d, cluster filtering, search, bilingual ES/EN toggle, dark mode
+4. **GenLayer Contract** — Wrote and deployed `GreenPanoramaQA` intelligent contract with 3 verification functions (node, social, relationship) using non-deterministic web fetch + LLM consensus
+5. **Verification API** — Next.js API routes for submit/poll/result using genlayer-js SDK
+6. **Research Agent** — Python spider pattern using OpenRouter (Gemini Flash) to scrape company websites and discover new nodes
+7. **KiloClaw / Daemon** — 24/7 research daemon that runs cycles, deduplicates discoveries, writes to Supabase
+8. **GitHub + Vercel** — CI/CD with auto-deploy on push to main
+9. **AI Chat Panel** — Natural language graph query interface powered by Gemini 2.0 Flash via OpenRouter
+10. **Welcome Overlay** — First-time onboarding explaining the tool
+11. **Edge Legend + Filters** — Toggle relationship types on/off
+12. **Search Autocomplete** — Dropdown results as you type
+13. **Auto-Verification** — Research daemon auto-submits new discoveries to GenLayer, periodic verification passes on unverified nodes
+
+## User Personas
+
+### Maria — Ecosystem Newcomer
+Journalist, student, or entrepreneur curious about Argentina's green sector. Opens the app, sees the welcome overlay, clicks "Preguntar al Ecosistema", asks "Who are the main green funds?" and gets an instant answer with highlighted nodes.
+
+### Lucas — Startup Founder
+Already knows some players. Searches for his company, sees who they're connected to, discovers potential partners and investors through the graph. Uses edge type filters to focus on funding relationships.
+
+### Sofia — Policy Researcher
+Works at Ministry of Environment. Uses the stats and cluster view to understand ecosystem maturity. Asks the AI "What sectors have few players?" to identify gaps for policy intervention.
+
+---
+
 ## Team & Tech Stack
 
 | Layer | Technology |
@@ -162,8 +216,9 @@ An interactive node graph that maps Argentina's entire green/carbon market ecosy
 | Backend | Python FastAPI, OpenRouter API |
 | Database | Supabase (PostgreSQL) |
 | Blockchain | GenLayer (Studionet) — Intelligent Contracts |
-| AI Agents | Spider pattern, Gemini Flash via OpenRouter |
-| Deployment | Vercel (frontend), GitHub (DanteDia/argentina-green-panorama) |
+| AI Models | Gemini 2.0 Flash (chat), Gemini 3.1 Flash Lite (research) |
+| AI Agents | Spider pattern with fuzzy dedup, 24/7 daemon |
+| Deployment | Vercel (frontend), GitHub CI/CD |
 
 ## Links
 - **Live App**: https://green-panorama-ar.vercel.app
