@@ -7,7 +7,7 @@ import type { Address } from "viem";
 
 // Contract deployed on GenLayer Studio (studionet)
 const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_GENLAYER_CONTRACT ||
-  "0x625CF6E848009135a5C532A766A9754b0DA618B8") as Address;
+  "0x57C566b552e528d86b230de35dbd847476f829c4") as Address;
 
 // Studionet is a simulator — no gas fees, auto-funded accounts
 // No private key needed
