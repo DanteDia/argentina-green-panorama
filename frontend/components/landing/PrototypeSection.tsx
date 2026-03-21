@@ -285,7 +285,7 @@ export default function PrototypeSection() {
     <section
       id="prototype"
       ref={sectionRef}
-      className="relative h-screen overflow-hidden bg-zinc-950"
+      className="relative h-screen overflow-hidden bg-[#111110]"
     >
       {loading ? (
         <div className="absolute inset-0 flex items-center justify-center">

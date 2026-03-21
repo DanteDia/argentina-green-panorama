@@ -79,23 +79,24 @@ export interface GraphStats {
 
 // Cluster colors
 export const CLUSTER_COLORS: Record<string, string> = {
-  "Empresa Privada": "#3b82f6",
-  "ONG": "#f59e0b",
-  "Fondo Verde": "#22c55e",
-  "Aceleradora": "#8b5cf6",
-  "Government": "#ef4444",
-  "Organismo Internacional": "#06b6d4",
-  "Consultora": "#ec4899",
-  "Startup": "#84cc16",
+  "Empresa Privada": "#5b8fd9",
+  "ONG": "#d4915a",
+  "Fondo Verde": "#3a9d6e",
+  "Aceleradora": "#8b7ec8",
+  "Government": "#c75f5f",
+  "Gobierno": "#c75f5f",
+  "Organismo Internacional": "#5db8b8",
+  "Consultora": "#c47ea0",
+  "Startup": "#7fb848",
 };
 
 // Edge colors by type
 export const EDGE_COLORS: Record<string, string> = {
-  funds: "#22c55e",
-  partners_with: "#3b82f6",
-  client_of: "#f59e0b",
-  portfolio: "#8b5cf6",
-  regulates: "#ef4444",
+  funds: "#3a9d6e",
+  partners_with: "#5b8fd9",
+  client_of: "#d4915a",
+  portfolio: "#8b7ec8",
+  regulates: "#c75f5f",
 };
 
 // Edge labels

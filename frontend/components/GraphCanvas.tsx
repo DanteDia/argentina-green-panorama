@@ -122,7 +122,7 @@ export default function GraphCanvas({
         (e) => e.source_id === node.id || e.target_id === node.id
       ).length;
       const followerBonus = node.followers ? Math.log10(node.followers + 1) : 0;
-      return Math.max(4, connections * 1.5 + followerBonus + 3);
+      return Math.max(5, connections * 1.5 + followerBonus + 3);
     },
     [edges]
   );
@@ -140,7 +140,7 @@ export default function GraphCanvas({
       // Glow effect for hovered/searched/highlighted nodes
       if (isHovered || isSearchMatch || isHighlighted) {
         ctx.shadowColor = color;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 10;
       }
 
       // Draw node circle — grey mode nodes are desaturated
@@ -250,7 +250,7 @@ export default function GraphCanvas({
       onNodeHover={((node: ForceNode | null) =>
         setHoveredNode(node ? node.id : null)
       ) as any}
-      backgroundColor="#0a0a0a"
+      backgroundColor="#111110"
       d3AlphaDecay={0.02}
       d3VelocityDecay={0.3}
       warmupTicks={100}

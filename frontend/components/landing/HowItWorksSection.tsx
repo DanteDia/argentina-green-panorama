@@ -1,6 +1,7 @@
 export default function HowItWorksSection() {
   const pillars = [
     {
+      step: "01",
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1a6b4a" strokeWidth="1.5">
           <circle cx="12" cy="12" r="3" />
@@ -12,6 +13,7 @@ export default function HowItWorksSection() {
         "Autonomous agents discover companies, map relationships, and enrich data around the clock. New actors and connections appear in real-time.",
     },
     {
+      step: "02",
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1a6b4a" strokeWidth="1.5">
           <path d="M9 12l2 2 4-4" />
@@ -24,6 +26,7 @@ export default function HowItWorksSection() {
         "GenLayer intelligent contracts verify every data point. Multiple AI validators reach consensus before marking information as trusted.",
     },
     {
+      step: "03",
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1a6b4a" strokeWidth="1.5">
           <circle cx="6" cy="6" r="2" />
@@ -39,11 +42,11 @@ export default function HowItWorksSection() {
   ];
 
   return (
-    <section id="how-it-works" className="py-24 md:py-32 bg-[#f5f3eb]">
+    <section id="how-it-works" className="py-28 md:py-36 bg-[#f5f3eb]">
       <div className="max-w-5xl mx-auto px-6">
         {/* Section header */}
-        <div className="text-center mb-16">
-          <p className="text-sm font-medium text-[#1a6b4a] tracking-widest uppercase mb-3">
+        <div className="text-center mb-20">
+          <p className="text-sm font-mono font-medium text-[#1a6b4a] tracking-widest uppercase mb-4">
             Architecture
           </p>
           <h2 className="font-serif text-4xl md:text-5xl font-semibold text-[#1a1a1a] tracking-tight">
@@ -56,17 +59,27 @@ export default function HowItWorksSection() {
           {pillars.map((pillar, i) => (
             <div
               key={i}
-              className="bg-white rounded-lg p-8 border border-[#1a1a1a]/5 hover:shadow-lg transition-shadow duration-300"
+              className="bg-white rounded-lg overflow-hidden border border-[#1a1a1a]/5 hover:shadow-lg transition-shadow duration-300"
             >
-              <div className="w-12 h-12 rounded-lg bg-[#1a6b4a]/8 flex items-center justify-center mb-5">
-                {pillar.icon}
+              {/* Top accent line */}
+              <div className="h-[2px] bg-gradient-to-r from-[#1a6b4a]/60 to-[#1a6b4a]/10" />
+
+              <div className="p-8">
+                {/* Step number */}
+                <span className="font-mono text-xs text-[#1a6b4a]/50 tracking-widest mb-4 block">
+                  {pillar.step}
+                </span>
+
+                <div className="w-12 h-12 rounded-lg bg-[#1a6b4a]/8 flex items-center justify-center mb-5">
+                  {pillar.icon}
+                </div>
+                <h3 className="text-lg font-semibold text-[#1a1a1a] mb-3">
+                  {pillar.title}
+                </h3>
+                <p className="text-[#1a1a1a]/55 text-sm leading-relaxed">
+                  {pillar.description}
+                </p>
               </div>
-              <h3 className="text-lg font-semibold text-[#1a1a1a] mb-3">
-                {pillar.title}
-              </h3>
-              <p className="text-[#1a1a1a]/60 text-sm leading-relaxed">
-                {pillar.description}
-              </p>
             </div>
           ))}
         </div>

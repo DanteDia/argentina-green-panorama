@@ -143,9 +143,9 @@ export default function NodeDetailPanel({
   const hasSocialLink = node.link && /instagram|linkedin|twitter|x\.com|facebook|tiktok|youtube/.test(node.link);
 
   return (
-    <div className="absolute right-0 top-0 h-full w-96 bg-zinc-900/95 backdrop-blur-md border-l border-zinc-700 overflow-y-auto z-50 shadow-2xl">
+    <div className="absolute right-0 top-0 h-full w-96 bg-[#161615]/95 backdrop-blur-md border-l border-[#2a2a28] overflow-y-auto z-50 shadow-2xl">
       {/* Header */}
-      <div className="sticky top-0 bg-zinc-900/95 backdrop-blur-md p-4 border-b border-zinc-700 z-10">
+      <div className="sticky top-0 bg-[#161615]/95 backdrop-blur-md p-4 border-b border-[#2a2a28] z-10">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <h2 className="text-xl font-bold text-white">{node.nombre}</h2>
@@ -241,7 +241,7 @@ export default function NodeDetailPanel({
           {!isVerified && !isPending && onVerify && (
             <button
               onClick={() => onVerify(node)}
-              className="flex-1 text-xs font-medium bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded-lg transition flex items-center justify-center gap-1.5"
+              className="flex-1 text-xs font-medium bg-[#1a6b4a] hover:bg-[#155a3e] text-white px-3 py-2 rounded-lg transition flex items-center justify-center gap-1.5"
             >
               <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M16.403 12.652a3 3 0 000-5.304 3 3 0 00-3.75-3.751 3 3 0 00-5.305 0 3 3 0 00-3.751 3.75 3 3 0 000 5.305 3 3 0 003.75 3.751 3 3 0 005.305 0 3 3 0 003.751-3.75zm-2.546-4.46a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />

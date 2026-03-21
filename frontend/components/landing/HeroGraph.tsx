@@ -1,92 +1,77 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
-import dynamic from "next/dynamic";
+import { useEffect, useRef } from "react";
+import createGlobe from "cobe";
 
-const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
-  ssr: false,
-});
+const MARKERS: { location: [number, number]; size: number }[] = [
+  // Argentina
+  { location: [-34.6037, -58.3816], size: 0.08 }, // Buenos Aires
+  { location: [-31.4201, -64.1888], size: 0.05 }, // Cordoba
+  { location: [-32.8895, -68.8458], size: 0.04 }, // Mendoza
+  { location: [-32.9468, -60.6393], size: 0.05 }, // Rosario
+  { location: [-24.7821, -65.4232], size: 0.04 }, // Salta
+  { location: [-26.8241, -65.2226], size: 0.04 }, // Tucuman
+  { location: [-38.9516, -68.0591], size: 0.03 }, // Neuquen
+  { location: [-42.7692, -65.0385], size: 0.03 }, // Rawson
+  { location: [-27.4512, -58.9867], size: 0.03 }, // Resistencia
+  { location: [-25.2637, -57.5759], size: 0.03 }, // Formosa
+  // Global green finance
+  { location: [51.5074, -0.1278], size: 0.06 },  // London
+  { location: [40.7128, -74.006], size: 0.06 },   // New York
+  { location: [1.3521, 103.8198], size: 0.05 },   // Singapore
+  { location: [48.8566, 2.3522], size: 0.04 },    // Paris
+  { location: [-23.5505, -46.6333], size: 0.05 }, // Sao Paulo
+];
 
-interface HeroNode {
-  id?: string | number;
-  x?: number;
-  y?: number;
-  [key: string]: unknown;
-}
-
-interface HeroLink {
-  source: string;
-  target: string;
-}
-
-export default function HeroGraph() {
-  const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
+export default function HeroGlobe() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const updateSize = () => {
-      setDimensions({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
+    if (!canvasRef.current) return;
+
+    let phi = 0.8;
+    let animationFrame: number;
+
+    const width = canvasRef.current.offsetWidth;
+
+    const globe = createGlobe(canvasRef.current, {
+      devicePixelRatio: 2,
+      width: width * 2,
+      height: width * 2,
+      phi: 0.8,
+      theta: -0.15,
+      dark: 0,
+      diffuse: 1.4,
+      mapSamples: 20000,
+      mapBrightness: 1.1,
+      baseColor: [0.94, 0.92, 0.87],
+      markerColor: [0.1, 0.42, 0.29],
+      glowColor: [0.92, 0.9, 0.85],
+      markers: MARKERS,
+    });
+
+    const animate = () => {
+      phi += 0.002;
+      globe.update({ phi });
+      animationFrame = requestAnimationFrame(animate);
     };
-    updateSize();
-    window.addEventListener("resize", updateSize);
-    return () => window.removeEventListener("resize", updateSize);
+    animationFrame = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      globe.destroy();
+    };
   }, []);
-
-  // Generate abstract node network
-  const graphData = useMemo(() => {
-    const nodes: HeroNode[] = [];
-    const links: HeroLink[] = [];
-    const count = 80;
-
-    for (let i = 0; i < count; i++) {
-      nodes.push({ id: `n${i}` });
-    }
-
-    // Create organic connections
-    for (let i = 0; i < count; i++) {
-      const connectionCount = Math.floor(Math.random() * 3) + 1;
-      for (let j = 0; j < connectionCount; j++) {
-        const target = Math.floor(Math.random() * count);
-        if (target !== i) {
-          links.push({ source: `n${i}`, target: `n${target}` });
-        }
-      }
-    }
-
-    return { nodes, links };
-  }, []);
-
-  const paintNode = useCallback(
-    (node: HeroNode, ctx: CanvasRenderingContext2D) => {
-      if (node.x == null || node.y == null) return;
-      const size = 1.5 + Math.random() * 2;
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, size, 0, 2 * Math.PI);
-      ctx.fillStyle = "rgba(26, 107, 74, 0.35)";
-      ctx.fill();
-    },
-    []
-  );
 
   return (
-    <ForceGraph2D
-      graphData={graphData}
-      width={dimensions.width}
-      height={dimensions.height}
-      backgroundColor="transparent"
-      nodeCanvasObject={paintNode}
-      nodePointerAreaPaint={() => {}}
-      linkColor={() => "rgba(26, 107, 74, 0.08)"}
-      linkWidth={0.5}
-      enableNodeDrag={false}
-      enableZoomInteraction={false}
-      enablePanInteraction={false}
-      d3AlphaDecay={0.008}
-      d3VelocityDecay={0.3}
-      cooldownTime={Infinity}
-      warmupTicks={50}
+    <canvas
+      ref={canvasRef}
+      className="w-full h-full"
+      style={{
+        contain: "layout paint size",
+        maxWidth: "100%",
+        aspectRatio: "1",
+      }}
     />
   );
 }
