@@ -39,6 +39,7 @@ export async function GET() {
             verification_attempts: n.verification_attempts || 0,
             verification_status: n.verification_status || "unverified",
             verification_failure_reason: n.verification_failure_reason || null,
+            verification_details: n.verification_details || {},
             source: n.source || "manual",
           })),
           edges: edges.map((e) => ({

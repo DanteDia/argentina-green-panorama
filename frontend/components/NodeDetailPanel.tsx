@@ -2,6 +2,21 @@
 
 import { GreenNode, GreenEdge, CLUSTER_COLORS, EDGE_LABELS, NodeVerificationState } from "@/lib/types";
 
+/** Tiny dot showing per-field verification status */
+function FieldDot({ status }: { status: "verified" | "failed" | "unverified" }) {
+  if (status === "verified") return <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 ml-1.5" title="Verified on-chain" />;
+  if (status === "failed") return <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 ml-1.5" title="Verification failed" />;
+  return <span className="inline-block w-1.5 h-1.5 rounded-full bg-zinc-300 ml-1.5" title="Not yet verified" />;
+}
+
+function getFieldStatus(details: Record<string, unknown> | undefined, field: string): "verified" | "failed" | "unverified" {
+  if (!details || Object.keys(details).length === 0) return "unverified";
+  const val = details[field];
+  if (val === true) return "verified";
+  if (val === false) return "failed";
+  return "unverified";
+}
+
 interface NodeDetailPanelProps {
   node: GreenNode;
   edges: GreenEdge[];
@@ -156,7 +171,7 @@ export default function NodeDetailPanel({
               >
                 {node.cluster}
               </span>
-              <span className="text-xs text-zinc-600">{node.categoria}</span>
+              <span className="text-xs text-zinc-600 flex items-center">{node.categoria}<FieldDot status={getFieldStatus(node.verification_details, "green_sector")} /></span>
             </div>
           </div>
           <button onClick={onClose} className="text-zinc-600 hover:text-[#1a1a1a] transition p-1">
@@ -358,8 +373,9 @@ export default function NodeDetailPanel({
         {/* Links */}
         {node.link && (
           <div>
-            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1">
+            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center">
               {labels.website}
+              <FieldDot status={getFieldStatus(node.verification_details, "exists")} />
             </h3>
             <a
               href={node.link}
@@ -385,8 +401,9 @@ export default function NodeDetailPanel({
         {/* Description */}
         {node.descripcion && (
           <div>
-            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1">
+            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center">
               {labels.description}
+              <FieldDot status={getFieldStatus(node.verification_details, "description_accurate")} />
             </h3>
             <p className="text-zinc-700 text-sm">{node.descripcion}</p>
           </div>
@@ -395,8 +412,9 @@ export default function NodeDetailPanel({
         {/* Funding */}
         {node.quien_fondea && (
           <div>
-            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1">
+            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center">
               {labels.funding}
+              <FieldDot status="unverified" />
             </h3>
             <p className="text-zinc-700 text-sm">{node.quien_fondea}</p>
           </div>
@@ -405,8 +423,9 @@ export default function NodeDetailPanel({
         {/* Partners */}
         {node.aliados_portfolio && node.aliados_portfolio.length > 0 && (
           <div>
-            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1">
+            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center">
               {labels.partners}
+              <FieldDot status="unverified" />
             </h3>
             <div className="flex flex-wrap gap-1.5">
               {node.aliados_portfolio.map((p) => (
@@ -436,8 +455,9 @@ export default function NodeDetailPanel({
 
         {/* Connections */}
         <div>
-          <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2">
+          <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2 flex items-center">
             {labels.connections} ({outgoing.length + incoming.length})
+            <FieldDot status={getFieldStatus(node.verification_details, "argentina_related")} />
           </h3>
           <div className="space-y-1.5">
             {outgoing.map((edge) => {
@@ -454,6 +474,11 @@ export default function NodeDetailPanel({
                     style={{ backgroundColor: CLUSTER_COLORS[targetNode.cluster] || "#6b7280" }}
                   />
                   <span className="text-zinc-700 flex-1 truncate">{targetNode.nombre}</span>
+                  <FieldDot status={
+                    (node.verification_details?.relationships as Record<string, boolean> | undefined)?.[targetNode.nombre] === true ? "verified"
+                    : (node.verification_details?.relationships as Record<string, boolean> | undefined)?.[targetNode.nombre] === false ? "failed"
+                    : "unverified"
+                  } />
                   <span className="text-zinc-500 text-xs">
                     {EDGE_LABELS[edge.relationship_type] || edge.relationship_type}
                   </span>
@@ -474,6 +499,11 @@ export default function NodeDetailPanel({
                     style={{ backgroundColor: CLUSTER_COLORS[sourceNode.cluster] || "#6b7280" }}
                   />
                   <span className="text-zinc-700 flex-1 truncate">{sourceNode.nombre}</span>
+                  <FieldDot status={
+                    (node.verification_details?.relationships as Record<string, boolean> | undefined)?.[sourceNode.nombre] === true ? "verified"
+                    : (node.verification_details?.relationships as Record<string, boolean> | undefined)?.[sourceNode.nombre] === false ? "failed"
+                    : "unverified"
+                  } />
                   <span className="text-zinc-500 text-xs">
                     {EDGE_LABELS[edge.relationship_type] || edge.relationship_type}
                   </span>

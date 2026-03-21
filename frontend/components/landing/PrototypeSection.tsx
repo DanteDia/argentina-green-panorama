@@ -77,17 +77,25 @@ export default function PrototypeSection({ lang = "en" }: { lang?: "es" | "en" }
             }));
 
             if (type === "node") {
+              // Extract per-field details from result
+              const details = result ? {
+                exists: result.exists === "yes" || result.exists === true,
+                green_sector: result.green_sector === "yes" || result.green_sector === true,
+                description_accurate: result.description_accurate === "yes" || result.description_accurate === true,
+                argentina_related: result.argentina_related === "yes" || result.argentina_related === true,
+              } : undefined;
+
               setNodes((prev) =>
                 prev.map((n) =>
                   n.id === nodeId
-                    ? { ...n, verified: true, verification_tx: txHash }
+                    ? { ...n, verified: true, verification_tx: txHash, verification_details: details }
                     : n
                 )
               );
               fetch("/api/nodes/verify", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ nodeId, txHash }),
+                body: JSON.stringify({ nodeId, txHash, details }),
               }).catch(() => {});
             }
             return;

@@ -52,6 +52,14 @@ export interface GreenNode {
   verification_attempts?: number;
   verification_status?: "unverified" | "pending" | "verified" | "failed" | "grey";
   verification_failure_reason?: string | null;
+  verification_details?: {
+    exists?: boolean;
+    green_sector?: boolean;
+    description_accurate?: boolean;
+    argentina_related?: boolean;
+    relationships?: Record<string, boolean>;
+    social?: Record<string, boolean>;
+  };
   source: "manual" | "agent";
 }
 

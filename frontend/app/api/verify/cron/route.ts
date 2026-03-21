@@ -81,7 +81,17 @@ export async function GET(request: NextRequest) {
         if (status === "ACCEPTED" || status === "FINALIZED") {
           finalStatus = "verified";
 
-          // Update Supabase
+          // Extract per-field verification details from leader result
+          const lr = statusResult.leaderResult as Record<string, unknown> | null;
+          const details: Record<string, unknown> = {};
+          if (lr) {
+            details.exists = lr.exists === "yes" || lr.exists === true;
+            details.green_sector = lr.green_sector === "yes" || lr.green_sector === true;
+            details.description_accurate = lr.description_accurate === "yes" || lr.description_accurate === true;
+            details.argentina_related = lr.argentina_related === "yes" || lr.argentina_related === true;
+          }
+
+          // Update Supabase with per-field details
           await supabase
             .from("nodes")
             .update({
@@ -89,9 +99,11 @@ export async function GET(request: NextRequest) {
               verification_tx: txHash,
               verification_date: new Date().toISOString(),
               verification_status: "verified",
+              verification_details: details,
             })
             .eq("id", node.id);
 
+          nodeResult.details = details;
           break;
         }
 
@@ -99,12 +111,16 @@ export async function GET(request: NextRequest) {
           finalStatus = "failed";
           const attempts = (node.verification_attempts || 0) + 1;
 
+          // Extract leader result even on failure for debugging
+          const lr = statusResult.leaderResult as Record<string, unknown> | null;
+          const failureReason = lr?.reasoning || `GenLayer: ${status}`;
+
           await supabase
             .from("nodes")
             .update({
               verification_attempts: attempts,
               verification_status: attempts >= 3 ? "grey" : "failed",
-              verification_failure_reason: `GenLayer: ${status}`,
+              verification_failure_reason: String(failureReason),
             })
             .eq("id", node.id);
 

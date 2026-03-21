@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   try {
-    const { nodeId, txHash } = await request.json();
+    const { nodeId, txHash, details } = await request.json();
 
     if (!nodeId || !txHash) {
       return NextResponse.json({ error: "nodeId and txHash required" }, { status: 400 });
@@ -13,14 +13,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
     }
 
+    const updateData: Record<string, unknown> = {
+      verified: true,
+      verification_tx: txHash,
+      verification_date: new Date().toISOString(),
+      verification_status: "verified",
+    };
+
+    if (details) {
+      updateData.verification_details = details;
+    }
+
     const { error } = await supabase
       .from("nodes")
-      .update({
-        verified: true,
-        verification_tx: txHash,
-        verification_date: new Date().toISOString(),
-        verification_status: "verified",
-      })
+      .update(updateData)
       .eq("id", nodeId);
 
     if (error) {
