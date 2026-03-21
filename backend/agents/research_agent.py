@@ -27,8 +27,8 @@ client = OpenAI(
 )
 
 # Default model - cheap and capable
-DEFAULT_MODEL = "google/gemini-flash-1.5"
-VISION_MODEL = "google/gemini-flash-1.5"  # supports vision
+DEFAULT_MODEL = "google/gemini-2.0-flash-001"
+VISION_MODEL = "google/gemini-2.0-flash-001"  # supports vision
 
 
 @dataclass
