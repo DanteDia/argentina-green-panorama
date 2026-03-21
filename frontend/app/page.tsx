@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import GraphCanvas from "@/components/GraphCanvas";
 import FilterSidebar from "@/components/FilterSidebar";
 import NodeDetailPanel from "@/components/NodeDetailPanel";
+import AIChatPanel from "@/components/AIChatPanel";
+import WelcomeOverlay from "@/components/WelcomeOverlay";
 import { GreenNode, GreenEdge, NodeVerificationState } from "@/lib/types";
 import { fetchGraph } from "@/lib/api";
 
@@ -18,6 +20,11 @@ export default function Home() {
   const [verificationStates, setVerificationStates] = useState<
     Record<string, NodeVerificationState>
   >({});
+  const [highlightedNodes, setHighlightedNodes] = useState<string[]>([]);
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [activeEdgeTypes, setActiveEdgeTypes] = useState<Set<string>>(
+    new Set(["funds", "partners_with", "client_of", "portfolio", "regulates"])
+  );
 
   useEffect(() => {
     fetchGraph()
@@ -238,6 +245,31 @@ export default function Home() {
     [pollStatus]
   );
 
+  const handleHighlightNodes = useCallback((names: string[]) => {
+    setHighlightedNodes(names);
+    // Clear highlights after 10 seconds
+    setTimeout(() => setHighlightedNodes([]), 10000);
+  }, []);
+
+  const handleChatNodeSelect = useCallback((name: string) => {
+    const node = nodes.find((n) => n.nombre.toLowerCase() === name.toLowerCase());
+    if (node) setSelectedNode(node);
+  }, [nodes]);
+
+  const handleToggleEdgeType = useCallback((type: string) => {
+    setActiveEdgeTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  }, []);
+
+  const handleSearchSelect = useCallback((node: GreenNode) => {
+    setSelectedNode(node);
+    setSearchQuery("");
+  }, []);
+
   const [isBatchVerifying, setIsBatchVerifying] = useState(false);
 
   const handleBatchVerify = useCallback(async () => {
@@ -283,6 +315,11 @@ export default function Home() {
   return (
     <main className="fixed inset-0 overflow-hidden bg-zinc-950">
       {/* Filter Sidebar */}
+      {/* Welcome Overlay */}
+      {showWelcome && (
+        <WelcomeOverlay lang={lang} onDismiss={() => setShowWelcome(false)} />
+      )}
+
       <FilterSidebar
         clusters={clusters}
         selectedCluster={selectedCluster}
@@ -296,6 +333,10 @@ export default function Home() {
         onLangToggle={toggleLang}
         onBatchVerify={handleBatchVerify}
         isBatchVerifying={isBatchVerifying}
+        nodes={nodes}
+        onSearchSelect={handleSearchSelect}
+        activeEdgeTypes={activeEdgeTypes}
+        onToggleEdgeType={handleToggleEdgeType}
       />
 
       {/* Graph Canvas - offset by sidebar width */}
@@ -307,6 +348,8 @@ export default function Home() {
           searchQuery={searchQuery}
           onNodeClick={handleNodeClick}
           verificationStates={verificationStates}
+          highlightedNodes={highlightedNodes}
+          activeEdgeTypes={activeEdgeTypes}
         />
       </div>
 
@@ -324,6 +367,13 @@ export default function Home() {
           onSocialAudit={handleSocialAudit}
         />
       )}
+
+      {/* AI Chat */}
+      <AIChatPanel
+        lang={lang}
+        onHighlightNodes={handleHighlightNodes}
+        onNodeSelect={handleChatNodeSelect}
+      />
     </main>
   );
 }

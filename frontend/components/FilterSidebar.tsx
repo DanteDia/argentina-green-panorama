@@ -1,6 +1,6 @@
 "use client";
 
-import { CLUSTER_COLORS, CLUSTER_LABELS_ES, CLUSTER_LABELS_EN } from "@/lib/types";
+import { CLUSTER_COLORS, CLUSTER_LABELS_ES, CLUSTER_LABELS_EN, EDGE_COLORS, GreenNode } from "@/lib/types";
 
 interface FilterSidebarProps {
   clusters: string[];
@@ -15,7 +15,16 @@ interface FilterSidebarProps {
   onLangToggle: () => void;
   onBatchVerify?: () => void;
   isBatchVerifying?: boolean;
+  nodes?: GreenNode[];
+  onSearchSelect?: (node: GreenNode) => void;
+  activeEdgeTypes?: Set<string>;
+  onToggleEdgeType?: (type: string) => void;
 }
+
+const EDGE_TYPE_LABELS = {
+  es: { funds: "Fondea", partners_with: "Aliados", client_of: "Clientes", portfolio: "Portfolio", regulates: "Regula" },
+  en: { funds: "Funds", partners_with: "Partners", client_of: "Clients", portfolio: "Portfolio", regulates: "Regulates" },
+};
 
 const t = {
   es: {
@@ -24,7 +33,8 @@ const t = {
     search: "Buscar empresa o nodo...",
     clusters: "Clusters",
     all: "Todos",
-    stats: "Estadísticas",
+    relationships: "Relaciones",
+    stats: "Estadisticas",
     nodes: "Nodos",
     connections: "Conexiones",
     verified: "Verificados",
@@ -39,6 +49,7 @@ const t = {
     search: "Search company or node...",
     clusters: "Clusters",
     all: "All",
+    relationships: "Relationships",
     stats: "Statistics",
     nodes: "Nodes",
     connections: "Connections",
@@ -63,12 +74,27 @@ export default function FilterSidebar({
   onLangToggle,
   onBatchVerify,
   isBatchVerifying = false,
+  nodes = [],
+  onSearchSelect,
+  activeEdgeTypes,
+  onToggleEdgeType,
 }: FilterSidebarProps) {
   const labels = t[lang];
   const clusterLabels = lang === "es" ? CLUSTER_LABELS_ES : CLUSTER_LABELS_EN;
+  const edgeLabels = EDGE_TYPE_LABELS[lang];
+
+  // Search autocomplete
+  const searchResults = searchQuery.length >= 2
+    ? nodes.filter((n) => {
+        const q = searchQuery.toLowerCase();
+        return n.nombre.toLowerCase().includes(q) ||
+          n.descripcion?.toLowerCase().includes(q) ||
+          n.categoria?.toLowerCase().includes(q);
+      }).slice(0, 6)
+    : [];
 
   return (
-    <div className="fixed left-0 top-0 h-full w-72 bg-zinc-900/90 backdrop-blur-md border-r border-zinc-700 z-40 flex flex-col">
+    <div className="fixed left-0 top-0 h-full w-72 bg-zinc-900/90 backdrop-blur-md border-r border-zinc-700 z-40 flex flex-col overflow-y-auto">
       {/* Header */}
       <div className="p-4 border-b border-zinc-700">
         <div className="flex items-center justify-between">
@@ -85,8 +111,8 @@ export default function FilterSidebar({
         </div>
       </div>
 
-      {/* Search */}
-      <div className="p-4">
+      {/* Search with autocomplete */}
+      <div className="p-4 relative">
         <input
           type="text"
           value={searchQuery}
@@ -94,6 +120,24 @@ export default function FilterSidebar({
           placeholder={labels.search}
           className="w-full bg-zinc-800 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition"
         />
+        {searchResults.length > 0 && (
+          <div className="absolute left-4 right-4 top-14 bg-zinc-800 border border-zinc-600 rounded-lg shadow-xl z-50 overflow-hidden">
+            {searchResults.map((node) => (
+              <button
+                key={node.id}
+                onClick={() => onSearchSelect?.(node)}
+                className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white transition flex items-center gap-2 border-b border-zinc-700/50 last:border-0"
+              >
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: CLUSTER_COLORS[node.cluster] || "#6b7280" }}
+                />
+                <span className="flex-1 truncate">{node.nombre}</span>
+                <span className="text-xs text-zinc-500">{node.cluster}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Clusters */}
@@ -101,10 +145,10 @@ export default function FilterSidebar({
         <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
           {labels.clusters}
         </h3>
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           <button
             onClick={() => onClusterSelect(null)}
-            className={`w-full text-left text-sm px-3 py-1.5 rounded transition ${
+            className={`w-full text-left text-sm px-3 py-1 rounded transition ${
               !selectedCluster
                 ? "bg-green-500/20 text-green-400"
                 : "text-zinc-400 hover:text-white hover:bg-zinc-800"
@@ -118,14 +162,14 @@ export default function FilterSidebar({
               onClick={() =>
                 onClusterSelect(selectedCluster === cluster ? null : cluster)
               }
-              className={`w-full text-left text-sm px-3 py-1.5 rounded transition flex items-center gap-2 ${
+              className={`w-full text-left text-sm px-3 py-1 rounded transition flex items-center gap-2 ${
                 selectedCluster === cluster
                   ? "bg-zinc-800 text-white"
                   : "text-zinc-400 hover:text-white hover:bg-zinc-800"
               }`}
             >
               <span
-                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ backgroundColor: CLUSTER_COLORS[cluster] || "#6b7280" }}
               />
               {clusterLabels[cluster] || cluster}
@@ -133,6 +177,36 @@ export default function FilterSidebar({
           ))}
         </div>
       </div>
+
+      {/* Edge Type Legend / Filter */}
+      {onToggleEdgeType && activeEdgeTypes && (
+        <div className="px-4 py-2 border-t border-zinc-800">
+          <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+            {labels.relationships}
+          </h3>
+          <div className="space-y-0.5">
+            {Object.entries(EDGE_COLORS).map(([type, color]) => (
+              <button
+                key={type}
+                onClick={() => onToggleEdgeType(type)}
+                className={`w-full text-left text-sm px-3 py-1 rounded transition flex items-center gap-2 ${
+                  activeEdgeTypes.has(type)
+                    ? "text-zinc-300"
+                    : "text-zinc-600 line-through"
+                }`}
+              >
+                <span
+                  className="w-3 h-0.5 flex-shrink-0 rounded"
+                  style={{
+                    backgroundColor: activeEdgeTypes.has(type) ? color : "#4b5563",
+                  }}
+                />
+                {edgeLabels[type as keyof typeof edgeLabels] || type}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="mt-auto p-4 border-t border-zinc-700">
