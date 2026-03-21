@@ -93,8 +93,8 @@ export default function ActivityFeed({ lang, onNodeClick }: ActivityFeedProps) {
   const visible = expanded ? entries : entries.slice(0, 5);
 
   return (
-    <div className="px-4 py-2 border-t border-zinc-800">
-      <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+    <div className="px-4 py-2 border-t border-zinc-200">
+      <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
         {labels.title}
       </h3>
@@ -136,17 +136,17 @@ export default function ActivityFeed({ lang, onNodeClick }: ActivityFeedProps) {
               {/* Content */}
               <div className="flex-1 min-w-0">
                 {entry.type === "edge_added" ? (
-                  <span className="text-zinc-400">
+                  <span className="text-zinc-600">
                     <button
                       onClick={() => entry.from && onNodeClick?.(entry.from)}
-                      className="text-zinc-300 hover:text-white transition"
+                      className="text-zinc-700 hover:text-[#1a1a1a] transition"
                     >
                       {entry.from}
                     </button>
                     <span className="text-zinc-600 mx-0.5">{relLabels[entry.rel || "partners_with"] || entry.rel}</span>
                     <button
                       onClick={() => entry.to && onNodeClick?.(entry.to)}
-                      className="text-zinc-300 hover:text-white transition"
+                      className="text-zinc-700 hover:text-[#1a1a1a] transition"
                     >
                       {entry.to}
                     </button>
@@ -161,7 +161,7 @@ export default function ActivityFeed({ lang, onNodeClick }: ActivityFeedProps) {
                     )}
                     <button
                       onClick={() => onNodeClick?.(entry.name)}
-                      className="text-zinc-300 hover:text-white transition truncate"
+                      className="text-zinc-700 hover:text-[#1a1a1a] transition truncate"
                     >
                       {entry.name}
                     </button>
@@ -179,7 +179,7 @@ export default function ActivityFeed({ lang, onNodeClick }: ActivityFeedProps) {
           {entries.length > 5 && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="text-[10px] text-zinc-500 hover:text-zinc-300 transition mt-1"
+              className="text-[10px] text-zinc-500 hover:text-zinc-700 transition mt-1"
             >
               {expanded ? labels.showLess : `${labels.showMore} (${entries.length - 5})`}
             </button>

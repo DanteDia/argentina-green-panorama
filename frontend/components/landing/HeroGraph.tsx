@@ -38,7 +38,7 @@ export default function HeroGlobe({ onMarkerHover }: HeroGlobeProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const pointerInteracting = useRef<number | null>(null);
   const pointerInteractionMovement = useRef(0);
-  const phiRef = useRef(0.8);
+  const phiRef = useRef(4.2);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     pointerInteracting.current = e.clientX - pointerInteractionMovement.current;
@@ -73,8 +73,8 @@ export default function HeroGlobe({ onMarkerHover }: HeroGlobeProps) {
       devicePixelRatio: 2,
       width: width * 2,
       height: width * 2,
-      phi: 0.8,
-      theta: -0.15,
+      phi: 4.2,
+      theta: 0.2,
       dark: 0,
       diffuse: 1.4,
       mapSamples: 24000,

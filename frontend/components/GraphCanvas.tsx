@@ -152,7 +152,7 @@ export default function GraphCanvas({
       ctx.globalAlpha = 1;
 
       // Border
-      ctx.strokeStyle = isHovered ? "#ffffff" : "rgba(255,255,255,0.3)";
+      ctx.strokeStyle = isHovered ? "#1a1a1a" : "rgba(26,26,26,0.2)";
       ctx.lineWidth = isHovered ? 2 : 0.5;
       ctx.stroke();
 
@@ -183,7 +183,7 @@ export default function GraphCanvas({
         }
 
         ctx.fill();
-        ctx.strokeStyle = "#ffffff";
+        ctx.strokeStyle = "#1a1a1a";
         ctx.lineWidth = 1;
         ctx.stroke();
       }
@@ -195,8 +195,8 @@ export default function GraphCanvas({
         } Inter, Arial, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillStyle = "#ffffff";
-        ctx.strokeStyle = "rgba(0,0,0,0.7)";
+        ctx.fillStyle = "#1a1a1a";
+        ctx.strokeStyle = "rgba(245,243,235,0.8)";
         ctx.lineWidth = 3;
         ctx.strokeText(node.nombre, node.x!, node.y! + size + 3);
         ctx.fillText(node.nombre, node.x!, node.y! + size + 3);
@@ -250,7 +250,7 @@ export default function GraphCanvas({
       onNodeHover={((node: ForceNode | null) =>
         setHoveredNode(node ? node.id : null)
       ) as any}
-      backgroundColor="#111110"
+      backgroundColor="#f5f3eb"
       d3AlphaDecay={0.02}
       d3VelocityDecay={0.3}
       warmupTicks={100}

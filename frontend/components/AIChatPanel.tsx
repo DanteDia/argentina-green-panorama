@@ -100,7 +100,7 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="absolute bottom-6 right-6 z-50 bg-[#1a6b4a] hover:bg-[#155a3e] text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg shadow-[#1a6b4a]/30 transition-all hover:scale-105"
+          className="absolute bottom-6 right-6 z-50 bg-[#1a6b4a] hover:bg-[#155a3e] text-[#1a1a1a] rounded-full w-14 h-14 flex items-center justify-center shadow-lg shadow-[#1a6b4a]/30 transition-all hover:scale-105"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -110,14 +110,14 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
 
       {/* Chat panel */}
       {isOpen && (
-        <div className="absolute bottom-6 right-6 z-50 w-96 max-h-[500px] bg-[#161615]/95 backdrop-blur-md border border-zinc-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="absolute bottom-6 right-6 z-50 w-96 max-h-[500px] bg-[#faf8f5]/95 backdrop-blur-md border border-[#ddd8ce] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700 bg-zinc-800/50">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[#ddd8ce] bg-zinc-100/50">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <h3 className="text-sm font-semibold text-white">{labels.title}</h3>
+              <h3 className="text-sm font-semibold text-[#1a1a1a]">{labels.title}</h3>
             </div>
-            <button onClick={() => setIsOpen(false)} className="text-zinc-400 hover:text-white transition">
+            <button onClick={() => setIsOpen(false)} className="text-zinc-600 hover:text-[#1a1a1a] transition">
               <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
               </svg>
@@ -135,7 +135,7 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
                   <button
                     key={i}
                     onClick={() => sendMessage(s)}
-                    className="block w-full text-left text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 px-3 py-2 rounded-lg transition"
+                    className="block w-full text-left text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-700 px-3 py-2 rounded-lg transition"
                   >
                     {s}
                   </button>
@@ -148,8 +148,8 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
                 <div
                   className={`max-w-[85%] px-3 py-2 rounded-xl text-sm ${
                     msg.role === "user"
-                      ? "bg-[#1a6b4a] text-white"
-                      : "bg-zinc-800 text-zinc-200"
+                      ? "bg-[#1a6b4a] text-[#1a1a1a]"
+                      : "bg-zinc-100 text-zinc-800"
                   }`}
                 >
                   {msg.content}
@@ -159,7 +159,7 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
                         <button
                           key={name}
                           onClick={() => onNodeSelect?.(name)}
-                          className="text-xs bg-green-900/50 text-green-400 px-2 py-0.5 rounded-full hover:bg-green-800/50 transition"
+                          className="text-xs bg-green-100 text-[#1a6b4a] px-2 py-0.5 rounded-full hover:bg-green-200 transition"
                         >
                           {name}
                         </button>
@@ -172,7 +172,7 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
 
             {loading && (
               <div className="flex justify-start">
-                <div className="bg-zinc-800 text-zinc-400 px-3 py-2 rounded-xl text-sm flex items-center gap-2">
+                <div className="bg-zinc-100 text-zinc-600 px-3 py-2 rounded-xl text-sm flex items-center gap-2">
                   <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
                   {labels.thinking}
                 </div>
@@ -182,7 +182,7 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
           </div>
 
           {/* Input */}
-          <div className="p-3 border-t border-zinc-700">
+          <div className="p-3 border-t border-[#ddd8ce]">
             <div className="flex gap-2">
               <input
                 type="text"
@@ -190,12 +190,12 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
                 placeholder={labels.placeholder}
-                className="flex-1 bg-zinc-800 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition"
+                className="flex-1 bg-zinc-100 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-[#1a1a1a] placeholder-zinc-500 focus:outline-none focus:border-green-500 transition"
               />
               <button
                 onClick={() => sendMessage()}
                 disabled={loading || !input.trim()}
-                className="bg-[#1a6b4a] hover:bg-[#155a3e] disabled:bg-zinc-700 disabled:text-zinc-500 text-white px-3 py-2 rounded-lg text-sm font-medium transition"
+                className="bg-[#1a6b4a] hover:bg-[#155a3e] disabled:bg-zinc-200 disabled:text-zinc-500 text-[#1a1a1a] px-3 py-2 rounded-lg text-sm font-medium transition"
               >
                 {labels.send}
               </button>

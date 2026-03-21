@@ -95,17 +95,17 @@ const t = {
 
 function CheckIcon({ ok }: { ok: boolean }) {
   return ok ? (
-    <span className="text-green-400">&#10003;</span>
+    <span className="text-[#1a6b4a]">&#10003;</span>
   ) : (
-    <span className="text-red-400">&#10007;</span>
+    <span className="text-red-600">&#10007;</span>
   );
 }
 
 function ScoreBadge({ score }: { score: string }) {
   const colors: Record<string, string> = {
-    high: "bg-green-900/50 text-green-400",
+    high: "bg-green-900/50 text-[#1a6b4a]",
     medium: "bg-yellow-900/50 text-yellow-400",
-    low: "bg-red-900/50 text-red-400",
+    low: "bg-red-900/50 text-red-600",
   };
   return (
     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[score] || colors.low}`}>
@@ -143,12 +143,12 @@ export default function NodeDetailPanel({
   const hasSocialLink = node.link && /instagram|linkedin|twitter|x\.com|facebook|tiktok|youtube/.test(node.link);
 
   return (
-    <div className="absolute right-0 top-0 h-full w-96 bg-[#161615]/95 backdrop-blur-md border-l border-[#2a2a28] overflow-y-auto z-50 shadow-2xl">
+    <div className="absolute right-0 top-0 h-full w-96 bg-[#faf8f5]/95 backdrop-blur-md border-l border-[#ddd8ce] overflow-y-auto z-50 shadow-2xl">
       {/* Header */}
-      <div className="sticky top-0 bg-[#161615]/95 backdrop-blur-md p-4 border-b border-[#2a2a28] z-10">
+      <div className="sticky top-0 bg-[#faf8f5]/95 backdrop-blur-md p-4 border-b border-[#ddd8ce] z-10">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-white">{node.nombre}</h2>
+            <h2 className="text-xl font-bold text-[#1a1a1a]">{node.nombre}</h2>
             <div className="flex items-center gap-2 mt-1">
               <span
                 className="text-xs px-2 py-0.5 rounded-full font-medium"
@@ -156,10 +156,10 @@ export default function NodeDetailPanel({
               >
                 {node.cluster}
               </span>
-              <span className="text-xs text-zinc-400">{node.categoria}</span>
+              <span className="text-xs text-zinc-600">{node.categoria}</span>
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-400 hover:text-white transition p-1">
+          <button onClick={onClose} className="text-zinc-600 hover:text-[#1a1a1a] transition p-1">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
               <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
             </svg>
@@ -174,7 +174,7 @@ export default function NodeDetailPanel({
               {labels.verifying}
             </div>
           ) : isVerified ? (
-            <div className="flex items-center gap-1.5 text-green-400 text-xs">
+            <div className="flex items-center gap-1.5 text-[#1a6b4a] text-xs">
               <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
               </svg>
@@ -192,7 +192,7 @@ export default function NodeDetailPanel({
             </div>
           ) : node.verification_status === "grey" ? (
             <div className="space-y-1">
-              <div className="flex items-center gap-1.5 text-zinc-400 text-xs">
+              <div className="flex items-center gap-1.5 text-zinc-600 text-xs">
                 <span className="w-3 h-3 rounded-full bg-zinc-500 flex-shrink-0" />
                 {lang === "es" ? "Revision manual necesaria" : "Manual review needed"}
                 <span className="text-zinc-500">({node.verification_attempts || 0}/3 intentos)</span>
@@ -205,7 +205,7 @@ export default function NodeDetailPanel({
             </div>
           ) : isFailed ? (
             <div className="space-y-1">
-              <div className="flex items-center gap-1.5 text-red-400 text-xs">
+              <div className="flex items-center gap-1.5 text-red-600 text-xs">
                 <span>&#10007;</span>
                 {labels.failed}
                 {node.verification_attempts ? (
@@ -241,7 +241,7 @@ export default function NodeDetailPanel({
           {!isVerified && !isPending && onVerify && (
             <button
               onClick={() => onVerify(node)}
-              className="flex-1 text-xs font-medium bg-[#1a6b4a] hover:bg-[#155a3e] text-white px-3 py-2 rounded-lg transition flex items-center justify-center gap-1.5"
+              className="flex-1 text-xs font-medium bg-[#1a6b4a] hover:bg-[#155a3e] text-[#1a1a1a] px-3 py-2 rounded-lg transition flex items-center justify-center gap-1.5"
             >
               <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M16.403 12.652a3 3 0 000-5.304 3 3 0 00-3.75-3.751 3 3 0 00-5.305 0 3 3 0 00-3.751 3.75 3 3 0 000 5.305 3 3 0 003.75 3.751 3 3 0 005.305 0 3 3 0 003.751-3.75zm-2.546-4.46a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
@@ -252,7 +252,7 @@ export default function NodeDetailPanel({
           {!hasSocialResult && !isSocialPending && onSocialAudit && hasSocialLink && (
             <button
               onClick={() => onSocialAudit(node)}
-              className="flex-1 text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg transition flex items-center justify-center gap-1.5"
+              className="flex-1 text-xs font-medium bg-blue-600 hover:bg-blue-500 text-[#1a1a1a] px-3 py-2 rounded-lg transition flex items-center justify-center gap-1.5"
             >
               <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493a1.23 1.23 0 00.41 1.412A9.957 9.957 0 0010 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 00-13.074.003z" />
@@ -261,7 +261,7 @@ export default function NodeDetailPanel({
             </button>
           )}
           {isSocialPending && (
-            <div className="flex-1 text-xs text-amber-400 flex items-center justify-center gap-1.5 bg-zinc-800 rounded-lg py-2">
+            <div className="flex-1 text-xs text-amber-400 flex items-center justify-center gap-1.5 bg-zinc-100 rounded-lg py-2">
               <div className="w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
               {labels.verifying}
             </div>
@@ -273,37 +273,37 @@ export default function NodeDetailPanel({
       <div className="p-4 space-y-4">
         {/* Verification Results */}
         {verificationState?.result && !(verificationState.result as unknown as Record<string, unknown>).error && (
-          <div className={`${isFailed ? "bg-amber-950/30 border-amber-800/50" : "bg-green-950/30 border-green-800/50"} border rounded-lg p-3 space-y-2`}>
+          <div className={`${isFailed ? "bg-amber-50 border-amber-800/50" : "bg-green-50 border-green-800/50"} border rounded-lg p-3 space-y-2`}>
             {isFailed && (
               <p className="text-xs text-amber-400 italic mb-1">{labels.unverified_result}</p>
             )}
-            <h3 className={`text-xs font-semibold ${isFailed ? "text-amber-400" : "text-green-400"} uppercase tracking-wider`}>
+            <h3 className={`text-xs font-semibold ${isFailed ? "text-amber-400" : "text-[#1a6b4a]"} uppercase tracking-wider`}>
               {labels.verification_results}
             </h3>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="flex items-center gap-1.5">
                 <CheckIcon ok={verificationState.result.exists} />
-                <span className="text-zinc-300">{labels.exists}</span>
+                <span className="text-zinc-700">{labels.exists}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckIcon ok={verificationState.result.argentina_related} />
-                <span className="text-zinc-300">{labels.argentina}</span>
+                <span className="text-zinc-700">{labels.argentina}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckIcon ok={verificationState.result.green_sector} />
-                <span className="text-zinc-300">{labels.green}</span>
+                <span className="text-zinc-700">{labels.green}</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckIcon ok={verificationState.result.description_accurate} />
-                <span className="text-zinc-300">{labels.desc_accurate}</span>
+                <span className="text-zinc-700">{labels.desc_accurate}</span>
               </div>
             </div>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs text-zinc-400">{labels.accuracy}:</span>
+              <span className="text-xs text-zinc-600">{labels.accuracy}:</span>
               <ScoreBadge score={verificationState.result.accuracy_score} />
             </div>
             {verificationState.result.reasoning && (
-              <p className="text-xs text-zinc-400 mt-1">
+              <p className="text-xs text-zinc-600 mt-1">
                 {verificationState.result.reasoning}
               </p>
             )}
@@ -321,26 +321,26 @@ export default function NodeDetailPanel({
             </div>
             {Object.entries(verificationState.socialResult.platforms || {}).map(
               ([platform, data]) => (
-                <div key={platform} className="bg-zinc-800/50 rounded p-2 space-y-1">
-                  <div className="text-xs font-medium text-white capitalize">{platform}</div>
+                <div key={platform} className="bg-zinc-100/50 rounded p-2 space-y-1">
+                  <div className="text-xs font-medium text-[#1a1a1a] capitalize">{platform}</div>
                   <div className="grid grid-cols-2 gap-1 text-xs">
                     <div className="flex items-center gap-1">
                       <CheckIcon ok={data.is_real_account} />
-                      <span className="text-zinc-400">{labels.real_account}</span>
+                      <span className="text-zinc-600">{labels.real_account}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <CheckIcon ok={data.follower_match} />
-                      <span className="text-zinc-400">{labels.follower_match}</span>
+                      <span className="text-zinc-600">{labels.follower_match}</span>
                     </div>
                   </div>
-                  <div className="text-xs text-zinc-400">
+                  <div className="text-xs text-zinc-600">
                     {labels.followers}: {data.estimated_followers} | {labels.activity}: {data.activity_level}
                   </div>
                 </div>
               )
             )}
             {verificationState.socialResult.reasoning && (
-              <p className="text-xs text-zinc-400">{verificationState.socialResult.reasoning}</p>
+              <p className="text-xs text-zinc-600">{verificationState.socialResult.reasoning}</p>
             )}
             {verificationState.socialTxHash && (
               <a
@@ -358,7 +358,7 @@ export default function NodeDetailPanel({
         {/* Links */}
         {node.link && (
           <div>
-            <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1">
               {labels.website}
             </h3>
             <a
@@ -375,42 +375,42 @@ export default function NodeDetailPanel({
         {/* Followers */}
         {node.followers && (
           <div>
-            <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1">
               {labels.followers}
             </h3>
-            <p className="text-white text-sm">{node.followers.toLocaleString()}</p>
+            <p className="text-[#1a1a1a] text-sm">{node.followers.toLocaleString()}</p>
           </div>
         )}
 
         {/* Description */}
         {node.descripcion && (
           <div>
-            <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1">
               {labels.description}
             </h3>
-            <p className="text-zinc-300 text-sm">{node.descripcion}</p>
+            <p className="text-zinc-700 text-sm">{node.descripcion}</p>
           </div>
         )}
 
         {/* Funding */}
         {node.quien_fondea && (
           <div>
-            <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1">
               {labels.funding}
             </h3>
-            <p className="text-zinc-300 text-sm">{node.quien_fondea}</p>
+            <p className="text-zinc-700 text-sm">{node.quien_fondea}</p>
           </div>
         )}
 
         {/* Partners */}
         {node.aliados_portfolio && node.aliados_portfolio.length > 0 && (
           <div>
-            <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1">
               {labels.partners}
             </h3>
             <div className="flex flex-wrap gap-1.5">
               {node.aliados_portfolio.map((p) => (
-                <span key={p} className="text-xs bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded">
+                <span key={p} className="text-xs bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded">
                   {p}
                 </span>
               ))}
@@ -421,12 +421,12 @@ export default function NodeDetailPanel({
         {/* Clients */}
         {node.clientes && node.clientes.length > 0 && (
           <div>
-            <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+            <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1">
               {labels.clients}
             </h3>
             <div className="flex flex-wrap gap-1.5">
               {node.clientes.map((c) => (
-                <span key={c} className="text-xs bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded">
+                <span key={c} className="text-xs bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded">
                   {c}
                 </span>
               ))}
@@ -436,7 +436,7 @@ export default function NodeDetailPanel({
 
         {/* Connections */}
         <div>
-          <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+          <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2">
             {labels.connections} ({outgoing.length + incoming.length})
           </h3>
           <div className="space-y-1.5">
@@ -447,13 +447,13 @@ export default function NodeDetailPanel({
                 <button
                   key={edge.id}
                   onClick={() => onNodeNavigate(targetNode)}
-                  className="w-full text-left flex items-center gap-2 p-2 rounded bg-zinc-800/50 hover:bg-zinc-800 transition text-sm"
+                  className="w-full text-left flex items-center gap-2 p-2 rounded bg-zinc-100/50 hover:bg-zinc-100 transition text-sm"
                 >
                   <span
                     className="w-2 h-2 rounded-full flex-shrink-0"
                     style={{ backgroundColor: CLUSTER_COLORS[targetNode.cluster] || "#6b7280" }}
                   />
-                  <span className="text-zinc-300 flex-1 truncate">{targetNode.nombre}</span>
+                  <span className="text-zinc-700 flex-1 truncate">{targetNode.nombre}</span>
                   <span className="text-zinc-500 text-xs">
                     {EDGE_LABELS[edge.relationship_type] || edge.relationship_type}
                   </span>
@@ -467,13 +467,13 @@ export default function NodeDetailPanel({
                 <button
                   key={edge.id}
                   onClick={() => onNodeNavigate(sourceNode)}
-                  className="w-full text-left flex items-center gap-2 p-2 rounded bg-zinc-800/50 hover:bg-zinc-800 transition text-sm"
+                  className="w-full text-left flex items-center gap-2 p-2 rounded bg-zinc-100/50 hover:bg-zinc-100 transition text-sm"
                 >
                   <span
                     className="w-2 h-2 rounded-full flex-shrink-0"
                     style={{ backgroundColor: CLUSTER_COLORS[sourceNode.cluster] || "#6b7280" }}
                   />
-                  <span className="text-zinc-300 flex-1 truncate">{sourceNode.nombre}</span>
+                  <span className="text-zinc-700 flex-1 truncate">{sourceNode.nombre}</span>
                   <span className="text-zinc-500 text-xs">
                     {EDGE_LABELS[edge.relationship_type] || edge.relationship_type}
                   </span>

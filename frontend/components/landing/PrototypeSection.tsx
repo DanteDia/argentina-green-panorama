@@ -285,13 +285,13 @@ export default function PrototypeSection() {
     <section
       id="prototype"
       ref={sectionRef}
-      className="relative h-screen overflow-hidden bg-[#111110]"
+      className="relative h-screen overflow-hidden bg-[#f5f3eb]"
     >
       {loading ? (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
-            <div className="w-12 h-12 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-green-400 mt-4 text-sm">
+            <div className="w-12 h-12 border-2 border-[#1a6b4a] border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-[#1a6b4a] mt-4 text-sm">
               {lang === "es" ? "Cargando ecosistema verde..." : "Loading green ecosystem..."}
             </p>
           </div>

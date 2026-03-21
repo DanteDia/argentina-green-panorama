@@ -95,17 +95,17 @@ export default function FilterSidebar({
     : [];
 
   return (
-    <div className="absolute left-0 top-0 h-full w-72 bg-[#161615]/95 backdrop-blur-md border-r border-[#2a2a28] z-40 flex flex-col overflow-y-auto">
+    <div className="absolute left-0 top-0 h-full w-72 bg-[#faf8f5]/95 backdrop-blur-md border-r border-[#2a2a28] z-40 flex flex-col overflow-y-auto">
       {/* Header */}
       <div className="p-4 border-b border-[#2a2a28]">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-[#3a9d6e]">{labels.title}</h1>
-            <p className="text-xs text-zinc-400 mt-0.5">{labels.subtitle}</p>
+            <p className="text-xs text-zinc-600 mt-0.5">{labels.subtitle}</p>
           </div>
           <button
             onClick={onLangToggle}
-            className="text-xs bg-[#1e1e1c] hover:bg-zinc-700 text-zinc-300 px-2 py-1 rounded transition"
+            className="text-xs bg-[#f0ede7] hover:bg-zinc-700 text-zinc-300 px-2 py-1 rounded transition"
           >
             {lang === "es" ? "EN" : "ES"}
           </button>
@@ -119,15 +119,15 @@ export default function FilterSidebar({
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={labels.search}
-          className="w-full bg-[#1e1e1c] border border-[#333330] rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500 transition"
+          className="w-full bg-[#f0ede7] border border-[#d0c9bc] rounded-lg px-3 py-2 text-sm text-[#1a1a1a] placeholder-zinc-500 focus:outline-none focus:border-green-500 transition"
         />
         {searchResults.length > 0 && (
-          <div className="absolute left-4 right-4 top-14 bg-[#1e1e1c] border border-[#333330] rounded-lg shadow-xl z-50 overflow-hidden">
+          <div className="absolute left-4 right-4 top-14 bg-[#f0ede7] border border-[#d0c9bc] rounded-lg shadow-xl z-50 overflow-hidden">
             {searchResults.map((node) => (
               <button
                 key={node.id}
                 onClick={() => onSearchSelect?.(node)}
-                className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-white transition flex items-center gap-2 border-b border-[#2a2a28]/50 last:border-0"
+                className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-[#1a1a1a] transition flex items-center gap-2 border-b border-[#2a2a28]/50 last:border-0"
               >
                 <span
                   className="w-2 h-2 rounded-full flex-shrink-0"
@@ -143,7 +143,7 @@ export default function FilterSidebar({
 
       {/* Clusters */}
       <div className="px-4 pb-2">
-        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+        <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2">
           {labels.clusters}
         </h3>
         <div className="space-y-0.5">
@@ -152,7 +152,7 @@ export default function FilterSidebar({
             className={`w-full text-left text-sm px-3 py-1 rounded transition ${
               !selectedCluster
                 ? "bg-[#1a6b4a]/20 text-[#3a9d6e]"
-                : "text-zinc-400 hover:text-white hover:bg-[#1e1e1c]"
+                : "text-zinc-600 hover:text-[#1a1a1a] hover:bg-[#f0ede7]"
             }`}
           >
             {labels.all}
@@ -165,8 +165,8 @@ export default function FilterSidebar({
               }
               className={`w-full text-left text-sm px-3 py-1 rounded transition flex items-center gap-2 ${
                 selectedCluster === cluster
-                  ? "bg-[#1e1e1c] text-white"
-                  : "text-zinc-400 hover:text-white hover:bg-[#1e1e1c]"
+                  ? "bg-[#f0ede7] text-[#1a1a1a]"
+                  : "text-zinc-600 hover:text-[#1a1a1a] hover:bg-[#f0ede7]"
               }`}
             >
               <span
@@ -182,7 +182,7 @@ export default function FilterSidebar({
       {/* Edge Type Legend / Filter */}
       {onToggleEdgeType && activeEdgeTypes && (
         <div className="px-4 py-2 border-t border-zinc-800">
-          <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+          <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2">
             {labels.relationships}
           </h3>
           <div className="space-y-0.5">
@@ -220,16 +220,16 @@ export default function FilterSidebar({
 
       {/* Stats */}
       <div className="mt-auto p-4 border-t border-[#2a2a28]">
-        <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+        <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-3">
           {labels.stats}
         </h3>
         <div className="grid grid-cols-3 gap-2">
           <div className="text-center">
-            <div className="text-xl font-bold text-white">{nodeCount}</div>
+            <div className="text-xl font-bold text-[#1a1a1a]">{nodeCount}</div>
             <div className="text-xs text-zinc-500">{labels.nodes}</div>
           </div>
           <div className="text-center">
-            <div className="text-xl font-bold text-white">{edgeCount}</div>
+            <div className="text-xl font-bold text-[#1a1a1a]">{edgeCount}</div>
             <div className="text-xs text-zinc-500">{labels.connections}</div>
           </div>
           <div className="text-center">
@@ -244,8 +244,8 @@ export default function FilterSidebar({
             disabled={isBatchVerifying}
             className={`mt-3 w-full text-xs font-medium px-3 py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${
               isBatchVerifying
-                ? "bg-amber-900/50 text-amber-400 cursor-not-allowed"
-                : "bg-[#1a6b4a] hover:bg-[#155a3e] text-white"
+                ? "bg-amber-900/50 text-amber-600 cursor-not-allowed"
+                : "bg-[#1a6b4a] hover:bg-[#155a3e] text-[#1a1a1a]"
             }`}
           >
             {isBatchVerifying ? (
@@ -265,8 +265,8 @@ export default function FilterSidebar({
         )}
 
         <div className="mt-3 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-xs text-zinc-400">{labels.agentStatus}</span>
+          <span className="w-2 h-2 rounded-full bg-[#1a6b4a] animate-pulse" />
+          <span className="text-xs text-zinc-600">{labels.agentStatus}</span>
         </div>
 
         <div className="mt-2 text-xs text-zinc-600">

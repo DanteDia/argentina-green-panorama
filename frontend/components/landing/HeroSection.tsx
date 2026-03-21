@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
+import { fetchStats } from "@/lib/api";
 
 const HeroGlobe = dynamic(() => import("./HeroGraph"), { ssr: false });
 
 export default function HeroSection() {
   const [mounted, setMounted] = useState(false);
+  const [stats, setStats] = useState({ total_nodes: 0, total_edges: 0, verified_nodes: 0 });
 
   useEffect(() => {
     setMounted(true);
+    fetchStats().then(setStats).catch(() => {});
   }, []);
 
   const scrollToPrototype = () => {
@@ -76,11 +79,11 @@ export default function HeroSection() {
           {/* Micro stats under CTA */}
           <div className="mt-12 flex gap-8 text-sm">
             <div>
-              <span className="font-mono text-[#1a6b4a] text-lg font-semibold">130+</span>
+              <span className="font-mono text-[#1a6b4a] text-lg font-semibold">{stats.total_nodes || "—"}+</span>
               <p className="text-[#1a1a1a]/35 mt-0.5">Actors mapped</p>
             </div>
             <div>
-              <span className="font-mono text-[#1a6b4a] text-lg font-semibold">100+</span>
+              <span className="font-mono text-[#1a6b4a] text-lg font-semibold">{stats.total_edges || "—"}+</span>
               <p className="text-[#1a1a1a]/35 mt-0.5">Connections</p>
             </div>
             <div>
