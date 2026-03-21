@@ -51,9 +51,9 @@ export default function Home() {
   // Poll transaction status
   const pollStatus = useCallback(
     async (nodeId: string, txHash: string, type: "node" | "social") => {
-      const maxAttempts = 60; // 5 min max
+      const maxAttempts = 60; // ~8 min max (8s intervals)
       for (let i = 0; i < maxAttempts; i++) {
-        await new Promise((r) => setTimeout(r, 5000));
+        await new Promise((r) => setTimeout(r, 8000));
         try {
           const res = await fetch(`/api/verify/status?txHash=${txHash}`);
           const data = await res.json();
@@ -63,7 +63,7 @@ export default function Home() {
             data.status === "ACCEPTED" ||
             data.status === "FINALIZED"
           ) {
-            // Fetch verification result
+            // Fetch verification result from contract storage
             const resultType = type === "social" ? "social" : "node";
             const resultRes = await fetch(
               `/api/verify/result?nodeId=${nodeId}&type=${resultType}`
@@ -104,13 +104,15 @@ export default function Home() {
             data.status === "UNDETERMINED" ||
             data.status === "CANCELED"
           ) {
+            // Extract leader result even on failure — useful for feedback
+            const leaderResult = data.leaderResult || null;
             setVerificationStates((prev) => ({
               ...prev,
               [nodeId]: {
                 ...prev[nodeId],
                 ...(type === "node"
-                  ? { status: "failed" as const }
-                  : { socialStatus: "failed" as const }),
+                  ? { status: "failed" as const, result: leaderResult }
+                  : { socialStatus: "failed" as const, socialResult: leaderResult }),
               },
             }));
             return;

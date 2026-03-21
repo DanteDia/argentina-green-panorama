@@ -47,7 +47,8 @@ const t = {
     reasoning: "Razonamiento",
     view_tx: "Ver transaccion",
     retry: "Reintentar",
-    failed: "Verificacion fallida",
+    failed: "Consenso no alcanzado",
+    unverified_result: "Resultado sin verificar (solo lider)",
     social_score: "Puntaje Social",
     activity: "Actividad",
     follower_match: "Seguidores coinciden",
@@ -83,7 +84,8 @@ const t = {
     reasoning: "Reasoning",
     view_tx: "View transaction",
     retry: "Retry",
-    failed: "Verification failed",
+    failed: "Consensus not reached",
+    unverified_result: "Unverified result (leader only)",
     social_score: "Social Score",
     activity: "Activity",
     follower_match: "Followers Match",
@@ -247,9 +249,12 @@ export default function NodeDetailPanel({
       {/* Content */}
       <div className="p-4 space-y-4">
         {/* Verification Results */}
-        {verificationState?.result && (
-          <div className="bg-green-950/30 border border-green-800/50 rounded-lg p-3 space-y-2">
-            <h3 className="text-xs font-semibold text-green-400 uppercase tracking-wider">
+        {verificationState?.result && !(verificationState.result as unknown as Record<string, unknown>).error && (
+          <div className={`${isFailed ? "bg-amber-950/30 border-amber-800/50" : "bg-green-950/30 border-green-800/50"} border rounded-lg p-3 space-y-2`}>
+            {isFailed && (
+              <p className="text-xs text-amber-400 italic mb-1">{labels.unverified_result}</p>
+            )}
+            <h3 className={`text-xs font-semibold ${isFailed ? "text-amber-400" : "text-green-400"} uppercase tracking-wider`}>
               {labels.verification_results}
             </h3>
             <div className="grid grid-cols-2 gap-2 text-sm">

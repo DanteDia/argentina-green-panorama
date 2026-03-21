@@ -120,15 +120,36 @@ function normalizeStatus(status: unknown): string {
 export async function getTransactionStatus(txHash: string) {
   const client = getClient();
   try {
-    const receipt = await client.waitForTransactionReceipt({
+    const tx = await client.getTransaction({
       hash: txHash as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-      status: "ACCEPTED" as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-      retries: 1,
-      interval: 2000,
     });
-    return { status: normalizeStatus(receipt.status), data: receipt };
+
+    const status = normalizeStatus(tx.status ?? tx.statusName);
+
+    // Try to extract leader result from the raw transaction data
+    // The SDK type doesn't expose consensus_data but the RPC response has it
+    const rawTx = tx as Record<string, unknown>;
+    const consensusData = rawTx.consensus_data as Record<string, unknown> | undefined;
+    let leaderResult: Record<string, unknown> | null = null;
+
+    if (consensusData?.leader_receipt) {
+      const receipts = consensusData.leader_receipt as Array<Record<string, unknown>>;
+      if (receipts[0]) {
+        const result = receipts[0].result as Record<string, unknown> | undefined;
+        if (result?.status === "success" && result?.payload) {
+          try {
+            // payload may be base64 encoded or raw string
+            const payload = String(result.payload);
+            const decoded = payload.startsWith("ey") ? atob(payload) : payload;
+            leaderResult = parseContractResult(decoded) as Record<string, unknown>;
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    }
+
+    return { status, data: tx, leaderResult };
   } catch {
-    return { status: "PENDING", data: null };
+    return { status: "PENDING", data: null, leaderResult: null };
   }
 }
 
