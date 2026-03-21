@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
         verified: true,
         verification_tx: txHash,
         verification_date: new Date().toISOString(),
+        verification_status: "verified",
       })
       .eq("id", nodeId);
 

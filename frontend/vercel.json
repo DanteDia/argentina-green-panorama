@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/verify/cron?count=2",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
