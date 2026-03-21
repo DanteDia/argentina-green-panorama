@@ -5,23 +5,29 @@ import { fetchStats } from "@/lib/api";
 
 function AnimatedCounter({ target, label, color = "text-[#1a6b4a]" }: { target: number; label: string; color?: string }) {
   const [count, setCount] = useState(0);
-  const [hasAnimated, setHasAnimated] = useState(false);
+  const hasAnimatedRef = useRef(false);
+  const prevTargetRef = useRef(0);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Reset animation when target changes from 0 to real value
+  if (target > 0 && prevTargetRef.current === 0) {
+    hasAnimatedRef.current = false;
+  }
+  prevTargetRef.current = target;
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || target === 0) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && !hasAnimated) {
-          setHasAnimated(true);
+        if (entry.isIntersecting && !hasAnimatedRef.current) {
+          hasAnimatedRef.current = true;
           const duration = 1500;
           const start = Date.now();
           const animate = () => {
             const elapsed = Date.now() - start;
             const progress = Math.min(elapsed / duration, 1);
-            // Ease out cubic
             const eased = 1 - Math.pow(1 - progress, 3);
             setCount(Math.floor(eased * target));
             if (progress < 1) requestAnimationFrame(animate);
@@ -29,12 +35,12 @@ function AnimatedCounter({ target, label, color = "text-[#1a6b4a]" }: { target: 
           requestAnimationFrame(animate);
         }
       },
-      { threshold: 0.5 }
+      { threshold: 0.3 }
     );
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, [target, hasAnimated]);
+  }, [target]);
 
   return (
     <div ref={ref} className="text-center">
