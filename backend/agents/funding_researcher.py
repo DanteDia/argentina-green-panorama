@@ -20,6 +20,62 @@ from openai import OpenAI
 
 log = logging.getLogger("funding_researcher")
 
+
+def _extract_json(content: str, array: bool = True):
+    """Robustly extract JSON from LLM responses.
+
+    Handles markdown code fences, trailing text, and malformed wrapping.
+    Returns parsed JSON (list or dict) or None on failure.
+    """
+    # Strip markdown code fences
+    content = re.sub(r'```(?:json)?\s*', '', content)
+    content = content.strip()
+
+    open_char = '[' if array else '{'
+    close_char = ']' if array else '}'
+
+    # Find the first opening bracket and count to matching close
+    start = content.find(open_char)
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escape_next = False
+    for i in range(start, len(content)):
+        c = content[i]
+        if escape_next:
+            escape_next = False
+            continue
+        if c == '\\' and in_string:
+            escape_next = True
+            continue
+        if c == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if c == open_char:
+            depth += 1
+        elif c == close_char:
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(content[start:i + 1])
+                except json.JSONDecodeError:
+                    break
+
+    # Fallback: raw_decode stops at first valid JSON
+    try:
+        decoder = json.JSONDecoder()
+        obj, _ = decoder.raw_decode(content, start)
+        return obj
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    return None
+
+
 # Reuse OpenRouter client (same as research_agent.py)
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -98,9 +154,8 @@ If no funding info found, return: {{"funders": [], "summary": "Unknown"}}"""
         )
         content = response.choices[0].message.content or "{}"
 
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
-        if json_match:
-            data = json.loads(json_match.group())
+        data = _extract_json(content, array=False)
+        if data and isinstance(data, dict):
             funders = []
             for f in data.get("funders", []):
                 funders.append(FundingSource(
@@ -169,9 +224,8 @@ If no connections found, return: []"""
         )
         content = response.choices[0].message.content or "[]"
 
-        json_match = re.search(r'\[.*\]', content, re.DOTALL)
-        if json_match:
-            results = json.loads(json_match.group())
+        results = _extract_json(content, array=True)
+        if results and isinstance(results, list):
             for r in results:
                 r["_source"] = "perplexity"
             return results[:10]
@@ -217,9 +271,9 @@ If no funding info found, return: []"""
             max_tokens=1000,
         )
         content = response.choices[0].message.content or "[]"
-        json_match = re.search(r'\[.*\]', content, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
+        results = _extract_json(content, array=True)
+        if results and isinstance(results, list):
+            return results
     except Exception as e:
         log.error(f"HTML funding extraction failed for {company_name}: {e}")
     return []
@@ -280,9 +334,8 @@ If no relationships found outside official website, return: []"""
         )
         content = response.choices[0].message.content or "[]"
 
-        json_match = re.search(r'\[.*\]', content, re.DOTALL)
-        if json_match:
-            results = json.loads(json_match.group())
+        results = _extract_json(content, array=True)
+        if results and isinstance(results, list):
             for r in results:
                 r["_source"] = "perplexity_deep"
             return results[:12]

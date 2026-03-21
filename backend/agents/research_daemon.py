@@ -23,6 +23,7 @@ import random
 import signal
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Add parent to path so we can import agents modules
@@ -52,6 +53,14 @@ MAX_AGENT_NODES = 500   # Global budget: max agent-discovered nodes total
 MAX_FUNDING_QUERIES_PER_CYCLE = 3  # Max Perplexity API calls per research cycle
 MAX_DEEP_DISCOVERY_PER_PASS = 3    # Max nodes to deep-research per pass
 DEEP_DISCOVERY_EVERY_N_CYCLES = 2  # Run deep discovery every N cycles
+
+# --- Adaptive discovery thresholds ---
+NORMAL_THRESHOLD = 1.0    # >1 new node/cycle avg → normal mode
+BOOST_THRESHOLD = 0.3     # 0.3-1 new node/cycle avg → boost mode
+# <0.3 → saturation mode
+METRICS_WINDOW_SHORT = 10   # Recent cycles for mode detection
+METRICS_WINDOW_LONG = 20    # Longer window for saturation detection
+MAINTENANCE_INTERVAL = 6 * 3600  # 6 hours between maintenance passes
 
 logging.basicConfig(
     level=logging.INFO,
@@ -873,18 +882,271 @@ async def run_one_cycle() -> dict:
     return summary
 
 
+def record_cycle_metrics(state: dict, cycle_count: int, summary: dict):
+    """Record discovery metrics for this cycle into state."""
+    entry = {
+        "cycle": cycle_count,
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "new_nodes": summary.get("new_nodes", 0),
+        "new_edges": summary.get("new_edges", 0),
+        "duplicates": summary.get("duplicates_skipped", 0),
+    }
+    state.setdefault("discovery_rate", []).append(entry)
+    # Keep last 100 entries
+    state["discovery_rate"] = state["discovery_rate"][-100:]
+    save_state(state)
+
+    # Log rolling averages
+    rates = state["discovery_rate"]
+    recent_5 = rates[-5:] if len(rates) >= 5 else rates
+    recent_20 = rates[-20:] if len(rates) >= 20 else rates
+
+    avg_nodes_5 = sum(r["new_nodes"] for r in recent_5) / len(recent_5) if recent_5 else 0
+    avg_nodes_20 = sum(r["new_nodes"] for r in recent_20) / len(recent_20) if recent_20 else 0
+    avg_edges_5 = sum(r["new_edges"] for r in recent_5) / len(recent_5) if recent_5 else 0
+
+    mode = get_discovery_mode(state)
+    log.info(f"  Discovery rate: {avg_nodes_5:.1f} nodes/cycle (last 5), "
+             f"{avg_nodes_20:.1f} (last 20), mode={mode}")
+
+    log_event("discovery_rate",
+              avg_nodes_5=round(avg_nodes_5, 2),
+              avg_nodes_20=round(avg_nodes_20, 2),
+              avg_edges_5=round(avg_edges_5, 2),
+              mode=mode,
+              cycle=cycle_count)
+
+    if avg_nodes_5 < BOOST_THRESHOLD and len(rates) >= METRICS_WINDOW_SHORT:
+        log.warning(f"  Discovery rate very low ({avg_nodes_5:.1f}/cycle) — approaching saturation")
+
+    return mode
+
+
+def get_discovery_mode(state: dict) -> str:
+    """Determine current discovery mode based on recent metrics.
+
+    Returns: "normal", "boost", or "saturation"
+    """
+    rates = state.get("discovery_rate", [])
+
+    # Not enough data yet — default to normal
+    if len(rates) < METRICS_WINDOW_SHORT:
+        return "normal"
+
+    recent = rates[-METRICS_WINDOW_SHORT:]
+    avg_nodes = sum(r["new_nodes"] for r in recent) / len(recent)
+
+    if avg_nodes > NORMAL_THRESHOLD:
+        return "normal"
+
+    if avg_nodes > BOOST_THRESHOLD:
+        return "boost"
+
+    # Check longer window for saturation confirmation
+    if len(rates) >= METRICS_WINDOW_LONG:
+        long_recent = rates[-METRICS_WINDOW_LONG:]
+        avg_long = sum(r["new_nodes"] for r in long_recent) / len(long_recent)
+        if avg_long < BOOST_THRESHOLD:
+            return "saturation"
+
+    return "boost"
+
+
+async def run_re_research_pass(max_nodes: int = 3) -> dict:
+    """Re-research already deep-searched nodes looking for NEW relationships.
+
+    Targets temporal changes: new press releases, new partnerships announced,
+    new LinkedIn posts since last search. Only creates edges to existing nodes
+    (no new node creation in re-research).
+    """
+    sb = get_supabase()
+    state = load_state()
+    deep_searched = list(state.get("deep_searched", []))
+    re_researched = state.get("re_researched", {})  # {name: last_ts}
+
+    if not deep_searched:
+        return {"re_researched": 0, "new_edges": 0}
+
+    # Pick random nodes, preferring those not recently re-researched
+    now = datetime.now(timezone.utc).isoformat()
+    candidates = sorted(deep_searched, key=lambda n: re_researched.get(n, ""))
+    selected = candidates[:max_nodes]
+
+    results = {"re_researched": 0, "new_edges": 0}
+    all_known = get_all_names()
+    all_known_set = {n.lower() for n in all_known}
+
+    # Get node URLs
+    resp = sb.table("nodes").select("nombre, link").execute()
+    name_to_url = {n["nombre"]: n.get("link") for n in resp.data}
+
+    for nombre in selected:
+        url = name_to_url.get(nombre)
+        log.info(f"  Re-research: {nombre}")
+
+        relationships = discover_relationships_deep(nombre, url)
+        results["re_researched"] += 1
+
+        for rel in (relationships or []):
+            partner_name = rel.get("name", "").strip()
+            if not partner_name:
+                continue
+
+            relationship = rel.get("relationship", "partner")
+            evidence = rel.get("evidence", "")
+
+            rel_type = "partners_with"
+            if relationship in ("funder", "investor", "co_investor", "backed_by"):
+                rel_type = "funds"
+            elif relationship in ("client", "customer"):
+                rel_type = "client_of"
+            elif relationship in ("portfolio", "portfolio_company"):
+                rel_type = "portfolio"
+
+            # Only connect to existing nodes
+            if partner_name.lower() in all_known_set:
+                exact_name = next((n for n in all_known if n.lower() == partner_name.lower()), partner_name)
+                if insert_edge(nombre, exact_name, rel_type,
+                              discovery_method="perplexity_deep", confidence=0.7):
+                    results["new_edges"] += 1
+                    log.info(f"    + Re-research edge: {nombre} --{rel_type}--> {exact_name} [{evidence[:50]}]")
+            else:
+                # Try fuzzy match
+                is_dup, match, score = check_duplicate(partner_name, all_known)
+                if is_dup:
+                    if insert_edge(nombre, match, rel_type,
+                                  discovery_method="perplexity_deep", confidence=0.7):
+                        results["new_edges"] += 1
+
+        # Track re-research timestamp
+        state.setdefault("re_researched", {})[nombre] = now
+        save_state(state)
+
+    log.info(f"  Re-research pass: {results['re_researched']} nodes, {results['new_edges']} new edges")
+    log_event("re_research_pass", **results)
+    return results
+
+
+async def run_maintenance_pass(state: dict):
+    """Maintenance mode: relationship refresh + ecosystem health metrics.
+
+    Runs when ecosystem is saturated (no new nodes being discovered).
+    Focus: find new edges between existing nodes, log ecosystem health.
+    """
+    sb = get_supabase()
+    log.info("=== MAINTENANCE MODE PASS ===")
+
+    # 1. Relationship refresh: pick 5 random nodes, find new edges
+    resp = sb.table("nodes").select("nombre, link").execute()
+    all_nodes = resp.data
+    all_names = [n["nombre"] for n in all_nodes]
+    all_names_set = {n.lower() for n in all_names}
+
+    sample = random.sample(all_nodes, min(5, len(all_nodes)))
+    new_edges = 0
+    for node in sample:
+        nombre = node["nombre"]
+        url = node.get("link")
+        log.info(f"  Maintenance refresh: {nombre}")
+
+        relationships = discover_relationships_deep(nombre, url)
+        for rel in (relationships or []):
+            partner_name = rel.get("name", "").strip()
+            if not partner_name:
+                continue
+
+            relationship = rel.get("relationship", "partner")
+            rel_type = "partners_with"
+            if relationship in ("funder", "investor", "co_investor", "backed_by"):
+                rel_type = "funds"
+            elif relationship in ("client", "customer"):
+                rel_type = "client_of"
+            elif relationship in ("portfolio", "portfolio_company"):
+                rel_type = "portfolio"
+
+            if partner_name.lower() in all_names_set:
+                exact_name = next((n for n in all_names if n.lower() == partner_name.lower()), partner_name)
+                if insert_edge(nombre, exact_name, rel_type,
+                              discovery_method="perplexity_deep", confidence=0.7):
+                    new_edges += 1
+                    log.info(f"    + Maintenance edge: {nombre} --{rel_type}--> {exact_name}")
+            else:
+                is_dup, match, score = check_duplicate(partner_name, all_names)
+                if is_dup:
+                    if insert_edge(nombre, match, rel_type,
+                                  discovery_method="perplexity_deep", confidence=0.7):
+                        new_edges += 1
+
+    # 2. Ecosystem health stats
+    nodes_resp = sb.table("nodes").select("id, source, verified, cluster", count="exact").execute()
+    edges_resp = sb.table("edges").select("id", count="exact").execute()
+    total_nodes = nodes_resp.count or len(nodes_resp.data)
+    total_edges = edges_resp.count or len(edges_resp.data)
+    verified = sum(1 for n in nodes_resp.data if n.get("verified"))
+    agent_nodes = sum(1 for n in nodes_resp.data if n.get("source") == "agent")
+
+    # Check for orphans
+    edges_full = sb.table("edges").select("source_id, target_id").execute()
+    connected = set()
+    for e in edges_full.data:
+        connected.add(e["source_id"])
+        connected.add(e["target_id"])
+    orphans = sum(1 for n in nodes_resp.data if n["id"] not in connected)
+
+    log.info(f"  Ecosystem health: {total_nodes} nodes, {total_edges} edges, "
+             f"{verified} verified, {agent_nodes} agent, {orphans} orphans, "
+             f"{new_edges} new edges this pass")
+
+    log_event("maintenance_pass",
+              total_nodes=total_nodes,
+              total_edges=total_edges,
+              verified=verified,
+              agent_nodes=agent_nodes,
+              orphans=orphans,
+              new_edges=new_edges)
+
+    # Fix any orphans found
+    if orphans > 0:
+        await fix_orphan_nodes()
+
+
 async def daemon_loop(interval: int = 600):
-    """Main daemon loop. Runs research cycles at the given interval (seconds)."""
+    """Main daemon loop with adaptive discovery modes.
+
+    Modes:
+    - normal: standard research cycles, discovery rate > 1 node/cycle
+    - boost: aggressive deep discovery, rate 0.3-1 node/cycle
+    - saturation: maintenance only, rate < 0.3 node/cycle over 20 cycles
+    """
     log.info(f"Research daemon started. Interval: {interval}s")
     log.info(f"Supabase: connected")
 
     cycle_count = 0
     while _running:
         cycle_count += 1
-        log.info(f"--- Cycle {cycle_count} ---")
+        state = load_state()
+        mode = get_discovery_mode(state)
+        log.info(f"--- Cycle {cycle_count} [mode={mode}] ---")
 
         try:
+            # SATURATION MODE: maintenance only, long sleep
+            if mode == "saturation":
+                log.info("Saturation mode — running maintenance pass (next in 6h)")
+                await run_maintenance_pass(state)
+                for _ in range(MAINTENANCE_INTERVAL):
+                    if not _running:
+                        break
+                    await asyncio.sleep(1)
+                # Still record a metrics entry so we can detect recovery
+                record_cycle_metrics(state, cycle_count, {"new_nodes": 0, "new_edges": 0})
+                continue
+
+            # NORMAL + BOOST: run main research cycle
             summary = await run_one_cycle()
+
+            # Record metrics and get updated mode
+            state = load_state()
+            mode = record_cycle_metrics(state, cycle_count, summary)
 
             if "budget_exhausted" in summary.get("errors", []):
                 log.info("Node budget exhausted. Running verification + deep discovery...")
@@ -897,22 +1159,33 @@ async def daemon_loop(interval: int = 600):
                 continue
 
             if "exhausted" in summary.get("errors", []):
-                log.info("All companies visited. Running verification + deep discovery...")
+                log.info("All companies visited. Running verification + deep discovery + re-research...")
                 await verify_unverified_batch(max_nodes=5)
                 await run_deep_discovery_pass(max_nodes=MAX_DEEP_DISCOVERY_PER_PASS)
+                await run_re_research_pass(max_nodes=3)
                 for _ in range(interval * 3):
                     if not _running:
                         break
                     await asyncio.sleep(1)
                 continue
 
+            # BOOST MODE: more aggressive discovery
+            if mode == "boost":
+                log.info("Boost mode — running extra deep discovery + re-research...")
+                # Double the deep discovery per pass
+                await run_deep_discovery_pass(max_nodes=MAX_DEEP_DISCOVERY_PER_PASS * 2)
+                # Also re-research previously searched nodes
+                await run_re_research_pass(max_nodes=3)
+
+            # NORMAL MODE periodic passes
             # Every 3rd cycle, also run a verification pass on old unverified nodes
             if cycle_count % 3 == 0:
                 log.info("Periodic verification pass...")
                 await verify_unverified_batch(max_nodes=3)
 
-            # Every Nth cycle, run deep relationship discovery (newsletters, social media, press)
-            if cycle_count % DEEP_DISCOVERY_EVERY_N_CYCLES == 0:
+            # Deep discovery: every cycle in boost, every Nth in normal
+            deep_every_n = 1 if mode == "boost" else DEEP_DISCOVERY_EVERY_N_CYCLES
+            if cycle_count % deep_every_n == 0 and mode != "boost":  # boost already ran it above
                 log.info("Deep relationship discovery pass (newsletters, social media, press)...")
                 await run_deep_discovery_pass(max_nodes=MAX_DEEP_DISCOVERY_PER_PASS)
 
@@ -920,6 +1193,20 @@ async def daemon_loop(interval: int = 600):
             if cycle_count % 5 == 0:
                 log.info("Orphan node cleanup...")
                 await fix_orphan_nodes()
+
+            # Log ecosystem health every 10 cycles
+            if cycle_count % 10 == 0:
+                sb = get_supabase()
+                n_count = sb.table("nodes").select("id", count="exact").execute()
+                e_count = sb.table("edges").select("id", count="exact").execute()
+                agent_count = get_agent_node_count()
+                log_event("ecosystem_health",
+                          total_nodes=n_count.count or 0,
+                          total_edges=e_count.count or 0,
+                          agent_nodes=agent_count,
+                          budget_remaining=MAX_AGENT_NODES - agent_count,
+                          mode=mode,
+                          cycle=cycle_count)
 
         except Exception as e:
             log.error(f"Cycle {cycle_count} failed: {e}")
