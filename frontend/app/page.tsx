@@ -80,7 +80,7 @@ export default function Home() {
               },
             }));
 
-            // Update node verified flag
+            // Update node verified flag in React state AND Supabase
             if (type === "node") {
               setNodes((prev) =>
                 prev.map((n) =>
@@ -89,6 +89,12 @@ export default function Home() {
                     : n
                 )
               );
+              // Persist to Supabase
+              fetch("/api/nodes/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nodeId, txHash }),
+              }).catch(() => {});
             }
             return;
           }
