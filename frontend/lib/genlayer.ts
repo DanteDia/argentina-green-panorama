@@ -5,6 +5,24 @@ import { createClient, createAccount } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
 import type { Address } from "viem";
 
+/** Extract JSON from a string that may contain markdown code blocks or preamble */
+function parseContractResult(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== "string") return raw as Record<string, unknown>;
+  const s = raw.trim();
+  // Try direct parse
+  try { return JSON.parse(s); } catch { /* continue */ }
+  // Try extracting from ```json ... ```
+  const mdMatch = s.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+  if (mdMatch) try { return JSON.parse(mdMatch[1]); } catch { /* continue */ }
+  // Try first { ... } block
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    try { return JSON.parse(s.slice(start, end + 1)); } catch { /* continue */ }
+  }
+  return { error: "could_not_parse", raw: s.slice(0, 200) };
+}
+
 // Contract deployed on GenLayer Studio (studionet)
 const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_GENLAYER_CONTRACT ||
   "0x57C566b552e528d86b230de35dbd847476f829c4") as Address;
@@ -108,7 +126,7 @@ export async function getVerification(nodeId: string) {
     functionName: "get_verification",
     args: [nodeId],
   });
-  return typeof result === "string" ? JSON.parse(result) : result;
+  return parseContractResult(result);
 }
 
 export async function getSocialVerification(nodeId: string) {
@@ -118,7 +136,7 @@ export async function getSocialVerification(nodeId: string) {
     functionName: "get_social_verification",
     args: [nodeId],
   });
-  return typeof result === "string" ? JSON.parse(result) : result;
+  return parseContractResult(result);
 }
 
 export async function getRelationshipVerification(edgeId: string) {
@@ -128,7 +146,7 @@ export async function getRelationshipVerification(edgeId: string) {
     functionName: "get_relationship_verification",
     args: [edgeId],
   });
-  return typeof result === "string" ? JSON.parse(result) : result;
+  return parseContractResult(result);
 }
 
 export async function getContractStats() {
@@ -138,5 +156,5 @@ export async function getContractStats() {
     functionName: "get_stats",
     args: [],
   });
-  return typeof result === "string" ? JSON.parse(result) : result;
+  return parseContractResult(result);
 }
