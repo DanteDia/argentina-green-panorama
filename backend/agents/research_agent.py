@@ -400,39 +400,7 @@ Return ONLY the description, nothing else."""
     return None
 
 
-async def check_green_sector(company_name: str, url: str | None) -> tuple[bool, str | None]:
-    """Check if a company is in the green sector and return evidence."""
-    context = ""
-    if url:
-        html = await fetch_webpage(url)
-        if html:
-            context = f"\nWebsite content (first 2000 chars):\n{html[:2000]}"
-
-    try:
-        response = client.chat.completions.create(
-            model=DEFAULT_MODEL,
-            messages=[{
-                "role": "user",
-                "content": f"""Is the company "{company_name}" related to the green/environmental/sustainability sector?
-{context}
-
-Look for evidence of: carbon credits, renewable energy, conservation, sustainable agriculture,
-environmental consulting, green finance, biodiversity, reforestation, clean technology, ESG,
-water management, waste management, circular economy.
-
-Respond in JSON format:
-{{"is_green": true/false, "evidence": "brief explanation of green sector connection"}}"""
-            }],
-            temperature=0.1,
-            max_tokens=200,
-        )
-        text = response.choices[0].message.content.strip()
-        # Parse JSON from response
-        start = text.find("{")
-        end = text.rfind("}") + 1
-        if start >= 0 and end > start:
-            data = json.loads(text[start:end])
-            return data.get("is_green", False), data.get("evidence")
-    except Exception:
-        pass
-    return False, None
+# NOTE: check_green_sector() was intentionally removed.
+# When GenLayer validators reach consensus that a company is NOT in the green sector,
+# we trust that consensus rather than asking another LLM (which would be sycophantic
+# and fabricate "evidence" to please the prompter). These nodes go directly to grey mode.

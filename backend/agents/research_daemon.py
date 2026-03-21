@@ -285,15 +285,33 @@ def extract_failure_reason(leader_result) -> str:
     return f"Unexpected result format: {str(leader_result)[:200]}"
 
 
+# Failure types where GenLayer consensus should be trusted — skip straight to grey
+CONSENSUS_TRUST_FAILURES = {"green", "sector", "argentina"}
+
+
 async def re_research_failed_node(node_id: str, nombre: str, link: str, failure_reason: str) -> dict:
-    """Re-run research on a node that failed verification, trying to fix the data."""
+    """Re-run research on a node that failed verification.
+
+    Strategy per failure type:
+    - "website not found"       → fixable: try to find better URL
+    - "description inaccurate"  → fixable: re-scrape and rewrite
+    - "not in green sector"     → trust GenLayer consensus, skip to grey
+    - "no Argentina connection" → trust GenLayer consensus, skip to grey
+    """
     log.info(f"  Re-researching {nombre} due to: {failure_reason}")
+    reason_lower = failure_reason.lower()
+
+    # Check if this is a consensus-trust failure — don't fight GenLayer on these
+    if any(keyword in reason_lower for keyword in CONSENSUS_TRUST_FAILURES):
+        log.info(f"  Skipping retry — GenLayer consensus should be trusted: {failure_reason[:100]}")
+        log_event("skip_to_grey", nombre=nombre, reason="consensus_trust", failure=failure_reason[:200])
+        return {"status": "skip_to_grey", "reason": failure_reason}
 
     sb = get_supabase()
     updates = {}
 
-    # If website not found, try to find a better URL
-    if "not found" in failure_reason.lower() or "not accessible" in failure_reason.lower():
+    # Fixable: website not found — try to find a better URL
+    if "not found" in reason_lower or "not accessible" in reason_lower:
         log.info(f"  Trying to find better URL for {nombre}...")
         try:
             from agents.research_agent import find_better_url
@@ -304,8 +322,8 @@ async def re_research_failed_node(node_id: str, nombre: str, link: str, failure_
         except (ImportError, Exception) as e:
             log.warning(f"  Could not find better URL: {e}")
 
-    # If description inaccurate, try to get better description
-    if "description" in failure_reason.lower():
+    # Fixable: description inaccurate — re-scrape website and rewrite
+    if "description" in reason_lower or "accuracy" in reason_lower:
         log.info(f"  Trying to get better description for {nombre}...")
         try:
             from agents.research_agent import get_company_description
@@ -315,20 +333,6 @@ async def re_research_failed_node(node_id: str, nombre: str, link: str, failure_
                 log.info(f"  Updated description for {nombre}")
         except (ImportError, Exception) as e:
             log.warning(f"  Could not get better description: {e}")
-
-    # If not clearly in green sector, try to find green sector evidence
-    if "green" in failure_reason.lower() or "sector" in failure_reason.lower():
-        log.info(f"  Trying to find green sector evidence for {nombre}...")
-        try:
-            from agents.research_agent import check_green_sector
-            is_green, evidence = await check_green_sector(nombre, link)
-            if is_green and evidence:
-                current = sb.table("nodes").select("descripcion").eq("id", node_id).execute()
-                if current.data:
-                    old_desc = current.data[0].get("descripcion", "")
-                    updates["descripcion"] = f"{old_desc}. Sector verde: {evidence}"
-        except (ImportError, Exception) as e:
-            log.warning(f"  Could not check green sector: {e}")
 
     if updates:
         sb.table("nodes").update(updates).eq("id", node_id).execute()
@@ -364,6 +368,18 @@ async def verify_with_retry(node_id: str, nombre: str, link: str, cluster: str,
     if attempts < MAX_VERIFICATION_ATTEMPTS:
         # Step 1: Re-research based on failure feedback
         research_result = await re_research_failed_node(node_id, nombre, link, failure_reason)
+
+        # If GenLayer consensus should be trusted (green_sector, argentina_related),
+        # skip straight to grey — don't waste time retrying
+        if research_result.get("status") == "skip_to_grey":
+            sb = get_supabase()
+            sb.table("nodes").update({
+                "verification_status": "grey",
+                "verification_attempts": MAX_VERIFICATION_ATTEMPTS,
+                "verification_failure_reason": failure_reason,
+            }).eq("id", node_id).execute()
+            log.warning(f"  {nombre} → GREY (GenLayer consensus trusted: {failure_reason[:80]})")
+            return {"status": "failed", "grey": True, "failure_reason": failure_reason}
 
         if research_result.get("status") == "updated":
             # Reload updated node data from Supabase
