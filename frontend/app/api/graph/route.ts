@@ -32,6 +32,9 @@ export async function GET() {
             logo_url: n.logo_url,
             verified: n.verified || false,
             verification_tx: n.verification_tx,
+            verification_attempts: n.verification_attempts || 0,
+            verification_status: n.verification_status || "unverified",
+            verification_failure_reason: n.verification_failure_reason || null,
             source: n.source || "manual",
           })),
           edges: edges.map((e) => ({

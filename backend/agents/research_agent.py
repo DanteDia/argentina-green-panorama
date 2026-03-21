@@ -340,3 +340,99 @@ if __name__ == "__main__":
                 print(f"  - {node.nombre} ({node.cluster}/{node.categoria})")
                 print(f"    {node.descripcion}")
                 print(f"    Rel: {node.relationship_type}")
+
+
+# --- Re-research helpers for verification feedback loop ---
+
+async def find_better_url(company_name: str) -> str | None:
+    """Use LLM to find a better website URL for a company."""
+    try:
+        response = client.chat.completions.create(
+            model=DEFAULT_MODEL,
+            messages=[{
+                "role": "user",
+                "content": f"""Find the official website URL for the company "{company_name}" which operates in Argentina's green/environmental sector.
+
+Return ONLY the URL, nothing else. If you cannot find it, return "NOT_FOUND".
+Example: https://kilimo.com"""
+            }],
+            temperature=0.1,
+            max_tokens=100,
+        )
+        url = response.choices[0].message.content.strip()
+        if url and url.startswith("http") and "NOT_FOUND" not in url:
+            return url
+    except Exception:
+        pass
+    return None
+
+
+async def get_company_description(company_name: str, url: str | None) -> str | None:
+    """Use LLM + web scraping to get an accurate Spanish description of a company."""
+    context = ""
+    if url:
+        html = await fetch_webpage(url)
+        if html:
+            context = f"\nWebsite content (first 2000 chars):\n{html[:2000]}"
+
+    try:
+        response = client.chat.completions.create(
+            model=DEFAULT_MODEL,
+            messages=[{
+                "role": "user",
+                "content": f"""Write a factual 1-2 sentence description in Spanish of the company "{company_name}"
+that operates in Argentina's green/environmental/sustainability sector.
+{context}
+
+Focus on: what they do, their sector (carbon credits, renewable energy, conservation, agtech, etc.),
+and their connection to Argentina. Be specific and factual.
+
+Return ONLY the description, nothing else."""
+            }],
+            temperature=0.2,
+            max_tokens=200,
+        )
+        desc = response.choices[0].message.content.strip()
+        if desc and len(desc) > 20:
+            return desc
+    except Exception:
+        pass
+    return None
+
+
+async def check_green_sector(company_name: str, url: str | None) -> tuple[bool, str | None]:
+    """Check if a company is in the green sector and return evidence."""
+    context = ""
+    if url:
+        html = await fetch_webpage(url)
+        if html:
+            context = f"\nWebsite content (first 2000 chars):\n{html[:2000]}"
+
+    try:
+        response = client.chat.completions.create(
+            model=DEFAULT_MODEL,
+            messages=[{
+                "role": "user",
+                "content": f"""Is the company "{company_name}" related to the green/environmental/sustainability sector?
+{context}
+
+Look for evidence of: carbon credits, renewable energy, conservation, sustainable agriculture,
+environmental consulting, green finance, biodiversity, reforestation, clean technology, ESG,
+water management, waste management, circular economy.
+
+Respond in JSON format:
+{{"is_green": true/false, "evidence": "brief explanation of green sector connection"}}"""
+            }],
+            temperature=0.1,
+            max_tokens=200,
+        )
+        text = response.choices[0].message.content.strip()
+        # Parse JSON from response
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start >= 0 and end > start:
+            data = json.loads(text[start:end])
+            return data.get("is_green", False), data.get("evidence")
+    except Exception:
+        pass
+    return False, None

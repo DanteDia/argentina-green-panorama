@@ -166,8 +166,16 @@ def insert_edge(source_name: str, target_name: str, rel_type: str) -> bool:
     return False
 
 
+MAX_VERIFICATION_ATTEMPTS = 3
+
+
 async def trigger_verification(node_id: str, nombre: str, link: str, cluster: str, categoria: str, descripcion: str) -> dict:
     """Submit a node to GenLayer for verification via the Vercel API, poll until done, and update Supabase."""
+    sb = get_supabase()
+
+    # Mark as pending in Supabase
+    sb.table("nodes").update({"verification_status": "pending"}).eq("id", node_id).execute()
+
     try:
         async with aiohttp.ClientSession() as session:
             # Step 1: Submit verification
@@ -199,20 +207,40 @@ async def trigger_verification(node_id: str, nombre: str, link: str, cluster: st
 
                 if status in ("FINALIZED", "ACCEPTED", "accepted", "finalized"):
                     log.info(f"  Verification PASSED for {nombre} (attempt {attempt + 1})")
-                    # Update Supabase
-                    sb = get_supabase()
                     sb.table("nodes").update({
                         "verified": True,
                         "verification_tx": tx_hash,
+                        "verification_status": "verified",
+                        "verification_failure_reason": None,
                     }).eq("id", node_id).execute()
                     log_event("verification_passed", nombre=nombre, tx_hash=tx_hash, attempts=attempt + 1)
                     return {"status": "verified", "tx_hash": tx_hash}
 
                 if status in ("UNDETERMINED", "CANCELED", "undetermined", "canceled"):
-                    log.warning(f"  Verification FAILED for {nombre}: {status}")
                     leader = status_data.get("leaderResult")
-                    log_event("verification_failed", nombre=nombre, status=status, leader_result=str(leader)[:200])
-                    return {"status": "failed", "reason": status, "leader_result": leader}
+                    failure_reason = extract_failure_reason(leader)
+                    log.warning(f"  Verification FAILED for {nombre}: {status} — {failure_reason}")
+
+                    # Increment attempts and store failure reason
+                    current = sb.table("nodes").select("verification_attempts").eq("id", node_id).execute()
+                    attempts = (current.data[0]["verification_attempts"] or 0) + 1 if current.data else 1
+
+                    new_status = "grey" if attempts >= MAX_VERIFICATION_ATTEMPTS else "failed"
+                    sb.table("nodes").update({
+                        "verification_attempts": attempts,
+                        "verification_status": new_status,
+                        "verification_failure_reason": failure_reason,
+                    }).eq("id", node_id).execute()
+
+                    log_event("verification_failed", nombre=nombre, status=status,
+                              attempts=attempts, failure_reason=failure_reason,
+                              leader_result=str(leader)[:300])
+
+                    if new_status == "grey":
+                        log.warning(f"  {nombre} hit {MAX_VERIFICATION_ATTEMPTS} failures — marked GREY (manual review needed)")
+
+                    return {"status": "failed", "reason": status, "failure_reason": failure_reason,
+                            "leader_result": leader, "attempts": attempts, "grey": new_status == "grey"}
 
                 if attempt % 6 == 0:
                     log.info(f"  Still verifying {nombre}... ({status}, attempt {attempt + 1})")
@@ -225,19 +253,156 @@ async def trigger_verification(node_id: str, nombre: str, link: str, cluster: st
         return {"status": "error", "error": str(e)}
 
 
-async def verify_unverified_batch(max_nodes: int = 5):
-    """Find unverified nodes in Supabase and submit them for GenLayer verification."""
+def extract_failure_reason(leader_result) -> str:
+    """Extract human-readable failure reason from GenLayer leader result."""
+    if not leader_result:
+        return "No feedback from validators"
+
+    if isinstance(leader_result, str):
+        try:
+            leader_result = json.loads(leader_result)
+        except (json.JSONDecodeError, TypeError):
+            return f"Validator feedback: {str(leader_result)[:200]}"
+
+    if isinstance(leader_result, dict):
+        # Extract specific failure fields from the contract response
+        reasons = []
+        if leader_result.get("exists") is False:
+            reasons.append("Company website not found or not accessible")
+        if leader_result.get("argentina_related") is False:
+            reasons.append("No evidence of Argentina connection")
+        if leader_result.get("green_sector") is False:
+            reasons.append("Not clearly in the green/environmental sector")
+        if leader_result.get("description_accurate") is False:
+            reasons.append("Description does not match website content")
+        if leader_result.get("reasoning"):
+            reasons.append(f"Reasoning: {str(leader_result['reasoning'])[:200]}")
+        if leader_result.get("accuracy_score") == "low":
+            reasons.append("Overall accuracy score: low")
+
+        return " | ".join(reasons) if reasons else f"Validator output: {json.dumps(leader_result)[:200]}"
+
+    return f"Unexpected result format: {str(leader_result)[:200]}"
+
+
+async def re_research_failed_node(node_id: str, nombre: str, link: str, failure_reason: str) -> dict:
+    """Re-run research on a node that failed verification, trying to fix the data."""
+    log.info(f"  Re-researching {nombre} due to: {failure_reason}")
+
     sb = get_supabase()
-    resp = sb.table("nodes").select("id, nombre, link, cluster, categoria, descripcion").eq("verified", False).limit(max_nodes).execute()
+    updates = {}
+
+    # If website not found, try to find a better URL
+    if "not found" in failure_reason.lower() or "not accessible" in failure_reason.lower():
+        log.info(f"  Trying to find better URL for {nombre}...")
+        try:
+            from agents.research_agent import find_better_url
+            new_url = await find_better_url(nombre)
+            if new_url and new_url != link:
+                updates["link"] = new_url
+                log.info(f"  Found new URL: {new_url}")
+        except (ImportError, Exception) as e:
+            log.warning(f"  Could not find better URL: {e}")
+
+    # If description inaccurate, try to get better description
+    if "description" in failure_reason.lower():
+        log.info(f"  Trying to get better description for {nombre}...")
+        try:
+            from agents.research_agent import get_company_description
+            new_desc = await get_company_description(nombre, link)
+            if new_desc:
+                updates["descripcion"] = new_desc
+                log.info(f"  Updated description for {nombre}")
+        except (ImportError, Exception) as e:
+            log.warning(f"  Could not get better description: {e}")
+
+    # If not clearly in green sector, try to find green sector evidence
+    if "green" in failure_reason.lower() or "sector" in failure_reason.lower():
+        log.info(f"  Trying to find green sector evidence for {nombre}...")
+        try:
+            from agents.research_agent import check_green_sector
+            is_green, evidence = await check_green_sector(nombre, link)
+            if is_green and evidence:
+                current = sb.table("nodes").select("descripcion").eq("id", node_id).execute()
+                if current.data:
+                    old_desc = current.data[0].get("descripcion", "")
+                    updates["descripcion"] = f"{old_desc}. Sector verde: {evidence}"
+        except (ImportError, Exception) as e:
+            log.warning(f"  Could not check green sector: {e}")
+
+    if updates:
+        sb.table("nodes").update(updates).eq("id", node_id).execute()
+        log_event("re_research_updated", nombre=nombre, updates=list(updates.keys()))
+        log.info(f"  Updated {len(updates)} fields for {nombre}: {list(updates.keys())}")
+        return {"status": "updated", "fields": list(updates.keys())}
+    else:
+        log.info(f"  No improvements found for {nombre}")
+        return {"status": "no_changes"}
+
+
+async def verify_with_retry(node_id: str, nombre: str, link: str, cluster: str,
+                             categoria: str, descripcion: str) -> dict:
+    """Full verification flow with retry logic:
+    1. Try verification
+    2. On failure, extract feedback from GenLayer
+    3. Re-research to fix data
+    4. Retry verification
+    5. After 3 failures, mark as grey (manual review)
+    """
+    result = await trigger_verification(node_id, nombre, link, cluster, categoria, descripcion)
+
+    if result.get("status") == "verified":
+        return result
+
+    if result.get("grey"):
+        return result  # Already hit max attempts
+
+    # Verification failed — try to fix and retry
+    failure_reason = result.get("failure_reason", "Unknown")
+    attempts = result.get("attempts", 1)
+
+    if attempts < MAX_VERIFICATION_ATTEMPTS:
+        # Step 1: Re-research based on failure feedback
+        research_result = await re_research_failed_node(node_id, nombre, link, failure_reason)
+
+        if research_result.get("status") == "updated":
+            # Reload updated node data from Supabase
+            sb = get_supabase()
+            updated = sb.table("nodes").select("link, descripcion").eq("id", node_id).execute()
+            if updated.data:
+                new_link = updated.data[0].get("link", link)
+                new_desc = updated.data[0].get("descripcion", descripcion)
+                log.info(f"  Retrying verification for {nombre} with updated data...")
+                await asyncio.sleep(5)  # Brief pause before retry
+                return await trigger_verification(node_id, nombre, new_link, cluster, categoria, new_desc)
+
+    return result
+
+
+async def verify_unverified_batch(max_nodes: int = 5):
+    """Find unverified nodes and submit for GenLayer verification with retry logic."""
+    sb = get_supabase()
+
+    # Get nodes that are unverified or failed (but NOT grey — those need manual review)
+    resp = (
+        sb.table("nodes")
+        .select("id, nombre, link, cluster, categoria, descripcion, verification_attempts, verification_status")
+        .neq("verification_status", "grey")
+        .neq("verification_status", "verified")
+        .neq("verification_status", "pending")
+        .order("verification_attempts", desc=False)  # Try nodes with fewest attempts first
+        .limit(max_nodes)
+        .execute()
+    )
 
     if not resp.data:
-        log.info("No unverified nodes found.")
+        log.info("No nodes needing verification found.")
         return []
 
-    log.info(f"Found {len(resp.data)} unverified nodes. Starting verification...")
+    log.info(f"Found {len(resp.data)} nodes to verify (attempts: {[n.get('verification_attempts', 0) for n in resp.data]})")
     results = []
     for node in resp.data:
-        result = await trigger_verification(
+        result = await verify_with_retry(
             node_id=str(node["id"]),
             nombre=node["nombre"],
             link=node.get("link", ""),
@@ -246,12 +411,12 @@ async def verify_unverified_batch(max_nodes: int = 5):
             descripcion=node.get("descripcion", ""),
         )
         results.append({"nombre": node["nombre"], **result})
-        # Small gap between submissions to avoid overwhelming GenLayer
         await asyncio.sleep(2)
 
     verified = sum(1 for r in results if r.get("status") == "verified")
     failed = sum(1 for r in results if r.get("status") == "failed")
-    log.info(f"Verification batch done: {verified} verified, {failed} failed, {len(results) - verified - failed} other")
+    grey = sum(1 for r in results if r.get("grey"))
+    log.info(f"Verification batch done: {verified} verified, {failed} failed, {grey} grey")
     return results
 
 

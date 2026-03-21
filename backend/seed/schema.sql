@@ -17,6 +17,9 @@ CREATE TABLE IF NOT EXISTS nodes (
   verified BOOLEAN DEFAULT FALSE,
   verification_tx TEXT,
   verification_date TIMESTAMPTZ,
+  verification_attempts INTEGER DEFAULT 0,
+  verification_status TEXT DEFAULT 'unverified',  -- unverified, pending, verified, failed, grey
+  verification_failure_reason TEXT,
   source TEXT DEFAULT 'manual',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

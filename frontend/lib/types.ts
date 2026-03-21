@@ -49,6 +49,9 @@ export interface GreenNode {
   logo_url?: string | null;
   verified: boolean;
   verification_tx: string | null;
+  verification_attempts?: number;
+  verification_status?: "unverified" | "pending" | "verified" | "failed" | "grey";
+  verification_failure_reason?: string | null;
   source: "manual" | "agent";
 }
 

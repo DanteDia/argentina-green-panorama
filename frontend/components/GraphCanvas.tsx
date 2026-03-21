@@ -27,6 +27,7 @@ interface ForceNode {
   followers: number | null;
   verified: boolean;
   verificationStatus?: string;
+  isGrey?: boolean;
   highlighted?: boolean;
   x?: number;
   y?: number;
@@ -93,6 +94,7 @@ export default function GraphCanvas({
       followers: n.followers,
       verified: n.verified || verificationStates[n.id]?.status === "finalized" || verificationStates[n.id]?.status === "accepted",
       verificationStatus: verificationStates[n.id]?.status,
+      isGrey: n.verification_status === "grey",
       highlighted: highlightSet.has(n.nombre.toLowerCase()),
       __data: n,
     }));
@@ -141,11 +143,11 @@ export default function GraphCanvas({
         ctx.shadowBlur = 15;
       }
 
-      // Draw node circle
+      // Draw node circle — grey mode nodes are desaturated
       ctx.beginPath();
       ctx.arc(node.x!, node.y!, size, 0, 2 * Math.PI);
-      ctx.fillStyle = color;
-      ctx.globalAlpha = isHovered ? 1 : 0.85;
+      ctx.fillStyle = node.isGrey ? "#4b5563" : color;
+      ctx.globalAlpha = node.isGrey ? 0.5 : (isHovered ? 1 : 0.85);
       ctx.fill();
       ctx.globalAlpha = 1;
 
@@ -159,7 +161,7 @@ export default function GraphCanvas({
       ctx.shadowBlur = 0;
 
       // Verification badge
-      if (node.verified || node.verificationStatus === "pending" || node.verificationStatus === "failed") {
+      if (node.verified || node.isGrey || node.verificationStatus === "pending" || node.verificationStatus === "failed") {
         const badgeX = node.x! + size * 0.7;
         const badgeY = node.y! - size * 0.7;
         const badgeR = node.verified ? 4 : 3;
@@ -167,7 +169,10 @@ export default function GraphCanvas({
         ctx.beginPath();
         ctx.arc(badgeX, badgeY, badgeR, 0, 2 * Math.PI);
 
-        if (node.verificationStatus === "pending") {
+        if (node.isGrey) {
+          // Grey badge with "?" feel — manual review needed
+          ctx.fillStyle = "#6b7280";
+        } else if (node.verificationStatus === "pending") {
           // Pulsing amber for pending
           const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 300);
           ctx.fillStyle = `rgba(245, 158, 11, ${0.5 + pulse * 0.5})`;

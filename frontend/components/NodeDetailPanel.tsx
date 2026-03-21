@@ -190,17 +190,40 @@ export default function NodeDetailPanel({
                 </a>
               )}
             </div>
+          ) : node.verification_status === "grey" ? (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-zinc-400 text-xs">
+                <span className="w-3 h-3 rounded-full bg-zinc-500 flex-shrink-0" />
+                {lang === "es" ? "Revision manual necesaria" : "Manual review needed"}
+                <span className="text-zinc-500">({node.verification_attempts || 0}/3 intentos)</span>
+              </div>
+              {node.verification_failure_reason && (
+                <p className="text-xs text-zinc-500 pl-5 italic">
+                  {node.verification_failure_reason.slice(0, 150)}
+                </p>
+              )}
+            </div>
           ) : isFailed ? (
-            <div className="flex items-center gap-1.5 text-red-400 text-xs">
-              <span>&#10007;</span>
-              {labels.failed}
-              {onVerify && (
-                <button
-                  onClick={() => onVerify(node)}
-                  className="text-blue-400 hover:text-blue-300 underline ml-1"
-                >
-                  {labels.retry}
-                </button>
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5 text-red-400 text-xs">
+                <span>&#10007;</span>
+                {labels.failed}
+                {node.verification_attempts ? (
+                  <span className="text-zinc-500">({node.verification_attempts}/3)</span>
+                ) : null}
+                {onVerify && (
+                  <button
+                    onClick={() => onVerify(node)}
+                    className="text-blue-400 hover:text-blue-300 underline ml-1"
+                  >
+                    {labels.retry}
+                  </button>
+                )}
+              </div>
+              {node.verification_failure_reason && (
+                <p className="text-xs text-zinc-500 pl-5 italic">
+                  {node.verification_failure_reason.slice(0, 150)}
+                </p>
               )}
             </div>
           ) : (
