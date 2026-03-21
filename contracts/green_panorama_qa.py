@@ -172,8 +172,17 @@ Website B content:
 Check if there is evidence on either website that this relationship exists.
 Look for: partner logos, mentions, press releases, portfolio pages, funding announcements.
 
+Also determine if the relationship TYPE is accurate:
+- "funds": A provides money/investment to B
+- "partners_with": A and B collaborate as allies/partners
+- "client_of": B is a client/customer of A
+- "portfolio": B is in A's portfolio/accelerator program
+- "regulates": A has regulatory authority over B
+
+If the relationship exists but the type is wrong, set type_accurate to false and suggest the correct type.
+
 Respond ONLY as valid JSON:
-{{"relationship_confirmed": true/false, "evidence_found_on": "website_a"/"website_b"/"both"/"neither", "confidence": "high"/"medium"/"low", "reasoning": "brief explanation"}}
+{{"relationship_confirmed": true/false, "type_accurate": true/false, "suggested_type": "funds"/"partners_with"/"client_of"/"portfolio"/"regulates", "evidence_found_on": "website_a"/"website_b"/"both"/"neither", "confidence": "high"/"medium"/"low", "reasoning": "brief explanation"}}
 """
             result = gl.nondet.exec_prompt(task)
             parsed = extract_json(result)
