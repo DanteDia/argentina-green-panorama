@@ -1,0 +1,17 @@
+[Unit]
+Description=Green Panorama Research Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/green-panorama/backend
+ExecStart=/usr/bin/python3 -m agents.research_daemon --interval 600
+Restart=always
+RestartSec=30
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/root/green-panorama/backend/.env
+
+[Install]
+WantedBy=multi-user.target
