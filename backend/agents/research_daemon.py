@@ -50,8 +50,8 @@ MAX_AGENT_NODES = 500   # Global budget: max agent-discovered nodes total
 
 # --- Perplexity cost management ---
 MAX_FUNDING_QUERIES_PER_CYCLE = 3  # Max Perplexity API calls per research cycle
-MAX_DEEP_DISCOVERY_PER_PASS = 2    # Max nodes to deep-research per pass
-DEEP_DISCOVERY_EVERY_N_CYCLES = 3  # Run deep discovery every N cycles
+MAX_DEEP_DISCOVERY_PER_PASS = 3    # Max nodes to deep-research per pass
+DEEP_DISCOVERY_EVERY_N_CYCLES = 2  # Run deep discovery every N cycles
 
 logging.basicConfig(
     level=logging.INFO,
