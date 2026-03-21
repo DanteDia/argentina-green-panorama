@@ -2,24 +2,30 @@
 // Never import this file from client components
 
 import { createClient, createAccount } from "genlayer-js";
-import { testnetBradbury } from "genlayer-js/chains";
+import { studionet } from "genlayer-js/chains";
 import type { Address } from "viem";
 
-const privateKey = process.env.GENLAYER_PRIVATE_KEY as `0x${string}` | undefined;
-const contractAddress = process.env.NEXT_PUBLIC_GENLAYER_CONTRACT as Address | undefined;
+// Contract deployed on GenLayer Studio (studionet)
+const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_GENLAYER_CONTRACT ||
+  "0x29d01F734B806bBc735e3e7C175C234c6a643B4C") as Address;
+
+// Studionet is a simulator — no gas fees, auto-funded accounts
+// No private key needed
+let _client: ReturnType<typeof createClient> | null = null;
 
 function getClient() {
-  if (!privateKey) throw new Error("GENLAYER_PRIVATE_KEY not set");
-  const account = createAccount(privateKey);
-  return createClient({
-    chain: testnetBradbury,
-    account,
-  });
+  if (!_client) {
+    const account = createAccount(); // generates fresh funded account on studionet
+    _client = createClient({
+      chain: studionet,
+      account,
+    });
+  }
+  return _client;
 }
 
 export function getContractAddress(): Address {
-  if (!contractAddress) throw new Error("NEXT_PUBLIC_GENLAYER_CONTRACT not set");
-  return contractAddress;
+  return CONTRACT_ADDRESS;
 }
 
 export async function verifyNode(
@@ -34,7 +40,7 @@ export async function verifyNode(
   const hash = await client.writeContract({
     address: getContractAddress(),
     functionName: "verify_node",
-    args: [nodeId, nombre, link || "", cluster, categoria, descripcion],
+    args: [nodeId, nombre, link || "", cluster || "", categoria || "", descripcion || ""],
     value: 0n,
   });
   return hash;
@@ -43,7 +49,7 @@ export async function verifyNode(
 export async function verifySocial(
   nodeId: string,
   nombre: string,
-  socialLinks: string[], // URLs
+  socialLinks: string[],
   claimedFollowers: Record<string, number>,
 ): Promise<string> {
   const client = getClient();
@@ -74,7 +80,7 @@ export async function verifyRelationship(
   const hash = await client.writeContract({
     address: getContractAddress(),
     functionName: "verify_relationship",
-    args: [edgeId, nodeAName, nodeALink, nodeBName, nodeBLink, relationshipType, relationshipDescription],
+    args: [edgeId, nodeAName, nodeALink || "", nodeBName, nodeBLink || "", relationshipType || "", relationshipDescription || ""],
     value: 0n,
   });
   return hash;

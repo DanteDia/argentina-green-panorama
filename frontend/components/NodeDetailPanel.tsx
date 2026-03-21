@@ -137,6 +137,9 @@ export default function NodeDetailPanel({
   const isSocialFailed = verificationState?.socialStatus === "failed";
   const hasSocialResult = verificationState?.socialStatus === "finalized" || verificationState?.socialStatus === "accepted";
 
+  // Only show social audit for nodes with social media links
+  const hasSocialLink = node.link && /instagram|linkedin|twitter|x\.com|facebook|tiktok|youtube/.test(node.link);
+
   return (
     <div className="fixed right-0 top-0 h-full w-96 bg-zinc-900/95 backdrop-blur-md border-l border-zinc-700 overflow-y-auto z-50 shadow-2xl">
       {/* Header */}
@@ -221,7 +224,7 @@ export default function NodeDetailPanel({
               {labels.verify_btn}
             </button>
           )}
-          {!hasSocialResult && !isSocialPending && onSocialAudit && node.link && (
+          {!hasSocialResult && !isSocialPending && onSocialAudit && hasSocialLink && (
             <button
               onClick={() => onSocialAudit(node)}
               className="flex-1 text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-lg transition flex items-center justify-center gap-1.5"

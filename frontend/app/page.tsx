@@ -212,6 +212,35 @@ export default function Home() {
     [pollStatus]
   );
 
+  const [isBatchVerifying, setIsBatchVerifying] = useState(false);
+
+  const handleBatchVerify = useCallback(async () => {
+    setIsBatchVerifying(true);
+    try {
+      const res = await fetch("/api/verify/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: 5 }),
+      });
+      const data = await res.json();
+      if (data.results) {
+        for (const r of data.results) {
+          if (r.txHash) {
+            setVerificationStates((prev) => ({
+              ...prev,
+              [r.nodeId]: { ...prev[r.nodeId], status: "pending", txHash: r.txHash },
+            }));
+            pollStatus(r.nodeId, r.txHash, "node");
+          }
+        }
+      }
+    } catch {
+      // batch failed
+    } finally {
+      setIsBatchVerifying(false);
+    }
+  }, [pollStatus]);
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-zinc-950 flex items-center justify-center">
@@ -239,6 +268,8 @@ export default function Home() {
         verifiedCount={verifiedCount}
         lang={lang}
         onLangToggle={toggleLang}
+        onBatchVerify={handleBatchVerify}
+        isBatchVerifying={isBatchVerifying}
       />
 
       {/* Graph Canvas - offset by sidebar width */}

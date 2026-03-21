@@ -2,6 +2,41 @@
 
 from genlayer import *
 import json
+import re
+
+
+def extract_json(text: str) -> dict:
+    """Extract JSON from LLM response, handling markdown code blocks and preamble."""
+    if not text or not text.strip():
+        return {"error": "empty_response"}
+    # Try direct parse first
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    # Try extracting from markdown code block
+    match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except Exception:
+            pass
+    # Try finding first { ... } block
+    match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except Exception:
+            pass
+    # Try finding nested { ... { ... } ... }
+    start = text.find('{')
+    end = text.rfind('}')
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(text[start:end + 1])
+        except Exception:
+            pass
+    return {"error": "could_not_parse", "raw": text[:200]}
 
 
 class GreenPanoramaQA(gl.Contract):
@@ -52,24 +87,28 @@ Company data to verify:
 - Category: {categoria}
 - Description: {descripcion}
 
-Website content (first 4000 chars):
+Website content:
 {web_data}
 
+IMPORTANT: If the website is unavailable or empty, use your general knowledge about this company/institution.
+Only mark a field as false if you have evidence it's incorrect, not just because data is missing.
+If you cannot determine a field, use your best judgment and explain in reasoning.
+
 Verify the following and respond ONLY as valid JSON:
-1. "exists": Does this company/institution actually exist based on the website content?
+1. "exists": Does this company/institution actually exist? (check website content or use general knowledge)
 2. "argentina_related": Is it related to Argentina? (headquartered, operates in, or has
    significant presence/projects in Argentina. International orgs that work WITH Argentina count as true)
 3. "green_sector": Is it genuinely part of the green/carbon/environmental/conservation/
    cleantech/sustainability sector?
-4. "description_accurate": Is the provided description reasonably accurate based on website content?
+4. "description_accurate": Is the provided description reasonably accurate? (if no description provided, set true)
 5. "accuracy_score": Rate overall data accuracy as "high", "medium", or "low"
-6. "reasoning": Brief explanation (max 100 words)
+6. "reasoning": Brief explanation (max 100 words). Mention any fields you could not verify due to missing data.
 
 JSON format:
 {{"exists": true, "argentina_related": true, "green_sector": true, "description_accurate": true, "accuracy_score": "high", "reasoning": "..."}}
 """
             result = gl.nondet.exec_prompt(task)
-            parsed = json.loads(result)
+            parsed = extract_json(result)
             return json.dumps(parsed, sort_keys=True)
 
         result_str = gl.eq_principle.strict_eq(nondet)
@@ -120,10 +159,10 @@ Claimed relationship:
 - Relationship type: {relationship_type}
 - Description: {relationship_description}
 
-Website A content (first 3000 chars):
+Website A content:
 {web_data_a}
 
-Website B content (first 3000 chars):
+Website B content:
 {web_data_b}
 
 Check if there is evidence on either website that this relationship exists.
@@ -133,7 +172,7 @@ Respond ONLY as valid JSON:
 {{"relationship_confirmed": true/false, "evidence_found_on": "website_a"/"website_b"/"both"/"neither", "confidence": "high"/"medium"/"low", "reasoning": "brief explanation"}}
 """
             result = gl.nondet.exec_prompt(task)
-            parsed = json.loads(result)
+            parsed = extract_json(result)
             return json.dumps(parsed, sort_keys=True)
 
         result_str = gl.eq_principle.strict_eq(nondet)
@@ -200,7 +239,7 @@ Include an entry for each platform found in the URLs. Detect the platform from t
 (instagram.com, linkedin.com, twitter.com/x.com, facebook.com, youtube.com, tiktok.com).
 """
             result = gl.nondet.exec_prompt(task)
-            parsed = json.loads(result)
+            parsed = extract_json(result)
             return json.dumps(parsed, sort_keys=True)
 
         result_str = gl.eq_principle.strict_eq(nondet)
