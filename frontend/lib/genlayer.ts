@@ -104,6 +104,19 @@ export async function verifyRelationship(
   return hash;
 }
 
+// GenLayer SDK returns numeric status codes — normalize to strings
+const STATUS_MAP: Record<number, string> = {
+  0: "UNINITIALIZED", 1: "PENDING", 2: "PROPOSING",
+  3: "COMMITTING", 4: "REVEALING", 5: "ACCEPTED",
+  6: "UNDETERMINED", 7: "FINALIZED", 8: "CANCELED",
+};
+
+function normalizeStatus(status: unknown): string {
+  if (typeof status === "number") return STATUS_MAP[status] || String(status);
+  if (typeof status === "string") return status;
+  return "UNKNOWN";
+}
+
 export async function getTransactionStatus(txHash: string) {
   const client = getClient();
   try {
@@ -113,7 +126,7 @@ export async function getTransactionStatus(txHash: string) {
       retries: 1,
       interval: 2000,
     });
-    return { status: receipt.status, data: receipt };
+    return { status: normalizeStatus(receipt.status), data: receipt };
   } catch {
     return { status: "PENDING", data: null };
   }

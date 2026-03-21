@@ -58,6 +58,7 @@ export default function Home() {
           const res = await fetch(`/api/verify/status?txHash=${txHash}`);
           const data = await res.json();
 
+          // Check for success
           if (
             data.status === "ACCEPTED" ||
             data.status === "FINALIZED"
@@ -89,6 +90,23 @@ export default function Home() {
                 )
               );
             }
+            return;
+          }
+
+          // Check for failure (consensus not reached)
+          if (
+            data.status === "UNDETERMINED" ||
+            data.status === "CANCELED"
+          ) {
+            setVerificationStates((prev) => ({
+              ...prev,
+              [nodeId]: {
+                ...prev[nodeId],
+                ...(type === "node"
+                  ? { status: "failed" as const }
+                  : { socialStatus: "failed" as const }),
+              },
+            }));
             return;
           }
         } catch {
