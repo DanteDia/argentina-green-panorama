@@ -1,6 +1,7 @@
 "use client";
 
 import { CLUSTER_COLORS, CLUSTER_LABELS_ES, CLUSTER_LABELS_EN, EDGE_COLORS, GreenNode } from "@/lib/types";
+import ActivityFeed from "./ActivityFeed";
 
 interface FilterSidebarProps {
   clusters: string[];
@@ -207,6 +208,15 @@ export default function FilterSidebar({
           </div>
         </div>
       )}
+
+      {/* Activity Feed */}
+      <ActivityFeed
+        lang={lang}
+        onNodeClick={(name) => {
+          const node = nodes.find((n) => n.nombre === name);
+          if (node) onSearchSelect?.(node);
+        }}
+      />
 
       {/* Stats */}
       <div className="mt-auto p-4 border-t border-zinc-700">
