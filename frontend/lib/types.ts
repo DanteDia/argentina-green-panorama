@@ -1,3 +1,40 @@
+// Verification types
+export type VerificationStatus = "unverified" | "pending" | "accepted" | "finalized" | "failed";
+
+export interface VerificationResult {
+  exists: boolean;
+  argentina_related: boolean;
+  green_sector: boolean;
+  description_accurate: boolean;
+  accuracy_score: "high" | "medium" | "low";
+  reasoning: string;
+}
+
+export interface SocialPlatformResult {
+  link_valid: boolean;
+  belongs_to_company: boolean;
+  is_real_account: boolean;
+  estimated_followers: string;
+  follower_match: boolean;
+  activity_level: "active" | "dormant" | "dead";
+  last_post_estimate: string;
+}
+
+export interface SocialAuditResult {
+  platforms: Record<string, SocialPlatformResult>;
+  overall_social_score: "high" | "medium" | "low";
+  reasoning: string;
+}
+
+export interface NodeVerificationState {
+  status: VerificationStatus;
+  txHash?: string;
+  result?: VerificationResult;
+  socialResult?: SocialAuditResult;
+  socialTxHash?: string;
+  socialStatus?: VerificationStatus;
+}
+
 export interface GreenNode {
   id: string;
   nombre: string;

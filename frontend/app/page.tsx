@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import GraphCanvas from "@/components/GraphCanvas";
 import FilterSidebar from "@/components/FilterSidebar";
 import NodeDetailPanel from "@/components/NodeDetailPanel";
-import { GreenNode, GreenEdge } from "@/lib/types";
+import { GreenNode, GreenEdge, NodeVerificationState } from "@/lib/types";
 import { fetchGraph } from "@/lib/api";
 
 export default function Home() {
@@ -15,6 +15,9 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [lang, setLang] = useState<"es" | "en">("es");
   const [loading, setLoading] = useState(true);
+  const [verificationStates, setVerificationStates] = useState<
+    Record<string, NodeVerificationState>
+  >({});
 
   useEffect(() => {
     fetchGraph()
@@ -27,7 +30,11 @@ export default function Home() {
   }, []);
 
   const clusters = [...new Set(nodes.map((n) => n.cluster))].sort();
-  const verifiedCount = nodes.filter((n) => n.verified).length;
+  const verifiedCount =
+    nodes.filter((n) => n.verified).length +
+    Object.values(verificationStates).filter(
+      (v) => v.status === "finalized" || v.status === "accepted"
+    ).length;
 
   const handleNodeClick = useCallback((node: GreenNode) => {
     setSelectedNode(node);
@@ -40,6 +47,170 @@ export default function Home() {
   const toggleLang = useCallback(() => {
     setLang((prev) => (prev === "es" ? "en" : "es"));
   }, []);
+
+  // Poll transaction status
+  const pollStatus = useCallback(
+    async (nodeId: string, txHash: string, type: "node" | "social") => {
+      const maxAttempts = 60; // 5 min max
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        try {
+          const res = await fetch(`/api/verify/status?txHash=${txHash}`);
+          const data = await res.json();
+
+          if (
+            data.status === "ACCEPTED" ||
+            data.status === "FINALIZED"
+          ) {
+            // Fetch verification result
+            const resultType = type === "social" ? "social" : "node";
+            const resultRes = await fetch(
+              `/api/verify/result?nodeId=${nodeId}&type=${resultType}`
+            );
+            const result = await resultRes.json();
+
+            setVerificationStates((prev) => ({
+              ...prev,
+              [nodeId]: {
+                ...prev[nodeId],
+                ...(type === "node"
+                  ? { status: "finalized", result }
+                  : { socialStatus: "finalized", socialResult: result }),
+              },
+            }));
+
+            // Update node verified flag
+            if (type === "node") {
+              setNodes((prev) =>
+                prev.map((n) =>
+                  n.id === nodeId
+                    ? { ...n, verified: true, verification_tx: txHash }
+                    : n
+                )
+              );
+            }
+            return;
+          }
+        } catch {
+          // continue polling
+        }
+      }
+
+      // Timeout
+      setVerificationStates((prev) => ({
+        ...prev,
+        [nodeId]: {
+          ...prev[nodeId],
+          ...(type === "node"
+            ? { status: "failed" as const }
+            : { socialStatus: "failed" as const }),
+        },
+      }));
+    },
+    []
+  );
+
+  const handleVerify = useCallback(
+    async (node: GreenNode) => {
+      setVerificationStates((prev) => ({
+        ...prev,
+        [node.id]: { ...prev[node.id], status: "pending" },
+      }));
+
+      try {
+        const res = await fetch("/api/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nodeId: node.id,
+            nombre: node.nombre,
+            link: node.link,
+            cluster: node.cluster,
+            categoria: node.categoria,
+            descripcion: node.descripcion,
+          }),
+        });
+
+        const data = await res.json();
+        if (data.txHash) {
+          setVerificationStates((prev) => ({
+            ...prev,
+            [node.id]: { ...prev[node.id], status: "pending", txHash: data.txHash },
+          }));
+          pollStatus(node.id, data.txHash, "node");
+        } else {
+          setVerificationStates((prev) => ({
+            ...prev,
+            [node.id]: { ...prev[node.id], status: "failed" },
+          }));
+        }
+      } catch {
+        setVerificationStates((prev) => ({
+          ...prev,
+          [node.id]: { ...prev[node.id], status: "failed" },
+        }));
+      }
+    },
+    [pollStatus]
+  );
+
+  const handleSocialAudit = useCallback(
+    async (node: GreenNode) => {
+      setVerificationStates((prev) => ({
+        ...prev,
+        [node.id]: { ...prev[node.id], socialStatus: "pending" },
+      }));
+
+      // Extract social links from node.link (often Instagram/LinkedIn)
+      const socialLinks = node.link ? [node.link] : [];
+      const claimedFollowers: Record<string, number> = {};
+      if (node.followers && node.link) {
+        // Detect platform from URL
+        if (node.link.includes("instagram")) claimedFollowers.instagram = node.followers;
+        else if (node.link.includes("linkedin")) claimedFollowers.linkedin = node.followers;
+        else if (node.link.includes("twitter") || node.link.includes("x.com"))
+          claimedFollowers.twitter = node.followers;
+        else claimedFollowers.website = node.followers;
+      }
+
+      try {
+        const res = await fetch("/api/verify/social", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nodeId: node.id,
+            nombre: node.nombre,
+            socialLinks,
+            claimedFollowers,
+          }),
+        });
+
+        const data = await res.json();
+        if (data.txHash) {
+          setVerificationStates((prev) => ({
+            ...prev,
+            [node.id]: {
+              ...prev[node.id],
+              socialStatus: "pending",
+              socialTxHash: data.txHash,
+            },
+          }));
+          pollStatus(node.id, data.txHash, "social");
+        } else {
+          setVerificationStates((prev) => ({
+            ...prev,
+            [node.id]: { ...prev[node.id], socialStatus: "failed" },
+          }));
+        }
+      } catch {
+        setVerificationStates((prev) => ({
+          ...prev,
+          [node.id]: { ...prev[node.id], socialStatus: "failed" },
+        }));
+      }
+    },
+    [pollStatus]
+  );
 
   if (loading) {
     return (
@@ -78,6 +249,7 @@ export default function Home() {
           selectedCluster={selectedCluster}
           searchQuery={searchQuery}
           onNodeClick={handleNodeClick}
+          verificationStates={verificationStates}
         />
       </div>
 
@@ -90,6 +262,9 @@ export default function Home() {
           onClose={() => setSelectedNode(null)}
           onNodeNavigate={handleNodeNavigate}
           lang={lang}
+          verificationState={verificationStates[selectedNode.id]}
+          onVerify={handleVerify}
+          onSocialAudit={handleSocialAudit}
         />
       )}
     </main>

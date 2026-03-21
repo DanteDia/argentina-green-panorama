@@ -1,0 +1,22 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getVerification, getSocialVerification } from "@/lib/genlayer";
+
+export async function GET(request: NextRequest) {
+  try {
+    const nodeId = request.nextUrl.searchParams.get("nodeId");
+    const type = request.nextUrl.searchParams.get("type") || "node"; // "node" | "social"
+
+    if (!nodeId) {
+      return NextResponse.json({ error: "nodeId is required" }, { status: 400 });
+    }
+
+    const result = type === "social"
+      ? await getSocialVerification(nodeId)
+      : await getVerification(nodeId);
+
+    return NextResponse.json(result);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

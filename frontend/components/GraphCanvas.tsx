@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { GreenNode, GreenEdge, CLUSTER_COLORS, EDGE_COLORS } from "@/lib/types";
+import { GreenNode, GreenEdge, CLUSTER_COLORS, EDGE_COLORS, NodeVerificationState } from "@/lib/types";
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
   ssr: false,
@@ -14,6 +14,7 @@ interface GraphCanvasProps {
   selectedCluster: string | null;
   searchQuery: string;
   onNodeClick: (node: GreenNode) => void;
+  verificationStates?: Record<string, NodeVerificationState>;
 }
 
 interface ForceNode {
@@ -23,6 +24,7 @@ interface ForceNode {
   categoria: string;
   followers: number | null;
   verified: boolean;
+  verificationStatus?: string;
   x?: number;
   y?: number;
   __data: GreenNode;
@@ -41,6 +43,7 @@ export default function GraphCanvas({
   selectedCluster,
   searchQuery,
   onNodeClick,
+  verificationStates = {},
 }: GraphCanvasProps) {
   const fgRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -81,7 +84,8 @@ export default function GraphCanvas({
       cluster: n.cluster,
       categoria: n.categoria,
       followers: n.followers,
-      verified: n.verified,
+      verified: n.verified || verificationStates[n.id]?.status === "finalized" || verificationStates[n.id]?.status === "accepted",
+      verificationStatus: verificationStates[n.id]?.status,
       __data: n,
     }));
 
@@ -95,7 +99,7 @@ export default function GraphCanvas({
       }));
 
     return { nodes: forceNodes, links: forceLinks };
-  }, [nodes, edges, selectedCluster, searchQuery]);
+  }, [nodes, edges, selectedCluster, searchQuery, verificationStates]);
 
   // Node size based on connections + followers
   const getNodeSize = useCallback(
@@ -141,11 +145,25 @@ export default function GraphCanvas({
       ctx.shadowColor = "transparent";
       ctx.shadowBlur = 0;
 
-      // Verified badge
-      if (node.verified) {
+      // Verification badge
+      if (node.verified || node.verificationStatus === "pending" || node.verificationStatus === "failed") {
+        const badgeX = node.x! + size * 0.7;
+        const badgeY = node.y! - size * 0.7;
+        const badgeR = node.verified ? 4 : 3;
+
         ctx.beginPath();
-        ctx.arc(node.x! + size * 0.7, node.y! - size * 0.7, 3, 0, 2 * Math.PI);
-        ctx.fillStyle = "#22c55e";
+        ctx.arc(badgeX, badgeY, badgeR, 0, 2 * Math.PI);
+
+        if (node.verificationStatus === "pending") {
+          // Pulsing amber for pending
+          const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 300);
+          ctx.fillStyle = `rgba(245, 158, 11, ${0.5 + pulse * 0.5})`;
+        } else if (node.verificationStatus === "failed") {
+          ctx.fillStyle = "#ef4444";
+        } else {
+          ctx.fillStyle = "#22c55e";
+        }
+
         ctx.fill();
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 1;

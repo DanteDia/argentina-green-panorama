@@ -7,6 +7,7 @@ import json
 class GreenPanoramaQA(gl.Contract):
     verifications: TreeMap[str, str]
     relationship_verifications: TreeMap[str, str]
+    social_verifications: TreeMap[str, str]
     verification_count: u256
 
     def __init__(self):
@@ -138,6 +139,79 @@ Respond ONLY as valid JSON:
         result_str = gl.eq_principle.strict_eq(nondet)
         self.relationship_verifications[edge_id] = result_str
         return result_str
+
+    @gl.public.write
+    def verify_social(
+        self,
+        node_id: str,
+        nombre: str,
+        social_links: str,
+        claimed_followers: str,
+    ) -> str:
+        """
+        Full social media audit for a node:
+        1. Verify each social link belongs to the company (not impersonator)
+        2. Check account is real (not fake/bot)
+        3. Compare claimed follower count to actual
+        4. Assess activity level (active, dormant, dead)
+
+        social_links: JSON array of URLs, e.g. ["https://instagram.com/company", ...]
+        claimed_followers: JSON object, e.g. {"instagram": 5000, "linkedin": 2000}
+        """
+
+        def nondet() -> str:
+            links = json.loads(social_links)
+            claimed = json.loads(claimed_followers)
+
+            social_data = {}
+            for url in links:
+                try:
+                    response = gl.nondet.web.get(url)
+                    social_data[url] = response.body.decode("utf-8")[:3000]
+                except Exception:
+                    social_data[url] = "PAGE_UNAVAILABLE"
+
+            links_context = ""
+            for url, content in social_data.items():
+                links_context += f"\n--- Social Profile: {url} ---\n{content}\n"
+
+            task = f"""You are auditing the social media presence of a company/institution
+in Argentina's green/carbon market ecosystem.
+
+Company: {nombre}
+Claimed followers: {json.dumps(claimed)}
+
+Social media profiles and their page content:
+{links_context}
+
+For EACH social media profile, verify:
+1. "link_valid": Does the URL load a real social media profile?
+2. "belongs_to_company": Does the profile name/bio match "{nombre}"?
+3. "is_real_account": Is this a genuine account (not fake/impersonator)?
+4. "estimated_followers": What follower count is visible on the page? (use format like "4.8K", "12.3K")
+5. "follower_match": Does the estimated count roughly match the claimed count?
+6. "activity_level": "active" (posted within 3 months), "dormant" (3-12 months), or "dead" (>12 months / no posts)
+7. "last_post_estimate": "within_1_month", "within_3_months", "within_1_year", "over_1_year", "unknown"
+
+Respond ONLY as valid JSON:
+{{"platforms": {{"instagram": {{"link_valid": true, "belongs_to_company": true, "is_real_account": true, "estimated_followers": "4.8K", "follower_match": true, "activity_level": "active", "last_post_estimate": "within_1_month"}}}}, "overall_social_score": "high"/"medium"/"low", "reasoning": "brief explanation max 100 words"}}
+
+Include an entry for each platform found in the URLs. Detect the platform from the URL
+(instagram.com, linkedin.com, twitter.com/x.com, facebook.com, youtube.com, tiktok.com).
+"""
+            result = gl.nondet.exec_prompt(task)
+            parsed = json.loads(result)
+            return json.dumps(parsed, sort_keys=True)
+
+        result_str = gl.eq_principle.strict_eq(nondet)
+        self.social_verifications[node_id] = result_str
+        return result_str
+
+    @gl.public.view
+    def get_social_verification(self, node_id: str) -> str:
+        if node_id in self.social_verifications:
+            return self.social_verifications[node_id]
+        return json.dumps({"error": "not_found"})
 
     @gl.public.view
     def get_verification(self, node_id: str) -> str:
