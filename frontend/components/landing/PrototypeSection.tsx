@@ -285,7 +285,7 @@ export default function PrototypeSection() {
     <section
       id="prototype"
       ref={sectionRef}
-      className="relative h-screen overflow-hidden bg-[#f5f3eb]"
+      className="relative min-h-screen overflow-hidden bg-[#f5f3eb]"
     >
       {loading ? (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -298,6 +298,15 @@ export default function PrototypeSection() {
         </div>
       ) : (
         <>
+          {/* Section header */}
+          <div className="absolute top-0 left-0 right-0 z-30 flex items-center gap-3 px-6 py-3 bg-[#f5f3eb]/80 backdrop-blur-sm border-b border-[#ddd8ce]">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#1a6b4a]/10 text-[#1a6b4a] text-xs font-medium rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#1a6b4a] animate-pulse" />
+              Live Prototype
+            </span>
+            <span className="text-sm text-zinc-500">Green Industry &bull; Argentina</span>
+          </div>
+
           <FilterSidebar
             clusters={clusters}
             selectedCluster={selectedCluster}
@@ -317,7 +326,7 @@ export default function PrototypeSection() {
             onToggleEdgeType={handleToggleEdgeType}
           />
 
-          <div className="ml-72">
+          <div className="ml-[304px] mt-14 mr-4 mb-4 rounded-2xl overflow-hidden ring-1 ring-[#ddd8ce]">
             <GraphCanvas
               nodes={nodes}
               edges={edges}

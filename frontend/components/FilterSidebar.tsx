@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { CLUSTER_COLORS, CLUSTER_LABELS_ES, CLUSTER_LABELS_EN, EDGE_COLORS, GreenNode } from "@/lib/types";
 import ActivityFeed from "./ActivityFeed";
 
@@ -80,6 +81,9 @@ export default function FilterSidebar({
   activeEdgeTypes,
   onToggleEdgeType,
 }: FilterSidebarProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setMounted(true), 50); return () => clearTimeout(t); }, []);
+
   const labels = t[lang];
   const clusterLabels = lang === "es" ? CLUSTER_LABELS_ES : CLUSTER_LABELS_EN;
   const edgeLabels = EDGE_TYPE_LABELS[lang];
@@ -95,9 +99,9 @@ export default function FilterSidebar({
     : [];
 
   return (
-    <div className="absolute left-0 top-0 h-full w-72 bg-[#faf8f5]/95 backdrop-blur-md border-r border-[#2a2a28] z-40 flex flex-col overflow-y-auto">
+    <div className={`absolute left-4 top-14 bottom-4 w-72 bg-[#faf8f5]/95 backdrop-blur-md border border-[#ddd8ce] rounded-2xl shadow-lg shadow-black/5 z-40 flex flex-col overflow-y-auto transition-all duration-500 ease-out ${mounted ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0"}`}>
       {/* Header */}
-      <div className="p-4 border-b border-[#2a2a28]">
+      <div className="p-4 border-b border-[#ddd8ce]">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-[#3a9d6e]">{labels.title}</h1>
@@ -105,7 +109,7 @@ export default function FilterSidebar({
           </div>
           <button
             onClick={onLangToggle}
-            className="text-xs bg-[#f0ede7] hover:bg-zinc-700 text-zinc-300 px-2 py-1 rounded transition"
+            className="text-xs bg-[#f0ede7] hover:bg-[#e8e4dc] text-zinc-600 px-2 py-1 rounded transition"
           >
             {lang === "es" ? "EN" : "ES"}
           </button>
@@ -127,7 +131,7 @@ export default function FilterSidebar({
               <button
                 key={node.id}
                 onClick={() => onSearchSelect?.(node)}
-                className="w-full text-left px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 hover:text-[#1a1a1a] transition flex items-center gap-2 border-b border-[#2a2a28]/50 last:border-0"
+                className="w-full text-left px-3 py-2 text-sm text-zinc-700 hover:bg-[#e8e4dc] hover:text-[#1a1a1a] transition flex items-center gap-2 border-b border-[#ddd8ce]/50 last:border-0"
               >
                 <span
                   className="w-2 h-2 rounded-full flex-shrink-0"
@@ -181,7 +185,7 @@ export default function FilterSidebar({
 
       {/* Edge Type Legend / Filter */}
       {onToggleEdgeType && activeEdgeTypes && (
-        <div className="px-4 py-2 border-t border-zinc-800">
+        <div className="px-4 py-2 border-t border-[#ddd8ce]">
           <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2">
             {labels.relationships}
           </h3>
@@ -219,7 +223,7 @@ export default function FilterSidebar({
       />
 
       {/* Stats */}
-      <div className="mt-auto p-4 border-t border-[#2a2a28]">
+      <div className="mt-auto p-4 border-t border-[#ddd8ce]">
         <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-3">
           {labels.stats}
         </h3>
