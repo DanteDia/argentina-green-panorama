@@ -152,6 +152,57 @@ Respond ONLY as JSON:
     return None
 
 
+def search_for_partners(company_name: str) -> list[dict]:
+    """Use LLM knowledge to find partners/connections for a company."""
+    prompt = f"""You are researching Argentina's green/carbon/environmental ecosystem.
+
+For the company/organization "{company_name}", list ALL known partners, allies, investors,
+portfolio companies, clients, and related organizations in Argentina's green sector.
+
+Focus on:
+- Investment relationships (who funds whom)
+- Partnerships and alliances
+- Portfolio companies (if it's a fund/accelerator)
+- Clients in the green sector
+- Government partnerships
+- NGO collaborations
+
+For each, provide:
+- name: organization name
+- link: website URL if you know it
+- relationship: partner, funder, client, portfolio_company, ally
+
+Respond ONLY as a JSON array:
+[{{"name": "Company X", "link": "https://...", "relationship": "partner"}}]
+
+If you don't know any connections, return: []
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=DEFAULT_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=2000,
+        )
+        content = response.choices[0].message.content or "[]"
+        json_match = re.search(r'\[.*\]', content, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group())
+    except Exception as e:
+        print(f"Error searching partners for {company_name}: {e}")
+    return []
+
+
+# Common subpages where partners are listed
+PARTNER_SUBPAGES = [
+    "/partners", "/aliados", "/socios", "/portfolio",
+    "/nuestros-aliados", "/quienes-somos", "/about",
+    "/about-us", "/nosotros", "/clientes", "/investors",
+    "/backed-by", "/apoyos", "/sponsors",
+]
+
+
 async def spider_company(
     company_name: str,
     company_url: str | None,
@@ -160,29 +211,54 @@ async def spider_company(
     """
     Spider a company's website to discover partners and new nodes.
 
-    1. Fetch the company's website
-    2. Extract partners/aliados from HTML
-    3. For each new partner, research it
-    4. Return discovered nodes and relationships
+    1. Fetch the company's homepage + common partner subpages
+    2. Extract partners/aliados from HTML via LLM
+    3. Also use LLM knowledge to find connections
+    4. For each new partner, research and classify it
+    5. Return discovered nodes and relationships
     """
     result = ResearchResult(source_company=company_name)
 
-    if not company_url:
+    all_partners = []
+
+    # Step 1: Fetch homepage and partner subpages
+    if company_url:
+        # Try homepage
+        html = await fetch_webpage(company_url)
+        if html:
+            partners = extract_partners_from_html(html, company_name)
+            all_partners.extend(partners)
+        else:
+            result.errors.append(f"Could not fetch {company_url}")
+
+        # Try common partner subpages
+        base_url = company_url.rstrip("/")
+        for subpage in PARTNER_SUBPAGES:
+            sub_html = await fetch_webpage(f"{base_url}{subpage}")
+            if sub_html:
+                sub_partners = extract_partners_from_html(sub_html, company_name)
+                all_partners.extend(sub_partners)
+                break  # Found a working partner page, don't spam more
+    else:
         result.errors.append(f"No URL for {company_name}")
-        return result
 
-    # Step 1: Fetch website
-    html = await fetch_webpage(company_url)
-    if not html:
-        result.errors.append(f"Could not fetch {company_url}")
-        return result
+    # Step 2: Use LLM knowledge to find connections (always, even if website failed)
+    llm_partners = search_for_partners(company_name)
+    all_partners.extend(llm_partners)
 
-    # Step 2: Extract partners from HTML
-    partners = extract_partners_from_html(html, company_name)
-    result.raw_partners_found = [p.get("name", "") for p in partners]
+    # Deduplicate partners by name
+    seen_names = set()
+    unique_partners = []
+    for p in all_partners:
+        name = p.get("name", "").strip().lower()
+        if name and name not in seen_names:
+            seen_names.add(name)
+            unique_partners.append(p)
+
+    result.raw_partners_found = [p.get("name", "") for p in unique_partners]
 
     # Step 3: For each new partner, research it
-    for partner in partners:
+    for partner in unique_partners:
         partner_name = partner.get("name", "").strip()
         if not partner_name or partner_name.lower() in {n.lower() for n in existing_names}:
             continue
