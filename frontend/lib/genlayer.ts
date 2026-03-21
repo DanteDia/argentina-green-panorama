@@ -25,7 +25,7 @@ function parseContractResult(raw: unknown): Record<string, unknown> {
 
 // Contract deployed on GenLayer Studio (studionet)
 const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_GENLAYER_CONTRACT ||
-  "0x57C566b552e528d86b230de35dbd847476f829c4") as Address;
+  "0xb81f386D893cda2016bfAeC6FF9B2027CD35413d") as Address;
 
 // Studionet is a simulator — no gas fees, auto-funded accounts
 // No private key needed
