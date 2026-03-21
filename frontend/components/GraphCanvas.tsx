@@ -1,0 +1,226 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { GreenNode, GreenEdge, CLUSTER_COLORS, EDGE_COLORS } from "@/lib/types";
+
+const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
+  ssr: false,
+});
+
+interface GraphCanvasProps {
+  nodes: GreenNode[];
+  edges: GreenEdge[];
+  selectedCluster: string | null;
+  searchQuery: string;
+  onNodeClick: (node: GreenNode) => void;
+}
+
+interface ForceNode {
+  id: string;
+  nombre: string;
+  cluster: string;
+  categoria: string;
+  followers: number | null;
+  verified: boolean;
+  x?: number;
+  y?: number;
+  __data: GreenNode;
+}
+
+interface ForceLink {
+  source: string | ForceNode;
+  target: string | ForceNode;
+  type: string;
+  description: string;
+}
+
+export default function GraphCanvas({
+  nodes,
+  edges,
+  selectedCluster,
+  searchQuery,
+  onNodeClick,
+}: GraphCanvasProps) {
+  const fgRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+
+  useEffect(() => {
+    const updateSize = () => {
+      setDimensions({
+        width: window.innerWidth - 288, // subtract sidebar width (w-72 = 288px)
+        height: window.innerHeight,
+      });
+    };
+    updateSize();
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
+  }, []);
+
+  // Build graph data for force-graph
+  const graphData = useMemo(() => {
+    const filteredNodes = nodes.filter((n) => {
+      if (selectedCluster && n.cluster !== selectedCluster) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        return (
+          n.nombre.toLowerCase().includes(q) ||
+          n.descripcion?.toLowerCase().includes(q) ||
+          n.categoria?.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+
+    const nodeIds = new Set(filteredNodes.map((n) => n.id));
+
+    const forceNodes: ForceNode[] = filteredNodes.map((n) => ({
+      id: n.id,
+      nombre: n.nombre,
+      cluster: n.cluster,
+      categoria: n.categoria,
+      followers: n.followers,
+      verified: n.verified,
+      __data: n,
+    }));
+
+    const forceLinks: ForceLink[] = edges
+      .filter((e) => nodeIds.has(e.source_id) && nodeIds.has(e.target_id))
+      .map((e) => ({
+        source: e.source_id,
+        target: e.target_id,
+        type: e.relationship_type,
+        description: e.description,
+      }));
+
+    return { nodes: forceNodes, links: forceLinks };
+  }, [nodes, edges, selectedCluster, searchQuery]);
+
+  // Node size based on connections + followers
+  const getNodeSize = useCallback(
+    (node: ForceNode) => {
+      const connections = edges.filter(
+        (e) => e.source_id === node.id || e.target_id === node.id
+      ).length;
+      const followerBonus = node.followers ? Math.log10(node.followers + 1) : 0;
+      return Math.max(4, connections * 1.5 + followerBonus + 3);
+    },
+    [edges]
+  );
+
+  const paintNode = useCallback(
+    (node: ForceNode, ctx: CanvasRenderingContext2D) => {
+      const size = getNodeSize(node);
+      const color = CLUSTER_COLORS[node.cluster] || "#6b7280";
+      const isHovered = hoveredNode === node.id;
+      const isSearchMatch =
+        searchQuery &&
+        node.nombre.toLowerCase().includes(searchQuery.toLowerCase());
+
+      // Glow effect for hovered/searched nodes
+      if (isHovered || isSearchMatch) {
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 15;
+      }
+
+      // Draw node circle
+      ctx.beginPath();
+      ctx.arc(node.x!, node.y!, size, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = isHovered ? 1 : 0.85;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Border
+      ctx.strokeStyle = isHovered ? "#ffffff" : "rgba(255,255,255,0.3)";
+      ctx.lineWidth = isHovered ? 2 : 0.5;
+      ctx.stroke();
+
+      // Reset shadow
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+
+      // Verified badge
+      if (node.verified) {
+        ctx.beginPath();
+        ctx.arc(node.x! + size * 0.7, node.y! - size * 0.7, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = "#22c55e";
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // Label
+      if (isHovered || size > 7 || isSearchMatch) {
+        ctx.font = `${isHovered ? "bold " : ""}${
+          isHovered ? "11px" : "9px"
+        } Inter, Arial, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "rgba(0,0,0,0.7)";
+        ctx.lineWidth = 3;
+        ctx.strokeText(node.nombre, node.x!, node.y! + size + 3);
+        ctx.fillText(node.nombre, node.x!, node.y! + size + 3);
+      }
+    },
+    [hoveredNode, searchQuery, getNodeSize]
+  );
+
+  const paintLink = useCallback(
+    (link: ForceLink, ctx: CanvasRenderingContext2D) => {
+      const source = link.source as ForceNode;
+      const target = link.target as ForceNode;
+      if (!source.x || !target.x) return;
+
+      const color = EDGE_COLORS[link.type] || "#4b5563";
+
+      ctx.beginPath();
+      ctx.moveTo(source.x, source.y!);
+      ctx.lineTo(target.x, target.y!);
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.3;
+      ctx.lineWidth = link.type === "funds" ? 1.5 : 0.8;
+
+      if (link.type === "client_of") {
+        ctx.setLineDash([4, 4]);
+      }
+
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    },
+    []
+  );
+
+  return (
+    <ForceGraph2D
+      ref={fgRef}
+      width={dimensions.width}
+      height={dimensions.height}
+      graphData={graphData}
+      nodeCanvasObject={paintNode as any}
+      linkCanvasObject={paintLink as any}
+      nodePointerAreaPaint={((node: ForceNode, color: string, ctx: CanvasRenderingContext2D) => {
+        const size = getNodeSize(node);
+        ctx.beginPath();
+        ctx.arc(node.x!, node.y!, size + 2, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.fill();
+      }) as any}
+      onNodeClick={((node: ForceNode) => onNodeClick(node.__data)) as any}
+      onNodeHover={((node: ForceNode | null) =>
+        setHoveredNode(node ? node.id : null)
+      ) as any}
+      backgroundColor="#0a0a0a"
+      d3AlphaDecay={0.02}
+      d3VelocityDecay={0.3}
+      warmupTicks={100}
+      cooldownTicks={200}
+      linkDirectionalArrowLength={3}
+      linkDirectionalArrowRelPos={0.8}
+    />
+  );
+}
