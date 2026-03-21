@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import seedData from "@/lib/seed_data.json";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   if (supabase) {
     try {
-      const { data: nodes } = await supabase.from("nodes").select("cluster, verified");
+      const { data: nodes } = await supabase.from("nodes").select("cluster, verified").limit(2000);
       const { count: edgeCount } = await supabase.from("edges").select("*", { count: "exact", head: true });
 
       if (nodes) {

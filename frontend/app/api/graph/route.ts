@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import seedData from "@/lib/seed_data.json";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   // Try Supabase first, fall back to static JSON
   if (supabase) {
@@ -9,12 +11,14 @@ export async function GET() {
       const { data: nodes, error: nodesErr } = await supabase
         .from("nodes")
         .select("*")
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true })
+        .limit(2000);
 
       const { data: edges, error: edgesErr } = await supabase
         .from("edges")
         .select("*")
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true })
+        .limit(5000);
 
       if (!nodesErr && !edgesErr && nodes && edges) {
         return NextResponse.json({

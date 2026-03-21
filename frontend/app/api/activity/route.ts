@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
 interface ActivityEntry {
   type: "node_added" | "verified" | "verification_failed" | "grey" | "edge_added";
   name: string;
