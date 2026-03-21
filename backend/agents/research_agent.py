@@ -124,7 +124,8 @@ Determine:
 1. Cluster: Empresa Privada, ONG, Fondo Verde, Aceleradora, Organismo Internacional, Consultora, Startup, Government
 2. Category (e.g., energía renovable, agricultura sustentable, biotecnología, créditos de carbono, conservación, finanzas verdes, aceleradora, agtech)
 3. Brief description in Spanish (1-2 sentences, factual only)
-4. Does this company interact with Argentina's green/environmental/sustainability sector?
+4. Who funds/backs this company? (investors, accelerators, grants, government programs). If unknown or bootstrapped, say so.
+5. Does this company interact with Argentina's green/environmental/sustainability sector?
 
 ACCEPT if the company:
 - Operates in Argentina's green/environmental sector directly
@@ -138,7 +139,7 @@ REJECT if the company:
 - Is a generic international org with no specific Argentina environmental involvement
 
 Respond ONLY as JSON:
-{{"cluster": "...", "categoria": "...", "descripcion": "...", "is_green_argentina": true/false}}
+{{"cluster": "...", "categoria": "...", "descripcion": "...", "quien_fondea": "...", "is_green_argentina": true/false}}
 """
 
     try:
@@ -159,6 +160,7 @@ Respond ONLY as JSON:
                     cluster=data.get("cluster", "Startup"),
                     categoria=data.get("categoria", ""),
                     descripcion=data.get("descripcion", ""),
+                    quien_fondea=data.get("quien_fondea", ""),
                 )
     except Exception as e:
         print(f"Error researching {name}: {e}")
@@ -238,14 +240,26 @@ async def spider_company(
     website_partner_names = set()  # Track which came from website scraping
 
     # Step 1: Fetch homepage and partner subpages
+    homepage_html = None  # Keep for funding extraction later
     if company_url:
         # Try homepage
-        html = await fetch_webpage(company_url)
-        if html:
-            partners = extract_partners_from_html(html, company_name)
+        homepage_html = await fetch_webpage(company_url)
+        if homepage_html:
+            partners = extract_partners_from_html(homepage_html, company_name)
             for p in partners:
                 p["_source"] = "website"
             all_partners.extend(partners)
+
+            # Also extract funding mentions from HTML (free, uses Gemini)
+            try:
+                from agents.funding_researcher import extract_funding_from_html
+                html_funders = extract_funding_from_html(homepage_html, company_name)
+                for f in html_funders:
+                    f["_source"] = "website"
+                    f["relationship"] = f.get("relationship", "funder")
+                all_partners.extend(html_funders)
+            except Exception:
+                pass
         else:
             result.errors.append(f"Could not fetch {company_url}")
 
@@ -262,15 +276,31 @@ async def spider_company(
     else:
         result.errors.append(f"No URL for {company_name}")
 
-    # Step 2: Use LLM knowledge ONLY for depth-0 (seed) nodes
+    # Step 2: Deep search ONLY for depth-0 (seed) nodes
     # For depth-1+ nodes, rely only on website scraping to prevent spiral drift
     if source_depth == 0:
-        llm_partners = search_for_partners(company_name)
-        for p in llm_partners:
-            p["_source"] = "llm"
-        all_partners.extend(llm_partners)
+        # Try Perplexity first (real web search, fewer hallucinations)
+        try:
+            from agents.funding_researcher import search_partners_perplexity
+            perplexity_partners = search_partners_perplexity(company_name, company_url)
+            if perplexity_partners:
+                print(f"  Perplexity found {len(perplexity_partners)} partners")
+                all_partners.extend(perplexity_partners)
+            else:
+                # Fallback to LLM knowledge if Perplexity returns nothing
+                print(f"  Perplexity empty, falling back to LLM knowledge")
+                llm_partners = search_for_partners(company_name)
+                for p in llm_partners:
+                    p["_source"] = "llm"
+                all_partners.extend(llm_partners)
+        except Exception as e:
+            print(f"  Perplexity failed ({e}), falling back to LLM knowledge")
+            llm_partners = search_for_partners(company_name)
+            for p in llm_partners:
+                p["_source"] = "llm"
+            all_partners.extend(llm_partners)
     else:
-        print(f"  Skipping LLM search for {company_name} (depth={source_depth})")
+        print(f"  Skipping deep search for {company_name} (depth={source_depth})")
 
     # Deduplicate partners by name
     seen_names = set()
@@ -308,7 +338,9 @@ async def spider_company(
             node.relationship_to_source = f"{company_name} -> {partner_name}"
             node.relationship_type = rel_type
             node.discovery_method = discovery_method
-            node.confidence = 0.8 if discovery_method == "website" else 0.4
+            # Confidence tiers: website=0.8, perplexity=0.7, llm=0.4
+            confidence_map = {"website": 0.8, "perplexity": 0.7, "llm": 0.4}
+            node.confidence = confidence_map.get(discovery_method, 0.5)
             result.discovered_nodes.append(node)
             existing_names.add(partner_name)
 

@@ -39,6 +39,7 @@ from agents.db_helpers import (
 import aiohttp
 
 from agents.research_agent import spider_company
+from agents.funding_researcher import research_funding
 
 # Vercel-hosted frontend API for GenLayer verification
 VERIFY_API_BASE = os.environ.get("VERIFY_API_BASE", "https://green-panorama-ar.vercel.app")
@@ -46,6 +47,9 @@ VERIFY_API_BASE = os.environ.get("VERIFY_API_BASE", "https://green-panorama-ar.v
 # --- Anti-spiral guardrails ---
 MAX_DEPTH = 2           # seed=0, direct partner=1, partner-of-partner=2, stop
 MAX_AGENT_NODES = 500   # Global budget: max agent-discovered nodes total
+
+# --- Perplexity cost management ---
+MAX_FUNDING_QUERIES_PER_CYCLE = 3  # Max Perplexity API calls per research cycle
 
 logging.basicConfig(
     level=logging.INFO,
@@ -127,7 +131,7 @@ def insert_node(node, discovered_from: str, depth: int = 1, discovered_by_id: st
         "categoria": node.categoria or "",
         "descripcion": node.descripcion or "",
         "source": "agent",
-        "quien_fondea": "",
+        "quien_fondea": getattr(node, "quien_fondea", "") or "",
         "aliados_portfolio": [],
         "clientes": [],
         "depth": depth,
@@ -541,6 +545,7 @@ async def run_one_cycle() -> dict:
     source_node_id = get_source_node_id(name)
     all_known = get_all_names()
     budget_remaining = MAX_AGENT_NODES - agent_count
+    newly_inserted_pairs = []  # Track (node, node_id) for funding research
 
     for node in result.discovered_nodes:
         # Guardrail: budget check
@@ -566,12 +571,52 @@ async def run_one_cycle() -> dict:
             summary["new_nodes"] += 1
             budget_remaining -= 1
             all_known.append(node.nombre)
+            newly_inserted_pairs.append((node, node_id))
 
             # Insert edge with discovery method and confidence
             if insert_edge(name, node.nombre, node.relationship_type,
                           discovery_method=getattr(node, "discovery_method", "llm"),
                           confidence=getattr(node, "confidence", 0.8)):
                 summary["new_edges"] += 1
+
+    # Step 3b: Funding research via Perplexity for newly inserted nodes
+    # Only for depth-0 and depth-1 discoveries (not depth-2)
+    funding_budget = MAX_FUNDING_QUERIES_PER_CYCLE
+    if child_depth <= 1 and newly_inserted_pairs:
+        sb = get_supabase()
+        for node, node_id in newly_inserted_pairs[:funding_budget]:
+            funding = research_funding(node.nombre, node.link)
+            if funding.funders and not funding.error:
+                sb.table("nodes").update({
+                    "quien_fondea": funding.quien_fondea_str
+                }).eq("id", node_id).execute()
+                log.info(f"  $ Funding: {node.nombre} <- {funding.quien_fondea_str}")
+
+                # Create 'funds' edges for discovered funders
+                for funder in funding.funders:
+                    if funder.funder_name:
+                        insert_edge(funder.funder_name, node.nombre, "funds",
+                                    discovery_method="perplexity", confidence=0.7)
+
+                summary["funding_researched"] = summary.get("funding_researched", 0) + 1
+                log_event("funding_research", company=node.nombre,
+                          funders=funding.quien_fondea_str, model=funding.model_used)
+            elif funding.error:
+                log.warning(f"  $ Funding research failed for {node.nombre}: {funding.error}")
+
+    # Step 3c: Update source company's quien_fondea with discovered funders
+    funder_names = [
+        node.nombre for node in result.discovered_nodes
+        if node.relationship_type == "funds"
+    ]
+    if funder_names:
+        sb = get_supabase()
+        current = sb.table("nodes").select("quien_fondea").eq("nombre", name).execute()
+        existing_funders = current.data[0].get("quien_fondea", "") if current.data else ""
+        existing_set = {f.strip() for f in existing_funders.split(",") if f.strip()} if existing_funders else set()
+        new_funders = existing_set | set(funder_names)
+        sb.table("nodes").update({"quien_fondea": ", ".join(sorted(new_funders))}).eq("nombre", name).execute()
+        log.info(f"  $ Updated quien_fondea for {name}: {', '.join(sorted(new_funders))}")
 
     # Step 4: Auto-verify newly added nodes
     if summary["new_nodes"] > 0:
