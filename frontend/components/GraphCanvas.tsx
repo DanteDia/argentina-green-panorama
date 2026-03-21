@@ -15,6 +15,8 @@ interface GraphCanvasProps {
   searchQuery: string;
   onNodeClick: (node: GreenNode) => void;
   verificationStates?: Record<string, NodeVerificationState>;
+  highlightedNodes?: string[];
+  activeEdgeTypes?: Set<string>;
 }
 
 interface ForceNode {
@@ -25,6 +27,7 @@ interface ForceNode {
   followers: number | null;
   verified: boolean;
   verificationStatus?: string;
+  highlighted?: boolean;
   x?: number;
   y?: number;
   __data: GreenNode;
@@ -44,6 +47,8 @@ export default function GraphCanvas({
   searchQuery,
   onNodeClick,
   verificationStates = {},
+  highlightedNodes = [],
+  activeEdgeTypes,
 }: GraphCanvasProps) {
   const fgRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -78,6 +83,8 @@ export default function GraphCanvas({
 
     const nodeIds = new Set(filteredNodes.map((n) => n.id));
 
+    const highlightSet = new Set(highlightedNodes.map((n) => n.toLowerCase()));
+
     const forceNodes: ForceNode[] = filteredNodes.map((n) => ({
       id: n.id,
       nombre: n.nombre,
@@ -86,11 +93,16 @@ export default function GraphCanvas({
       followers: n.followers,
       verified: n.verified || verificationStates[n.id]?.status === "finalized" || verificationStates[n.id]?.status === "accepted",
       verificationStatus: verificationStates[n.id]?.status,
+      highlighted: highlightSet.has(n.nombre.toLowerCase()),
       __data: n,
     }));
 
     const forceLinks: ForceLink[] = edges
-      .filter((e) => nodeIds.has(e.source_id) && nodeIds.has(e.target_id))
+      .filter((e) => {
+        if (!nodeIds.has(e.source_id) || !nodeIds.has(e.target_id)) return false;
+        if (activeEdgeTypes && !activeEdgeTypes.has(e.relationship_type)) return false;
+        return true;
+      })
       .map((e) => ({
         source: e.source_id,
         target: e.target_id,
@@ -99,7 +111,7 @@ export default function GraphCanvas({
       }));
 
     return { nodes: forceNodes, links: forceLinks };
-  }, [nodes, edges, selectedCluster, searchQuery, verificationStates]);
+  }, [nodes, edges, selectedCluster, searchQuery, verificationStates, highlightedNodes, activeEdgeTypes]);
 
   // Node size based on connections + followers
   const getNodeSize = useCallback(
@@ -118,12 +130,13 @@ export default function GraphCanvas({
       const size = getNodeSize(node);
       const color = CLUSTER_COLORS[node.cluster] || "#6b7280";
       const isHovered = hoveredNode === node.id;
+      const isHighlighted = node.highlighted;
       const isSearchMatch =
         searchQuery &&
         node.nombre.toLowerCase().includes(searchQuery.toLowerCase());
 
-      // Glow effect for hovered/searched nodes
-      if (isHovered || isSearchMatch) {
+      // Glow effect for hovered/searched/highlighted nodes
+      if (isHovered || isSearchMatch || isHighlighted) {
         ctx.shadowColor = color;
         ctx.shadowBlur = 15;
       }
@@ -171,7 +184,7 @@ export default function GraphCanvas({
       }
 
       // Label
-      if (isHovered || size > 7 || isSearchMatch) {
+      if (isHovered || size > 7 || isSearchMatch || isHighlighted) {
         ctx.font = `${isHovered ? "bold " : ""}${
           isHovered ? "11px" : "9px"
         } Inter, Arial, sans-serif`;
