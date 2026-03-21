@@ -27,8 +27,8 @@ client = OpenAI(
 )
 
 # Default model - cheap and capable
-DEFAULT_MODEL = "google/gemini-2.0-flash-001"
-VISION_MODEL = "google/gemini-2.0-flash-001"  # supports vision
+DEFAULT_MODEL = "google/gemini-3.1-flash-lite-preview"
+VISION_MODEL = "google/gemini-3.1-flash-lite-preview"
 
 
 @dataclass
@@ -53,16 +53,16 @@ class ResearchResult:
     errors: list[str] = field(default_factory=list)
 
 
-async def fetch_webpage(url: str) -> str | None:
+async def fetch_webpage(url: str, timeout: float = 10.0) -> str | None:
     """Fetch a webpage and return its text content."""
     try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client_http:
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client_http:
             response = await client_http.get(url, headers={
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Green Panorama Research Bot"
             })
             if response.status_code == 200:
                 return response.text[:15000]  # limit to 15k chars
-    except Exception as e:
+    except Exception:
         return None
     return None
 
@@ -194,12 +194,9 @@ If you don't know any connections, return: []
     return []
 
 
-# Common subpages where partners are listed
+# Common subpages where partners are listed (keep short to avoid timeout buildup)
 PARTNER_SUBPAGES = [
-    "/partners", "/aliados", "/socios", "/portfolio",
-    "/nuestros-aliados", "/quienes-somos", "/about",
-    "/about-us", "/nosotros", "/clientes", "/investors",
-    "/backed-by", "/apoyos", "/sponsors",
+    "/aliados", "/partners", "/portfolio",
 ]
 
 
@@ -231,10 +228,10 @@ async def spider_company(
         else:
             result.errors.append(f"Could not fetch {company_url}")
 
-        # Try common partner subpages
+        # Try common partner subpages (short timeout)
         base_url = company_url.rstrip("/")
         for subpage in PARTNER_SUBPAGES:
-            sub_html = await fetch_webpage(f"{base_url}{subpage}")
+            sub_html = await fetch_webpage(f"{base_url}{subpage}", timeout=5.0)
             if sub_html:
                 sub_partners = extract_partners_from_html(sub_html, company_name)
                 all_partners.extend(sub_partners)
