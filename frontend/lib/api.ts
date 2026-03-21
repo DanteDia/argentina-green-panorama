@@ -1,6 +1,8 @@
 import { GraphData, GraphStats } from "./types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// Use relative URL for Next.js API routes (works on Vercel without a separate backend)
+// Falls back to external backend URL if set
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 export async function fetchGraph(): Promise<GraphData> {
   const res = await fetch(`${API_URL}/api/graph`);
