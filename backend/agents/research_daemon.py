@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import signal
 import sys
 import time
@@ -34,7 +35,12 @@ from agents.db_helpers import (
     log_event,
     save_state,
 )
+import aiohttp
+
 from agents.research_agent import spider_company
+
+# Vercel-hosted frontend API for GenLayer verification
+VERIFY_API_BASE = os.environ.get("VERIFY_API_BASE", "https://green-panorama-ar.vercel.app")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -160,6 +166,95 @@ def insert_edge(source_name: str, target_name: str, rel_type: str) -> bool:
     return False
 
 
+async def trigger_verification(node_id: str, nombre: str, link: str, cluster: str, categoria: str, descripcion: str) -> dict:
+    """Submit a node to GenLayer for verification via the Vercel API, poll until done, and update Supabase."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Step 1: Submit verification
+            payload = {
+                "nodeId": node_id,
+                "nombre": nombre,
+                "link": link or "",
+                "cluster": cluster or "",
+                "categoria": categoria or "",
+                "descripcion": descripcion or "",
+            }
+            async with session.post(f"{VERIFY_API_BASE}/api/verify", json=payload) as resp:
+                data = await resp.json()
+                if "error" in data:
+                    log.warning(f"  Verify submit failed for {nombre}: {data['error']}")
+                    return {"status": "submit_failed", "error": data["error"]}
+                tx_hash = data.get("txHash")
+                if not tx_hash:
+                    return {"status": "no_txhash"}
+
+            log.info(f"  Verification submitted for {nombre}: {tx_hash}")
+
+            # Step 2: Poll status (max 60 attempts, 10s apart = ~10 min)
+            for attempt in range(60):
+                await asyncio.sleep(10)
+                async with session.get(f"{VERIFY_API_BASE}/api/verify/status?txHash={tx_hash}") as resp:
+                    status_data = await resp.json()
+                    status = status_data.get("status", "unknown")
+
+                if status in ("FINALIZED", "ACCEPTED", "accepted", "finalized"):
+                    log.info(f"  Verification PASSED for {nombre} (attempt {attempt + 1})")
+                    # Update Supabase
+                    sb = get_supabase()
+                    sb.table("nodes").update({
+                        "verified": True,
+                        "verification_tx": tx_hash,
+                    }).eq("id", node_id).execute()
+                    log_event("verification_passed", nombre=nombre, tx_hash=tx_hash, attempts=attempt + 1)
+                    return {"status": "verified", "tx_hash": tx_hash}
+
+                if status in ("UNDETERMINED", "CANCELED", "undetermined", "canceled"):
+                    log.warning(f"  Verification FAILED for {nombre}: {status}")
+                    leader = status_data.get("leaderResult")
+                    log_event("verification_failed", nombre=nombre, status=status, leader_result=str(leader)[:200])
+                    return {"status": "failed", "reason": status, "leader_result": leader}
+
+                if attempt % 6 == 0:
+                    log.info(f"  Still verifying {nombre}... ({status}, attempt {attempt + 1})")
+
+            log.warning(f"  Verification timed out for {nombre}")
+            return {"status": "timeout"}
+
+    except Exception as e:
+        log.error(f"  Verification error for {nombre}: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+async def verify_unverified_batch(max_nodes: int = 5):
+    """Find unverified nodes in Supabase and submit them for GenLayer verification."""
+    sb = get_supabase()
+    resp = sb.table("nodes").select("id, nombre, link, cluster, categoria, descripcion").eq("verified", False).limit(max_nodes).execute()
+
+    if not resp.data:
+        log.info("No unverified nodes found.")
+        return []
+
+    log.info(f"Found {len(resp.data)} unverified nodes. Starting verification...")
+    results = []
+    for node in resp.data:
+        result = await trigger_verification(
+            node_id=str(node["id"]),
+            nombre=node["nombre"],
+            link=node.get("link", ""),
+            cluster=node.get("cluster", ""),
+            categoria=node.get("categoria", ""),
+            descripcion=node.get("descripcion", ""),
+        )
+        results.append({"nombre": node["nombre"], **result})
+        # Small gap between submissions to avoid overwhelming GenLayer
+        await asyncio.sleep(2)
+
+    verified = sum(1 for r in results if r.get("status") == "verified")
+    failed = sum(1 for r in results if r.get("status") == "failed")
+    log.info(f"Verification batch done: {verified} verified, {failed} failed, {len(results) - verified - failed} other")
+    return results
+
+
 async def run_one_cycle() -> dict:
     """Run a single research cycle on one company.
 
@@ -225,7 +320,14 @@ async def run_one_cycle() -> dict:
             if insert_edge(name, node.nombre, node.relationship_type):
                 summary["new_edges"] += 1
 
-    # Step 4: Mark as visited
+    # Step 4: Auto-verify newly added nodes
+    if summary["new_nodes"] > 0:
+        log.info(f"  Triggering verification for {summary['new_nodes']} new nodes...")
+        verify_results = await verify_unverified_batch(max_nodes=summary["new_nodes"])
+        summary["verified"] = sum(1 for r in verify_results if r.get("status") == "verified")
+        summary["verification_failed"] = sum(1 for r in verify_results if r.get("status") == "failed")
+
+    # Step 5: Mark as visited
     cmd_mark_visited(name)
 
     # Update state stats
@@ -265,13 +367,19 @@ async def daemon_loop(interval: int = 600):
             summary = await run_one_cycle()
 
             if "exhausted" in summary.get("errors", []):
-                log.info("All companies visited. Waiting for new nodes to be added...")
+                log.info("All companies visited. Running verification pass on unverified nodes...")
+                await verify_unverified_batch(max_nodes=5)
                 # Wait longer when exhausted
                 for _ in range(interval * 3):
                     if not _running:
                         break
                     await asyncio.sleep(1)
                 continue
+
+            # Every 3rd cycle, also run a verification pass on old unverified nodes
+            if cycle_count % 3 == 0:
+                log.info("Periodic verification pass...")
+                await verify_unverified_batch(max_nodes=3)
 
         except Exception as e:
             log.error(f"Cycle {cycle_count} failed: {e}")
