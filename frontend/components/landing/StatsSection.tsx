@@ -48,7 +48,7 @@ function AnimatedCounter({ target, label, color = "text-[#1a6b4a]" }: { target: 
   );
 }
 
-export default function StatsSection() {
+export default function StatsSection({ lang = "en" }: { lang?: "es" | "en" }) {
   const [stats, setStats] = useState({ total_nodes: 0, total_edges: 0, verified_nodes: 0 });
 
   useEffect(() => {

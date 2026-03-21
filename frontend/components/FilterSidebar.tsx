@@ -102,18 +102,8 @@ export default function FilterSidebar({
     <div className={`absolute left-4 top-14 bottom-4 w-72 bg-[#faf8f5]/95 backdrop-blur-md border border-[#ddd8ce] rounded-2xl shadow-lg shadow-black/5 z-40 flex flex-col overflow-y-auto transition-all duration-500 ease-out ${mounted ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0"}`}>
       {/* Header */}
       <div className="p-4 border-b border-[#ddd8ce]">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold text-[#3a9d6e]">{labels.title}</h1>
-            <p className="text-xs text-zinc-600 mt-0.5">{labels.subtitle}</p>
-          </div>
-          <button
-            onClick={onLangToggle}
-            className="text-xs bg-[#f0ede7] hover:bg-[#e8e4dc] text-zinc-600 px-2 py-1 rounded transition"
-          >
-            {lang === "es" ? "EN" : "ES"}
-          </button>
-        </div>
+        <h1 className="text-lg font-bold text-[#3a9d6e]">{labels.title}</h1>
+        <p className="text-xs text-zinc-600 mt-0.5">{labels.subtitle}</p>
       </div>
 
       {/* Search with autocomplete */}

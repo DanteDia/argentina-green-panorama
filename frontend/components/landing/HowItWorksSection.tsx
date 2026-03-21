@@ -1,4 +1,4 @@
-export default function HowItWorksSection() {
+export default function HowItWorksSection({ lang = "en" }: { lang?: "es" | "en" }) {
   const pillars = [
     {
       step: "01",

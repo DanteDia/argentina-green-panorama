@@ -1,4 +1,4 @@
-export default function FooterSection() {
+export default function FooterSection({ lang = "en" }: { lang?: "es" | "en" }) {
   return (
     <footer className="bg-[#1a1a1a] text-white/70 py-16">
       <div className="max-w-5xl mx-auto px-6">

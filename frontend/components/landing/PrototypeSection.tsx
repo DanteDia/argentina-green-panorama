@@ -8,13 +8,12 @@ import AIChatPanel from "@/components/AIChatPanel";
 import { GreenNode, GreenEdge, NodeVerificationState } from "@/lib/types";
 import { fetchGraph } from "@/lib/api";
 
-export default function PrototypeSection() {
+export default function PrototypeSection({ lang = "en" }: { lang?: "es" | "en" }) {
   const [nodes, setNodes] = useState<GreenNode[]>([]);
   const [edges, setEdges] = useState<GreenEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<GreenNode | null>(null);
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [lang, setLang] = useState<"es" | "en">("es");
   const [loading, setLoading] = useState(true);
   const [verificationStates, setVerificationStates] = useState<
     Record<string, NodeVerificationState>
@@ -50,9 +49,6 @@ export default function PrototypeSection() {
     setSelectedNode(node);
   }, []);
 
-  const toggleLang = useCallback(() => {
-    setLang((prev) => (prev === "es" ? "en" : "es"));
-  }, []);
 
   const pollStatus = useCallback(
     async (nodeId: string, txHash: string, type: "node" | "social") => {
@@ -317,7 +313,7 @@ export default function PrototypeSection() {
             edgeCount={edges.length}
             verifiedCount={verifiedCount}
             lang={lang}
-            onLangToggle={toggleLang}
+            onLangToggle={() => {}}
             onBatchVerify={handleBatchVerify}
             isBatchVerifying={isBatchVerifying}
             nodes={nodes}

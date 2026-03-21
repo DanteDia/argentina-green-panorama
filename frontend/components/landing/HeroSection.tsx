@@ -6,7 +6,15 @@ import { fetchStats } from "@/lib/api";
 
 const HeroGlobe = dynamic(() => import("./HeroGraph"), { ssr: false });
 
-export default function HeroSection() {
+interface HeroSectionProps { lang?: "es" | "en"; }
+
+const t = {
+  es: { badge: "Prototipo en Vivo — Argentina", headline1: "Industrias,", headline2: "Verificadas.", subtitle: "Mapas de cada industria impulsados por IA. Cada actor, cada relacion, cada flujo de dinero — verificado on-chain.", cta: "Explorar Green Panorama", how: "Como Funciona", actors: "Actores mapeados", connections: "Conexiones", agents: "Agentes IA" },
+  en: { badge: "Live Prototype — Argentina", headline1: "Industries,", headline2: "Verified.", subtitle: "AI-powered maps of every industry. Every actor, every relationship, every money flow — verified on-chain.", cta: "Explore Green Panorama", how: "How It Works", actors: "Actors mapped", connections: "Connections", agents: "AI agents" },
+};
+
+export default function HeroSection({ lang = "en" }: HeroSectionProps) {
+  const labels = t[lang];
   const [mounted, setMounted] = useState(false);
   const [stats, setStats] = useState({ total_nodes: 0, total_edges: 0, verified_nodes: 0 });
 
@@ -40,21 +48,20 @@ export default function HeroSection() {
           <div className="inline-flex items-center gap-2 bg-white/60 backdrop-blur-sm border border-[#1a6b4a]/15 rounded-full px-5 py-2 mb-10">
             <span className="w-2 h-2 rounded-full bg-[#1a6b4a] animate-pulse" />
             <span className="text-sm text-[#1a6b4a] font-medium tracking-wide">
-              Live Prototype — Argentina
+              {labels.badge}
             </span>
           </div>
 
           {/* Headline */}
           <h1 className="font-serif text-5xl md:text-6xl lg:text-[5.5rem] font-semibold text-[#1a1a1a] leading-[0.92] tracking-tight mb-7">
-            Industries,
+            {labels.headline1}
             <br />
-            <span className="text-[#1a6b4a]">Verified.</span>
+            <span className="text-[#1a6b4a]">{labels.headline2}</span>
           </h1>
 
           {/* Subtitle */}
           <p className="text-lg md:text-xl text-[#1a1a1a]/60 leading-relaxed mb-10 max-w-md">
-            AI-powered maps of every industry. Every actor, every relationship,
-            every money flow — verified on-chain.
+            {labels.subtitle}
           </p>
 
           {/* CTA */}
@@ -63,13 +70,13 @@ export default function HeroSection() {
               onClick={scrollToPrototype}
               className="bg-[#1a6b4a] hover:bg-[#155a3e] text-white font-medium px-7 py-3 rounded-lg transition-all hover:shadow-lg hover:shadow-[#1a6b4a]/20 text-[15px]"
             >
-              Explore Green Panorama
+              {labels.cta}
             </button>
             <a
               href="#how-it-works"
               className="bg-white/50 backdrop-blur-sm hover:bg-white/70 text-[#1a1a1a] font-medium px-7 py-3 rounded-lg transition-all border border-[#1a1a1a]/8 text-[15px] flex items-center gap-2"
             >
-              How It Works
+              {labels.how}
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-40">
                 <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
               </svg>
@@ -80,15 +87,15 @@ export default function HeroSection() {
           <div className="mt-12 flex gap-8 text-sm">
             <div>
               <span className="font-mono text-[#1a6b4a] text-lg font-semibold">{stats.total_nodes || "—"}+</span>
-              <p className="text-[#1a1a1a]/35 mt-0.5">Actors mapped</p>
+              <p className="text-[#1a1a1a]/35 mt-0.5">{labels.actors}</p>
             </div>
             <div>
               <span className="font-mono text-[#1a6b4a] text-lg font-semibold">{stats.total_edges || "—"}+</span>
-              <p className="text-[#1a1a1a]/35 mt-0.5">Connections</p>
+              <p className="text-[#1a1a1a]/35 mt-0.5">{labels.connections}</p>
             </div>
             <div>
               <span className="font-mono text-[#1a6b4a] text-lg font-semibold">24/7</span>
-              <p className="text-[#1a1a1a]/35 mt-0.5">AI agents</p>
+              <p className="text-[#1a1a1a]/35 mt-0.5">{labels.agents}</p>
             </div>
           </div>
         </div>
