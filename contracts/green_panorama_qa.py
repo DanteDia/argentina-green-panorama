@@ -111,7 +111,11 @@ JSON format:
             parsed = extract_json(result)
             return json.dumps(parsed, sort_keys=True)
 
-        result_str = gl.eq_principle.strict_eq(nondet)
+        result_str = gl.eq_principle.prompt_non_comparative(
+            nondet,
+            task=f"Verify if {nombre} is a real company/institution in Argentina's green sector",
+            criteria="The JSON must contain exists, argentina_related, green_sector, description_accurate (all booleans), accuracy_score (high/medium/low), and reasoning (string). Boolean values should be factually correct.",
+        )
         self.verifications[node_id] = result_str
         self.verification_count = u256(int(self.verification_count) + 1)
         return result_str
@@ -175,7 +179,11 @@ Respond ONLY as valid JSON:
             parsed = extract_json(result)
             return json.dumps(parsed, sort_keys=True)
 
-        result_str = gl.eq_principle.strict_eq(nondet)
+        result_str = gl.eq_principle.prompt_non_comparative(
+            nondet,
+            task=f"Verify the {relationship_type} relationship between {node_a_name} and {node_b_name}",
+            criteria="The JSON must contain relationship_confirmed (boolean), evidence_found_on (string), confidence (high/medium/low), and reasoning (string). The boolean value should be factually correct.",
+        )
         self.relationship_verifications[edge_id] = result_str
         return result_str
 
@@ -242,7 +250,11 @@ Include an entry for each platform found in the URLs. Detect the platform from t
             parsed = extract_json(result)
             return json.dumps(parsed, sort_keys=True)
 
-        result_str = gl.eq_principle.strict_eq(nondet)
+        result_str = gl.eq_principle.prompt_non_comparative(
+            nondet,
+            task=f"Audit social media presence of {nombre}",
+            criteria="The JSON must contain platforms (object with per-platform data), overall_social_score (high/medium/low), and reasoning (string). Platform data should be factually accurate.",
+        )
         self.social_verifications[node_id] = result_str
         return result_str
 
