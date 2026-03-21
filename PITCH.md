@@ -18,21 +18,25 @@ An interactive node graph that maps Argentina's entire green/carbon market ecosy
 ## Technical Architecture
 
 ```
-                         Users (Browser)
-                              |
-                    Next.js Frontend (Vercel)
-                   /          |           \
-         react-force-graph  API Routes   GenLayerJS SDK
-          (Interactive Map)    |              |
-                              |         GenLayer Studio
-                              |         (Studionet)
-                         FastAPI Backend     |
-                         (Research Agents)   |
-                              |         GreenPanoramaQA
-                         Supabase        Intelligent Contract
-                         (PostgreSQL)    - verify_node()
-                                         - verify_social()
-                                         - verify_relationship()
+                          Users (Browser)
+                               |
+                     Next.js Frontend (Vercel)
+                    /          |           \
+          react-force-graph  API Routes   GenLayerJS SDK
+           (Interactive Map)    |              |
+                               |         GenLayer Studio
+                          Supabase          (Studionet)
+                         (PostgreSQL)          |
+                          /       \       GreenPanoramaQA
+                         /         \      Intelligent Contract
+            Research Daemon      AI Chat   - verify_node()
+          (Docker on VPS, 24/7)  (Gemini)  - verify_social()
+             /       |       \             - verify_relationship()
+     Website    Perplexity    Gemini
+     Scraping   Sonar/Pro    Flash Lite
+    (HTML parse) (newsletters, (classification,
+                 social media,  funding from HTML)
+                 press releases)
 ```
 
 ---
@@ -42,14 +46,14 @@ An interactive node graph that maps Argentina's entire green/carbon market ecosy
 ### Step 1: Welcome & Onboarding
 - Open green-panorama-ar.vercel.app
 - First-time visitors see a welcome overlay explaining:
-  - What Green Panorama is (interactive map of 79+ green organizations)
+  - What Green Panorama is (interactive map of 380+ green organizations, growing autonomously)
   - How nodes and connections work
   - What blockchain verification means
 - Two entry points: "Explorar el Mapa" or "Preguntar al Ecosistema"
 
 ### Step 2: The Graph
-- 79+ nodes representing real companies/institutions in Argentina's green sector
-- 49+ edges showing real relationships (funding, partnerships, clients)
+- 380+ nodes representing real companies/institutions in Argentina's green sector (growing 24/7)
+- 540+ edges showing real relationships (funding, partnerships, clients)
 - Color-coded by cluster: Funds (green), Startups (lime), NGOs (orange), Private (blue), Accelerators (purple), Government (red), International (cyan)
 - Force-directed physics — nodes cluster naturally by relationships
 - Edge type legend with toggle filters (Fondea, Aliados, Clientes, Portfolio, Regula)
@@ -96,15 +100,48 @@ An interactive node graph that maps Argentina's entire green/carbon market ecosy
 - Automatically verifies 5 nodes at once
 - Watch the graph light up with pulsing amber badges (pending) turning green (verified)
 
-### Step 8: AI Research Agents (24/7)
-- Research daemon runs continuously (every 10 minutes)
-- Spiders company websites using LLM to discover new partners, clients, and funders
-- Extracts structured data: name, cluster, category, description, relationships
-- Deduplicates against existing nodes using fuzzy name matching
-- Adds new nodes and edges to Supabase with `source="agent"`
-- **Auto-verification**: after adding new nodes, automatically submits to GenLayer for verification
-- Periodic verification pass: every 3rd cycle, verifies any remaining unverified nodes
-- Feedback loop: failed verifications are logged for manual review and data improvement
+### Step 8: Autonomous Research Agent (24/7 Docker Daemon)
+The research agent runs in a Docker container on a VPS, executing a multi-step cycle every 10 minutes:
+
+**Every cycle (10 min):**
+
+1. **Company Selection** — Picks the next company to research using weighted random selection (seed nodes 10x weight, depth-1 nodes 2x). Nodes at max depth (2) are excluded.
+
+2. **Website Spidering** — Fetches the company's homepage + partner subpages (`/partners`, `/aliados`, `/portfolio`). Uses Gemini Flash Lite to extract partners, clients, and funders from HTML.
+
+3. **Deep Internet Research (Perplexity Sonar)** — For seed nodes (depth-0), uses Perplexity Sonar Pro via OpenRouter to search newsletters, press releases, LinkedIn, social media, conference panels, and event reports for relationships that official websites miss. Falls back to LLM knowledge if Perplexity is unavailable.
+
+4. **Company Classification** — Each discovered company is classified by an LLM: cluster (Startup, ONG, Fondo Verde, etc.), category, description, funding sources, and whether it genuinely interacts with Argentina's green sector. Strict gating: rejects generic companies, requires Argentina + green sector relevance.
+
+5. **Deduplication** — Fuzzy name matching (0.75 threshold) with suffix/punctuation normalization catches duplicates like "Fundación Vida Silvestre" vs "Fundación Vida Silvestre Argentina".
+
+6. **Atomic Insertion** — New nodes are inserted with their edge in a single atomic operation. If the edge fails, the node is rolled back — **zero orphan guarantee** (no node ever exists without at least one relationship).
+
+7. **Funding Discovery** — For newly inserted nodes at depth 0-1, Perplexity Sonar researches specific funding sources (investors, grants, accelerators). Updates `quien_fondea` field and creates `funds` edges. Max 3 Perplexity calls per cycle.
+
+8. **Auto-Verification** — New nodes are automatically submitted to GenLayer for on-chain verification via multi-validator AI consensus.
+
+**Periodic passes (within the cycle loop):**
+
+- **Every 2nd cycle**: Deep relationship discovery — picks already-visited nodes and searches for relationships announced outside official websites (newsletters, social media, press releases)
+- **Every 3rd cycle**: Verification pass — re-verifies unverified/failed nodes
+- **Every 5th cycle**: Orphan sweep — finds any nodes with 0 connections, attempts to connect them via Perplexity, deletes if no relationship found
+
+**Anti-Spiral Guardrails:**
+- Max depth: 2 (seed → direct partner → partner-of-partner → STOP)
+- Global budget: 500 max agent-discovered nodes
+- LLM-only discoveries rejected at depth 1+ (only website/Perplexity sources allowed)
+- Weighted random prevents depth-first spiraling into irrelevant clusters
+
+**Confidence Tiers:**
+- Website-scraped relationships: 0.8 confidence
+- Perplexity-discovered relationships: 0.7 confidence
+- LLM knowledge-based relationships: 0.4 confidence
+
+**Current Stats (live, growing):**
+- 382+ nodes, 546+ edges, 0 orphans
+- 119 nodes with funding data populated
+- Research sources: official websites + Perplexity web search (newsletters, press releases, LinkedIn, social media)
 
 ---
 
@@ -122,7 +159,8 @@ An interactive node graph that maps Argentina's entire green/carbon market ecosy
 - **Why**: GenLayer SDK calls need to happen server-side (private key management). Next.js API routes run on Vercel's serverless functions — no separate backend needed for the verification flow.
 
 ### OpenRouter for Research Agents
-- **Why**: Access to 500+ models through one API. Use cheap models (Gemini Flash) for bulk research, expensive models (Claude/GPT) for accuracy. Cost: ~$0.25/M tokens.
+- **Why**: Access to 500+ models through one API. Use cheap models (Gemini Flash Lite) for bulk classification, Perplexity Sonar for real-time web search (newsletters, social media, press releases), and expensive models for accuracy when needed.
+- **Multi-model pipeline**: Gemini Flash Lite ($0.01/M tokens) for HTML extraction and classification, Perplexity Sonar ($1/M + $5/K searches) for deep internet research, Perplexity Sonar Pro ($3/M + $5/K searches) for partner/relationship discovery.
 
 ### Supabase
 - **Why**: Free PostgreSQL with realtime subscriptions. When a research agent adds a new node, the frontend could receive it in real-time via Supabase Realtime.
@@ -139,13 +177,16 @@ An interactive node graph that maps Argentina's entire green/carbon market ecosy
 | followers | Social media followers |
 | cluster | Fondo Verde, Startup, ONG, Empresa Privada, Aceleradora, Government, Organismo Internacional, Consultora |
 | categoria | Subcategory (energia renovable, medidora de carbono, etc.) |
-| quien_fondea | Funding source |
+| quien_fondea | Funding source (populated by Perplexity Sonar) |
 | aliados_portfolio | Partners/portfolio companies |
 | clientes | Clients |
 | descripcion | Description |
 | verified | On-chain verification status |
 | verification_tx | GenLayer transaction hash |
 | source | "manual" or "agent" |
+| depth | Discovery depth (0=seed, 1=direct partner, 2=partner-of-partner) |
+| discovery_method | How the node was found: "manual", "website", "perplexity", "perplexity_deep", "llm" |
+| discovered_by | UUID of the node that led to this discovery |
 
 ### Edges (Relationships)
 | Type | Meaning |
@@ -156,14 +197,22 @@ An interactive node graph that maps Argentina's entire green/carbon market ecosy
 | portfolio | A is in B's portfolio |
 | regulates | A regulates B |
 
+### Edge Metadata
+| Field | Description |
+|-------|-------------|
+| confidence | Discovery confidence: website=0.8, perplexity=0.7, llm=0.4 |
+| discovery_method | Source: "website", "perplexity", "perplexity_deep", "llm", "manual" |
+| source | "manual" or "agent" |
+
 ---
 
 ## Impact & Vision
 
 ### Short-term (Hackathon)
-- Map 100+ organizations in Argentina's green sector
+- Map 380+ organizations in Argentina's green sector (and growing 24/7)
+- Track money flows: 119+ nodes with funding sources identified
 - Verify data integrity with GenLayer on-chain consensus
-- Provide a research tool for newcomers to understand the ecosystem
+- Autonomous research agent discovers new organizations, relationships, and funding from websites + deep internet sources
 
 ### Medium-term (3-6 months)
 - Research agents discover 1000+ organizations across Latin America
@@ -186,14 +235,18 @@ This documents the chronological build order for the hackathon pitch:
 3. **Frontend v1** — Next.js + react-force-graph-2d, cluster filtering, search, bilingual ES/EN toggle, dark mode
 4. **GenLayer Contract** — Wrote and deployed `GreenPanoramaQA` intelligent contract with 3 verification functions (node, social, relationship) using non-deterministic web fetch + LLM consensus
 5. **Verification API** — Next.js API routes for submit/poll/result using genlayer-js SDK
-6. **Research Agent** — Python spider pattern using OpenRouter (Gemini Flash) to scrape company websites and discover new nodes
-7. **KiloClaw / Daemon** — 24/7 research daemon that runs cycles, deduplicates discoveries, writes to Supabase
+6. **Research Agent v1** — Python spider pattern using OpenRouter (Gemini Flash) to scrape company websites and discover new nodes
+7. **Research Daemon** — 24/7 Docker daemon on VPS that runs research cycles, deduplicates discoveries, writes to Supabase
 8. **GitHub + Vercel** — CI/CD with auto-deploy on push to main
 9. **AI Chat Panel** — Natural language graph query interface powered by Gemini 2.0 Flash via OpenRouter
 10. **Welcome Overlay** — First-time onboarding explaining the tool
 11. **Edge Legend + Filters** — Toggle relationship types on/off
 12. **Search Autocomplete** — Dropdown results as you type
 13. **Auto-Verification** — Research daemon auto-submits new discoveries to GenLayer, periodic verification passes on unverified nodes
+14. **Anti-Spiral Guardrails** — Depth limits, budget caps, weighted random selection, LLM gating to prevent agent from spiraling into irrelevant clusters
+15. **Perplexity Deep Research** — Real-time web search via Perplexity Sonar for discovering relationships from newsletters, social media, press releases, conference panels — sources that website scraping misses
+16. **Funding Pipeline** — Automated discovery and backfill of funding sources (`quien_fondea`) for all nodes using Perplexity Sonar, with funding edges and investor tracking
+17. **Zero-Orphan System** — Atomic node+edge insertion (rollback on failure) + periodic orphan sweep ensures every node has at least one relationship
 
 ## User Personas
 
@@ -216,9 +269,9 @@ Works at Ministry of Environment. Uses the stats and cluster view to understand 
 | Backend | Python FastAPI, OpenRouter API |
 | Database | Supabase (PostgreSQL) |
 | Blockchain | GenLayer (Studionet) — Intelligent Contracts |
-| AI Models | Gemini 2.0 Flash (chat), Gemini 3.1 Flash Lite (research) |
-| AI Agents | Spider pattern with fuzzy dedup, 24/7 daemon |
-| Deployment | Vercel (frontend), GitHub CI/CD |
+| AI Models | Gemini 2.0 Flash (chat), Gemini Flash Lite (classification), Perplexity Sonar/Pro (deep research) |
+| AI Agents | Multi-source spider (websites + Perplexity web search), fuzzy dedup, atomic insertion, orphan prevention, 24/7 Docker daemon |
+| Deployment | Vercel (frontend), Hostinger VPS + Docker (research agent), GitHub CI/CD |
 
 ## Links
 - **Live App**: https://green-panorama-ar.vercel.app
