@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -12,10 +12,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const playfair = Playfair_Display({
+  variable: "--font-serif",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
 export const metadata: Metadata = {
-  title: "Green Panorama - Argentina's Green Ecosystem Map",
+  title: "Verifiable Industries — Every Industry. Every Actor. Verified.",
   description:
-    "Interactive node map of Argentina's green/carbon market ecosystem powered by AI agents and GenLayer verification",
+    "AI-powered, blockchain-verified maps of every industry. Explore actors, relationships, and money flows — verified on-chain through GenLayer consensus.",
 };
 
 export default function RootLayout({
@@ -26,9 +32,9 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
+      className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-zinc-950 text-white">{children}</body>
+      <body className="min-h-full bg-[#f5f3eb] text-[#1a1a1a]">{children}</body>
     </html>
   );
 }

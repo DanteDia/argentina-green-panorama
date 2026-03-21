@@ -100,7 +100,7 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 z-50 bg-green-600 hover:bg-green-500 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg shadow-green-900/50 transition-all hover:scale-105"
+          className="absolute bottom-6 right-6 z-50 bg-green-600 hover:bg-green-500 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg shadow-green-900/50 transition-all hover:scale-105"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -110,7 +110,7 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
 
       {/* Chat panel */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 z-50 w-96 max-h-[500px] bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="absolute bottom-6 right-6 z-50 w-96 max-h-[500px] bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-2xl shadow-2xl flex flex-col overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700 bg-zinc-800/50">
             <div className="flex items-center gap-2">

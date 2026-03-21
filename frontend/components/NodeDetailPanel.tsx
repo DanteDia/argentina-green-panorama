@@ -143,7 +143,7 @@ export default function NodeDetailPanel({
   const hasSocialLink = node.link && /instagram|linkedin|twitter|x\.com|facebook|tiktok|youtube/.test(node.link);
 
   return (
-    <div className="fixed right-0 top-0 h-full w-96 bg-zinc-900/95 backdrop-blur-md border-l border-zinc-700 overflow-y-auto z-50 shadow-2xl">
+    <div className="absolute right-0 top-0 h-full w-96 bg-zinc-900/95 backdrop-blur-md border-l border-zinc-700 overflow-y-auto z-50 shadow-2xl">
       {/* Header */}
       <div className="sticky top-0 bg-zinc-900/95 backdrop-blur-md p-4 border-b border-zinc-700 z-10">
         <div className="flex items-start justify-between">

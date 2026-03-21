@@ -95,7 +95,7 @@ export default function FilterSidebar({
     : [];
 
   return (
-    <div className="fixed left-0 top-0 h-full w-72 bg-zinc-900/90 backdrop-blur-md border-r border-zinc-700 z-40 flex flex-col overflow-y-auto">
+    <div className="absolute left-0 top-0 h-full w-72 bg-zinc-900/90 backdrop-blur-md border-r border-zinc-700 z-40 flex flex-col overflow-y-auto">
       {/* Header */}
       <div className="p-4 border-b border-zinc-700">
         <div className="flex items-center justify-between">
