@@ -78,16 +78,53 @@ An interactive node graph that maps Argentina's entire green/carbon market ecosy
 
 ### Step 5: On-Chain Verification with GenLayer
 - Click "Verificar en GenLayer" on any unverified node
-- The GenLayer intelligent contract:
-  1. Fetches the company's website in real-time
-  2. Uses AI (multi-validator consensus with 5 different LLMs) to verify:
-     - Does the company exist?
-     - Is it related to Argentina?
-     - Is it in the green sector?
-     - Is the description accurate?
-  3. Stores the result on-chain with a transaction hash
-- Validators use different LLMs for diversity of judgment
-- Result: green badge on the node + verification details in the panel + Supabase updated
+- The GenLayer intelligent contract (3 verification methods):
+
+#### verify_node() — Company Verification
+5 AI validators independently verify using different LLMs:
+1. **Exists**: Fetches website in real-time, checks if company is real
+2. **Argentina related**: Headquartered, operates in, or has programs in Argentina
+3. **Green sector**: Part of green/carbon/environmental/sustainability sector
+4. **Description accurate**: Provided description matches reality
+Result: per-field green/red/grey dots next to each data field in the detail panel
+
+#### verify_relationship() — Connection Verification (NEW: 3-source)
+Validators check THREE sources to find evidence (aligned with how research agents discover):
+1. **Website A** — fetch company A's website for partner mentions
+2. **Website B** — fetch company B's website for partner mentions
+3. **Web search** — Google search for "{Company A} {Company B}" to find press releases, news articles, LinkedIn posts that company websites miss
+Also verifies relationship TYPE (funds vs partners vs client vs portfolio vs regulates).
+If type is wrong, suggests the correct type.
+
+#### verify_social() — Social Media Audit
+For each social link (Instagram, LinkedIn, Twitter, etc.):
+1. Is the link valid?
+2. Does the profile belong to this company?
+3. Is it a real account (not fake)?
+4. Do follower counts match claimed numbers?
+5. Activity level: active, dormant, or dead?
+
+#### Per-Field Verification Display
+Each data field shows a tiny colored dot:
+- **Green**: Verified on-chain by GenLayer consensus
+- **Red**: Verification failed
+- **Grey**: Not yet verified
+Dots appear next to: website, description, category, funding, partners, each connection
+
+#### Honest Verification Policy
+| Field | Discovery Source | Verification Source | Status |
+|-------|----------------|-------------------|--------|
+| Company exists | Website + LLM | Website + LLM knowledge | Verified by GenLayer |
+| Argentina related | LLM classification | Website + LLM knowledge | Verified by GenLayer |
+| Green sector | LLM classification | Website + LLM knowledge | Verified by GenLayer |
+| Description | LLM generation | Website + LLM knowledge | Verified by GenLayer |
+| Relationship exists | Perplexity + website | Website + web search + LLM | Verified by GenLayer |
+| Relationship type | LLM classification | Website + web search + LLM | Verified by GenLayer |
+| Social presence | Link extraction | Direct profile fetch | Verified by GenLayer |
+| Funding sources | Perplexity + website | Not individually verified | Shown as unverified (grey) |
+| Client list | Website scraping | Not verified | Shown as unverified (grey) |
+
+Fields without GenLayer verification honestly display grey dots — we never fabricate verification status.
 
 ### Step 6: Social Media Audit
 - For nodes with social media links (Instagram, LinkedIn, Twitter)
@@ -150,7 +187,8 @@ The research agent runs in a Docker container on a VPS, executing a multi-step c
 ### GenLayer (not a regular smart contract)
 - **Why**: Traditional smart contracts can't fetch websites or use AI reasoning. GenLayer's intelligent contracts can do both via `gl.nondet.web.get()` and `gl.nondet.exec_prompt()`.
 - **Consensus**: `prompt_non_comparative` — leader validator does the work, other validators judge if the result is reasonable. More reliable than requiring identical outputs from different LLMs.
-- **Contract address**: `0x57C566b552e528d86b230de35dbd847476f829c4` on Studionet
+- **Contract address**: Deployed on GenLayer Studionet (address updated on each deployment)
+- **3-source relationship verification**: Unlike v1 which only checked websites, v2 also web-searches for evidence — matching how the research agent discovers relationships via Perplexity
 
 ### react-force-graph-2d (not D3 or Cytoscape)
 - **Why**: WebGL-accelerated, handles hundreds of nodes smoothly, built-in physics simulation, custom canvas rendering for node badges and glow effects
@@ -276,5 +314,5 @@ Works at Ministry of Environment. Uses the stats and cluster view to understand 
 ## Links
 - **Live App**: https://green-panorama-ar.vercel.app
 - **GitHub**: https://github.com/DanteDia/argentina-green-panorama
-- **GenLayer Contract**: https://studio.genlayer.com/?import-contract=0x57C566b552e528d86b230de35dbd847476f829c4
+- **GenLayer Contract**: Deployed on GenLayer Studionet
 - **Hackathon**: Aleph March '26 (Buenos Aires)

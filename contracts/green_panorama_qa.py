@@ -133,26 +133,43 @@ JSON format:
     ) -> str:
         """
         Verify that a claimed relationship between two nodes actually exists.
-        Fetches both websites and uses LLM to find evidence of the relationship.
+        Uses THREE sources: both websites + web search for broader evidence.
+        This aligns with how research agents discover relationships (via Perplexity/web search),
+        so validators can find evidence that may not be on company websites.
         """
 
         def nondet() -> str:
             web_data_a = ""
             web_data_b = ""
+            web_search_data = ""
 
+            # Source 1: Fetch company A's website
             if node_a_link:
                 try:
                     response_a = gl.nondet.web.get(node_a_link)
-                    web_data_a = response_a.body.decode("utf-8")[:3000]
+                    web_data_a = response_a.body.decode("utf-8")[:2500]
                 except Exception:
                     web_data_a = "WEBSITE_UNAVAILABLE"
 
+            # Source 2: Fetch company B's website
             if node_b_link:
                 try:
                     response_b = gl.nondet.web.get(node_b_link)
-                    web_data_b = response_b.body.decode("utf-8")[:3000]
+                    web_data_b = response_b.body.decode("utf-8")[:2500]
                 except Exception:
                     web_data_b = "WEBSITE_UNAVAILABLE"
+
+            # Source 3: Web search for evidence of this relationship
+            # Many partnerships are mentioned in press releases, news, LinkedIn —
+            # not on the company websites themselves
+            try:
+                import urllib.parse
+                search_query = urllib.parse.quote(f"{node_a_name} {node_b_name} partnership OR alianza OR inversor OR cliente Argentina")
+                search_url = f"https://www.google.com/search?q={search_query}"
+                search_response = gl.nondet.web.get(search_url)
+                web_search_data = search_response.body.decode("utf-8")[:2500]
+            except Exception:
+                web_search_data = "SEARCH_UNAVAILABLE"
 
             task = f"""You are verifying a claimed relationship between two organizations
 in Argentina's green/carbon market ecosystem.
@@ -160,29 +177,35 @@ in Argentina's green/carbon market ecosystem.
 Claimed relationship:
 - Organization A: {node_a_name} ({node_a_link})
 - Organization B: {node_b_name} ({node_b_link})
-- Relationship type: {relationship_type}
+- Claimed type: {relationship_type}
 - Description: {relationship_description}
 
-Website A content:
+EVIDENCE SOURCE 1 — Website A content:
 {web_data_a}
 
-Website B content:
+EVIDENCE SOURCE 2 — Website B content:
 {web_data_b}
 
-Check if there is evidence on either website that this relationship exists.
-Look for: partner logos, mentions, press releases, portfolio pages, funding announcements.
+EVIDENCE SOURCE 3 — Web search results for "{node_a_name} {node_b_name}":
+{web_search_data}
 
-Also determine if the relationship TYPE is accurate:
-- "funds": A provides money/investment to B
-- "partners_with": A and B collaborate as allies/partners
-- "client_of": B is a client/customer of A
-- "portfolio": B is in A's portfolio/accelerator program
-- "regulates": A has regulatory authority over B
+Check ALL THREE sources for evidence. Relationships are often mentioned in:
+- Press releases, news articles, LinkedIn posts, event announcements
+- Not just on company websites. The web search results may contain critical evidence.
 
-If the relationship exists but the type is wrong, set type_accurate to false and suggest the correct type.
+Determine:
+1. Does this relationship exist? (check all 3 sources)
+2. Is the relationship TYPE correct?
+   - "funds": A provides money/investment to B
+   - "partners_with": A and B collaborate as allies/partners
+   - "client_of": B is a client/customer of A (A provides services to B)
+   - "portfolio": B is in A's accelerator/portfolio program
+   - "regulates": A has regulatory authority over B
+
+If the relationship exists but the type is wrong, suggest the correct type.
 
 Respond ONLY as valid JSON:
-{{"relationship_confirmed": true/false, "type_accurate": true/false, "suggested_type": "funds"/"partners_with"/"client_of"/"portfolio"/"regulates", "evidence_found_on": "website_a"/"website_b"/"both"/"neither", "confidence": "high"/"medium"/"low", "reasoning": "brief explanation"}}
+{{"relationship_confirmed": true/false, "type_accurate": true/false, "suggested_type": "funds"/"partners_with"/"client_of"/"portfolio"/"regulates", "evidence_found_on": "website_a"/"website_b"/"web_search"/"multiple"/"none", "confidence": "high"/"medium"/"low", "reasoning": "brief explanation of what evidence was found and where"}}
 """
             result = gl.nondet.exec_prompt(task)
             parsed = extract_json(result)
@@ -191,7 +214,7 @@ Respond ONLY as valid JSON:
         result_str = gl.eq_principle.prompt_non_comparative(
             nondet,
             task=f"Verify the {relationship_type} relationship between {node_a_name} and {node_b_name}",
-            criteria="The JSON must contain relationship_confirmed (boolean), evidence_found_on (string), confidence (high/medium/low), and reasoning (string). The boolean value should be factually correct.",
+            criteria="The JSON must contain relationship_confirmed (boolean), type_accurate (boolean), suggested_type (string), evidence_found_on (string), confidence (high/medium/low), and reasoning (string). Values should be factually correct based on evidence from websites and web search.",
         )
         self.relationship_verifications[edge_id] = result_str
         return result_str

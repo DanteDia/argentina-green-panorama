@@ -1,0 +1,2 @@
+{"ts": "2026-03-21T04:52:09.834265+00:00", "event": "new_node", "nombre": "Test Agent Node", "cluster": "Startup", "discovered_from": "Kilimo"}
+{"ts": "2026-03-21T04:52:16.774218+00:00", "event": "new_edge", "source": "Kilimo", "target": "Test Agent Node", "type": "partners_with"}
