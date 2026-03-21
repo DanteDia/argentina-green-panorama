@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import signal
 import sys
 import time
@@ -42,6 +43,10 @@ from agents.research_agent import spider_company
 # Vercel-hosted frontend API for GenLayer verification
 VERIFY_API_BASE = os.environ.get("VERIFY_API_BASE", "https://green-panorama-ar.vercel.app")
 
+# --- Anti-spiral guardrails ---
+MAX_DEPTH = 2           # seed=0, direct partner=1, partner-of-partner=2, stop
+MAX_AGENT_NODES = 500   # Global budget: max agent-discovered nodes total
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -64,26 +69,44 @@ signal.signal(signal.SIGINT, _handle_signal)
 
 
 def get_next_company() -> dict | None:
-    """Get the next unvisited company with a scrapeable URL."""
+    """Get the next company using weighted random selection.
+
+    Weights by depth: seed (depth=0) → weight 10, depth 1 → weight 2.
+    Nodes at MAX_DEPTH are excluded (no further spidering).
+    This naturally creates breadth-first exploration across seed families.
+    """
     sb = get_supabase()
     state = load_state()
     visited = set(state.get("visited", []))
 
-    resp = sb.table("nodes").select("nombre, link, cluster").execute()
+    resp = sb.table("nodes").select("nombre, link, cluster, depth").execute()
     candidates = []
     for node in resp.data:
         if node["nombre"] in visited:
             continue
+        depth = node.get("depth") or 0
+        if depth >= MAX_DEPTH:
+            continue  # Don't spider nodes at max depth
         link = node.get("link", "") or ""
-        if link and "instagram.com" not in link:
-            candidates.insert(0, node)
-        elif link:
-            candidates.append(node)
+        if not link or "instagram.com" in link:
+            continue  # Skip unscrapeable nodes
+        candidates.append(node)
 
     if not candidates:
         return None
 
-    return candidates[0]
+    # Weighted random: seeds get 10x weight, depth-1 gets 2x
+    weights = []
+    for c in candidates:
+        d = c.get("depth") or 0
+        if d == 0:
+            weights.append(10)
+        elif d == 1:
+            weights.append(2)
+        else:
+            weights.append(1)
+
+    return random.choices(candidates, weights=weights, k=1)[0]
 
 
 def get_all_names() -> list[str]:
@@ -93,7 +116,7 @@ def get_all_names() -> list[str]:
     return [n["nombre"] for n in resp.data]
 
 
-def insert_node(node, discovered_from: str) -> str | None:
+def insert_node(node, discovered_from: str, depth: int = 1, discovered_by_id: str | None = None) -> str | None:
     """Insert a discovered node into Supabase. Returns node ID or None."""
     sb = get_supabase()
 
@@ -107,21 +130,27 @@ def insert_node(node, discovered_from: str) -> str | None:
         "quien_fondea": "",
         "aliados_portfolio": [],
         "clientes": [],
+        "depth": depth,
+        "discovery_method": getattr(node, "discovery_method", "llm"),
     }
+    if discovered_by_id:
+        row["discovered_by"] = discovered_by_id
 
     try:
         resp = sb.table("nodes").insert(row).execute()
         if resp.data:
             node_id = resp.data[0]["id"]
-            log_event("new_node", nombre=node.nombre, cluster=node.cluster, discovered_from=discovered_from)
-            log.info(f"  + Node: {node.nombre} ({node.cluster}/{node.categoria})")
+            log_event("new_node", nombre=node.nombre, cluster=node.cluster,
+                      discovered_from=discovered_from, depth=depth,
+                      discovery_method=row["discovery_method"])
+            log.info(f"  + Node: {node.nombre} ({node.cluster}/{node.categoria}) [depth={depth}, method={row['discovery_method']}]")
             return node_id
     except Exception as e:
         log.error(f"  Failed to insert node {node.nombre}: {e}")
     return None
 
 
-def insert_edge(source_name: str, target_name: str, rel_type: str) -> bool:
+def insert_edge(source_name: str, target_name: str, rel_type: str, discovery_method: str = "llm", confidence: float = 0.8) -> bool:
     """Insert an edge between two nodes. Returns True on success."""
     sb = get_supabase()
 
@@ -151,15 +180,16 @@ def insert_edge(source_name: str, target_name: str, rel_type: str) -> bool:
         "target_id": target_id,
         "relationship_type": rel_type,
         "description": f"{source_name} {rel_type} {target_name}",
-        "confidence": 0.8,
+        "confidence": confidence,
         "source": "agent",
+        "discovery_method": discovery_method,
     }
 
     try:
         resp = sb.table("edges").insert(row).execute()
         if resp.data:
-            log_event("new_edge", source=source_name, target=target_name, type=rel_type)
-            log.info(f"  + Edge: {source_name} --{rel_type}--> {target_name}")
+            log_event("new_edge", source=source_name, target=target_name, type=rel_type, method=discovery_method)
+            log.info(f"  + Edge: {source_name} --{rel_type}--> {target_name} [method={discovery_method}]")
             return True
     except Exception as e:
         log.error(f"  Failed to insert edge: {e}")
@@ -436,6 +466,20 @@ async def verify_unverified_batch(max_nodes: int = 5):
     return results
 
 
+def get_agent_node_count() -> int:
+    """Get current count of agent-discovered nodes (for budget check)."""
+    sb = get_supabase()
+    resp = sb.table("nodes").select("id", count="exact").eq("source", "agent").execute()
+    return resp.count or 0
+
+
+def get_source_node_id(name: str) -> str | None:
+    """Get the UUID of a node by name."""
+    sb = get_supabase()
+    resp = sb.table("nodes").select("id").eq("nombre", name).execute()
+    return resp.data[0]["id"] if resp.data else None
+
+
 async def run_one_cycle() -> dict:
     """Run a single research cycle on one company.
 
@@ -446,10 +490,19 @@ async def run_one_cycle() -> dict:
         "new_nodes": 0,
         "new_edges": 0,
         "duplicates_skipped": 0,
+        "depth_rejected": 0,
+        "llm_at_depth_rejected": 0,
         "errors": [],
     }
 
-    # Step 1: Pick next company
+    # Budget check: stop adding nodes if we hit the global cap
+    agent_count = get_agent_node_count()
+    if agent_count >= MAX_AGENT_NODES:
+        log.info(f"Budget exhausted: {agent_count}/{MAX_AGENT_NODES} agent nodes. Skipping research.")
+        summary["errors"].append("budget_exhausted")
+        return summary
+
+    # Step 1: Pick next company (weighted random)
     company = get_next_company()
     if not company:
         log.info("All companies have been visited. Nothing to do.")
@@ -458,18 +511,19 @@ async def run_one_cycle() -> dict:
 
     name = company["nombre"]
     url = company.get("link")
+    source_depth = company.get("depth") or 0
     summary["company"] = name
-    log.info(f"Researching: {name} ({url})")
+    log.info(f"Researching: {name} ({url}) [depth={source_depth}]")
 
     if not url:
         log.warning(f"No URL for {name}, marking visited and skipping.")
         cmd_mark_visited(name)
         return summary
 
-    # Step 2: Spider the company website
+    # Step 2: Spider the company website (pass depth for LLM gating)
     try:
         existing_names = set(get_all_names())
-        result = await spider_company(name, url, existing_names)
+        result = await spider_company(name, url, existing_names, source_depth=source_depth)
     except Exception as e:
         log.error(f"Spider failed for {name}: {e}")
         summary["errors"].append(str(e))
@@ -482,23 +536,41 @@ async def run_one_cycle() -> dict:
         for err in result.errors:
             log.warning(f"  Spider warning: {err}")
 
-    # Step 3: For each discovered node, dedup and insert
+    # Step 3: For each discovered node, apply guardrails, dedup, and insert
+    child_depth = source_depth + 1
+    source_node_id = get_source_node_id(name)
     all_known = get_all_names()
+    budget_remaining = MAX_AGENT_NODES - agent_count
+
     for node in result.discovered_nodes:
+        # Guardrail: budget check
+        if budget_remaining <= 0:
+            log.info(f"  Budget cap reached during cycle. Stopping insertions.")
+            break
+
+        # Guardrail: reject LLM-only discoveries from depth-1+ sources
+        if source_depth >= 1 and getattr(node, "discovery_method", "llm") == "llm":
+            log.info(f"  ~ LLM-at-depth rejected: {node.nombre} (source depth={source_depth}, method=llm)")
+            summary["llm_at_depth_rejected"] += 1
+            continue
+
         is_dup, match, score = check_duplicate(node.nombre, all_known)
         if is_dup:
             log.info(f"  ~ Duplicate: {node.nombre} matches {match} ({score:.2f})")
             summary["duplicates_skipped"] += 1
             continue
 
-        # Insert node
-        node_id = insert_node(node, discovered_from=name)
+        # Insert node with depth propagation
+        node_id = insert_node(node, discovered_from=name, depth=child_depth, discovered_by_id=source_node_id)
         if node_id:
             summary["new_nodes"] += 1
+            budget_remaining -= 1
             all_known.append(node.nombre)
 
-            # Insert edge
-            if insert_edge(name, node.nombre, node.relationship_type):
+            # Insert edge with discovery method and confidence
+            if insert_edge(name, node.nombre, node.relationship_type,
+                          discovery_method=getattr(node, "discovery_method", "llm"),
+                          confidence=getattr(node, "confidence", 0.8)):
                 summary["new_edges"] += 1
 
     # Step 4: Auto-verify newly added nodes
@@ -518,17 +590,22 @@ async def run_one_cycle() -> dict:
     save_state(state)
 
     log.info(
-        f"Cycle complete: {name} -> "
-        f"{summary['new_nodes']} new nodes, "
-        f"{summary['new_edges']} new edges, "
-        f"{summary['duplicates_skipped']} duplicates skipped"
+        f"Cycle complete: {name} [depth={source_depth}] -> "
+        f"{summary['new_nodes']} new, "
+        f"{summary['new_edges']} edges, "
+        f"{summary['duplicates_skipped']} dups, "
+        f"{summary['llm_at_depth_rejected']} llm-rejected"
     )
     log_event(
         "cycle_complete",
         company=name,
+        source_depth=source_depth,
+        child_depth=child_depth,
         new_nodes=summary["new_nodes"],
         new_edges=summary["new_edges"],
         duplicates=summary["duplicates_skipped"],
+        llm_rejected=summary["llm_at_depth_rejected"],
+        budget_remaining=budget_remaining,
     )
 
     return summary
@@ -547,10 +624,18 @@ async def daemon_loop(interval: int = 600):
         try:
             summary = await run_one_cycle()
 
+            if "budget_exhausted" in summary.get("errors", []):
+                log.info("Node budget exhausted. Running verification pass only...")
+                await verify_unverified_batch(max_nodes=5)
+                for _ in range(interval * 3):
+                    if not _running:
+                        break
+                    await asyncio.sleep(1)
+                continue
+
             if "exhausted" in summary.get("errors", []):
                 log.info("All companies visited. Running verification pass on unverified nodes...")
                 await verify_unverified_batch(max_nodes=5)
-                # Wait longer when exhausted
                 for _ in range(interval * 3):
                     if not _running:
                         break

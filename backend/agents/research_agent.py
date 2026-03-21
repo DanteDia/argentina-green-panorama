@@ -43,6 +43,8 @@ class DiscoveredNode:
     descripcion: str = ""
     relationship_to_source: str = ""  # how it relates to the source company
     relationship_type: str = "partners_with"  # funds, partners_with, client_of
+    discovery_method: str = "website"  # 'website' or 'llm'
+    confidence: float = 0.8  # website=0.8, llm=0.4
 
 
 @dataclass
@@ -114,15 +116,26 @@ If no partners found, return empty array: []
 
 def research_company(name: str, url: str | None) -> DiscoveredNode | None:
     """Research a discovered company and extract structured data."""
-    prompt = f"""Research this company/organization and provide structured information.
+    prompt = f"""Research this company/organization and classify it.
 Company name: {name}
 Website: {url or 'unknown'}
 
 Determine:
-1. What cluster does it belong to? Choose from: Empresa Privada, ONG, Fondo Verde, Aceleradora, Organismo Internacional, Consultora, Startup, Government
-2. What category/subcategory? (e.g., energía renovable, agricultura sustentable, biotecnología, medidora de carbono, conservación, fondo verde, aceleradora, etc.)
-3. Brief description in Spanish (1-2 sentences)
-4. Is it related to Argentina's green/carbon/environmental sector? (yes/no)
+1. Cluster: Empresa Privada, ONG, Fondo Verde, Aceleradora, Organismo Internacional, Consultora, Startup, Government
+2. Category (e.g., energía renovable, agricultura sustentable, biotecnología, créditos de carbono, conservación, finanzas verdes, aceleradora, agtech)
+3. Brief description in Spanish (1-2 sentences, factual only)
+4. Does this company interact with Argentina's green/environmental/sustainability sector?
+
+ACCEPT if the company:
+- Operates in Argentina's green/environmental sector directly
+- Funds, invests in, or partners with green companies in Argentina
+- Provides services to green companies in Argentina (even if the company itself is not "green")
+- Has specific programs or initiatives related to environment/sustainability in Argentina
+
+REJECT if the company:
+- Has NO connection whatsoever to green/environmental/sustainability topics
+- Does not exist or you cannot verify any information about it
+- Is a generic international org with no specific Argentina environmental involvement
 
 Respond ONLY as JSON:
 {{"cluster": "...", "categoria": "...", "descripcion": "...", "is_green_argentina": true/false}}
@@ -153,19 +166,22 @@ Respond ONLY as JSON:
 
 
 def search_for_partners(company_name: str) -> list[dict]:
-    """Use LLM knowledge to find partners/connections for a company."""
+    """Use LLM knowledge to find partners/connections for a company.
+
+    NOTE: This should ONLY be called for depth-0 (seed) nodes to avoid spiral drift.
+    For depth-1+ nodes, rely only on website scraping.
+    """
     prompt = f"""You are researching Argentina's green/carbon/environmental ecosystem.
 
-For the company/organization "{company_name}", list ALL known partners, allies, investors,
-portfolio companies, clients, and related organizations in Argentina's green sector.
+For the company/organization "{company_name}", list known partners, allies, investors,
+portfolio companies, clients, and related organizations that interact with Argentina's green sector.
 
-Focus on:
-- Investment relationships (who funds whom)
-- Partnerships and alliances
-- Portfolio companies (if it's a fund/accelerator)
-- Clients in the green sector
-- Government partnerships
-- NGO collaborations
+IMPORTANT CONSTRAINTS:
+- Only include organizations that operate in or have specific programs in Argentina
+- Only include organizations connected to green/environmental/sustainability topics
+- Do NOT include generic international organizations unless they have specific Argentina green programs
+- Maximum 8 organizations
+- Only include organizations you are confident actually exist
 
 For each, provide:
 - name: organization name
@@ -188,7 +204,8 @@ If you don't know any connections, return: []
         content = response.choices[0].message.content or "[]"
         json_match = re.search(r'\[.*\]', content, re.DOTALL)
         if json_match:
-            return json.loads(json_match.group())
+            results = json.loads(json_match.group())
+            return results[:8]  # Cap at 8 to prevent LLM hallucination floods
     except Exception as e:
         print(f"Error searching partners for {company_name}: {e}")
     return []
@@ -204,19 +221,21 @@ async def spider_company(
     company_name: str,
     company_url: str | None,
     existing_names: set[str],
+    source_depth: int = 0,
 ) -> ResearchResult:
     """
     Spider a company's website to discover partners and new nodes.
 
     1. Fetch the company's homepage + common partner subpages
     2. Extract partners/aliados from HTML via LLM
-    3. Also use LLM knowledge to find connections
+    3. Use LLM knowledge ONLY for depth-0 (seed) nodes
     4. For each new partner, research and classify it
     5. Return discovered nodes and relationships
     """
     result = ResearchResult(source_company=company_name)
 
     all_partners = []
+    website_partner_names = set()  # Track which came from website scraping
 
     # Step 1: Fetch homepage and partner subpages
     if company_url:
@@ -224,6 +243,8 @@ async def spider_company(
         html = await fetch_webpage(company_url)
         if html:
             partners = extract_partners_from_html(html, company_name)
+            for p in partners:
+                p["_source"] = "website"
             all_partners.extend(partners)
         else:
             result.errors.append(f"Could not fetch {company_url}")
@@ -234,14 +255,22 @@ async def spider_company(
             sub_html = await fetch_webpage(f"{base_url}{subpage}", timeout=5.0)
             if sub_html:
                 sub_partners = extract_partners_from_html(sub_html, company_name)
+                for p in sub_partners:
+                    p["_source"] = "website"
                 all_partners.extend(sub_partners)
                 break  # Found a working partner page, don't spam more
     else:
         result.errors.append(f"No URL for {company_name}")
 
-    # Step 2: Use LLM knowledge to find connections (always, even if website failed)
-    llm_partners = search_for_partners(company_name)
-    all_partners.extend(llm_partners)
+    # Step 2: Use LLM knowledge ONLY for depth-0 (seed) nodes
+    # For depth-1+ nodes, rely only on website scraping to prevent spiral drift
+    if source_depth == 0:
+        llm_partners = search_for_partners(company_name)
+        for p in llm_partners:
+            p["_source"] = "llm"
+        all_partners.extend(llm_partners)
+    else:
+        print(f"  Skipping LLM search for {company_name} (depth={source_depth})")
 
     # Deduplicate partners by name
     seen_names = set()
@@ -262,6 +291,7 @@ async def spider_company(
 
         partner_url = partner.get("link")
         relationship = partner.get("relationship", "partner")
+        discovery_method = partner.get("_source", "llm")
 
         # Map relationship types
         rel_type = "partners_with"
@@ -277,6 +307,8 @@ async def spider_company(
         if node:
             node.relationship_to_source = f"{company_name} -> {partner_name}"
             node.relationship_type = rel_type
+            node.discovery_method = discovery_method
+            node.confidence = 0.8 if discovery_method == "website" else 0.4
             result.discovered_nodes.append(node)
             existing_names.add(partner_name)
 

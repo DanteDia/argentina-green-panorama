@@ -312,7 +312,7 @@ def cmd_stats():
     sb = get_supabase()
     state = load_state()
 
-    nodes_resp = sb.table("nodes").select("id, source, cluster", count="exact").execute()
+    nodes_resp = sb.table("nodes").select("id, source, cluster, depth, discovery_method", count="exact").execute()
     edges_resp = sb.table("edges").select("id, source", count="exact").execute()
 
     manual_nodes = sum(1 for n in nodes_resp.data if n.get("source") == "manual")
@@ -321,19 +321,28 @@ def cmd_stats():
     agent_edges = sum(1 for e in edges_resp.data if e.get("source") == "agent")
 
     cluster_counts = {}
+    depth_counts = {}
+    method_counts = {}
     for n in nodes_resp.data:
         c = n.get("cluster", "Unknown")
         cluster_counts[c] = cluster_counts.get(c, 0) + 1
+        d = str(n.get("depth", 0))
+        depth_counts[d] = depth_counts.get(d, 0) + 1
+        m = n.get("discovery_method", "manual")
+        method_counts[m] = method_counts.get(m, 0) + 1
 
     print(json.dumps({
         "total_nodes": nodes_resp.count,
         "manual_nodes": manual_nodes,
         "agent_nodes": agent_nodes,
+        "agent_budget_remaining": 500 - agent_nodes,
         "total_edges": edges_resp.count,
         "manual_edges": manual_edges,
         "agent_edges": agent_edges,
         "visited_companies": len(state.get("visited", [])),
         "clusters": cluster_counts,
+        "depth_distribution": depth_counts,
+        "discovery_methods": method_counts,
     }, indent=2))
 
 
