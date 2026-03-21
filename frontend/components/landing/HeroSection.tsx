@@ -18,8 +18,11 @@ export default function HeroSection() {
 
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden bg-[#f5f3eb]">
-      {/* Globe - right side on desktop, behind on mobile */}
-      <div className="absolute right-[-10%] top-1/2 -translate-y-1/2 w-[700px] h-[700px] md:w-[800px] md:h-[800px] lg:w-[900px] lg:h-[900px] opacity-70 pointer-events-none">
+      {/* Subtle gradient overlay from left for text readability */}
+      <div className="absolute inset-0 bg-gradient-to-r from-[#f5f3eb] via-[#f5f3eb]/80 to-transparent z-[1]" />
+
+      {/* Globe - right side on desktop */}
+      <div className="absolute right-[-5%] top-1/2 -translate-y-1/2 w-[650px] h-[650px] md:w-[750px] md:h-[750px] lg:w-[850px] lg:h-[850px] opacity-80">
         {mounted && <HeroGlobe />}
       </div>
 
@@ -68,6 +71,22 @@ export default function HeroSection() {
                 <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
               </svg>
             </a>
+          </div>
+
+          {/* Micro stats under CTA */}
+          <div className="mt-12 flex gap-8 text-sm">
+            <div>
+              <span className="font-mono text-[#1a6b4a] text-lg font-semibold">130+</span>
+              <p className="text-[#1a1a1a]/35 mt-0.5">Actors mapped</p>
+            </div>
+            <div>
+              <span className="font-mono text-[#1a6b4a] text-lg font-semibold">100+</span>
+              <p className="text-[#1a1a1a]/35 mt-0.5">Connections</p>
+            </div>
+            <div>
+              <span className="font-mono text-[#1a6b4a] text-lg font-semibold">24/7</span>
+              <p className="text-[#1a1a1a]/35 mt-0.5">AI agents</p>
+            </div>
           </div>
         </div>
       </div>
