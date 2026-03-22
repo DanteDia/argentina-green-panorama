@@ -80,9 +80,9 @@ export default function PrototypeSection({ lang = "en" }: { lang?: "es" | "en" }
               // Extract per-field details from result
               const details = result ? {
                 exists: result.exists === "yes" || result.exists === true,
-                green_sector: result.green_sector === "yes" || result.green_sector === true,
+                sector_relevant: result.sector_relevant === "yes" || result.sector_relevant === true,
                 description_accurate: result.description_accurate === "yes" || result.description_accurate === true,
-                argentina_related: result.argentina_related === "yes" || result.argentina_related === true,
+                geography_relevant: result.geography_relevant === "yes" || result.geography_relevant === true,
               } : undefined;
 
               setNodes((prev) =>

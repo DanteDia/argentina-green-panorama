@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySocial } from "@/lib/genlayer";
+import { verifySocial, DEFAULT_MAP_ID } from "@/lib/genlayer";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
     }
 
     const txHash = await verifySocial(
+      DEFAULT_MAP_ID,
       nodeId,
       nombre,
       socialLinks,

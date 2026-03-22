@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyNode } from "@/lib/genlayer";
+import { verifyNode, DEFAULT_MAP_ID } from "@/lib/genlayer";
 import seedData from "@/lib/seed_data.json";
 
 export async function POST(request: NextRequest) {
@@ -15,12 +15,14 @@ export async function POST(request: NextRequest) {
 
       try {
         const txHash = await verifyNode(
+          DEFAULT_MAP_ID,
           nodeId,
           node.nombre,
           node.link || "",
           node.cluster,
           node.categoria || "",
           node.descripcion || "",
+          "Argentina",
         );
         results.push({ nodeId, nombre: node.nombre, txHash });
       } catch (error: unknown) {

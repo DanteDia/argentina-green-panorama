@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getVerification, getSocialVerification } from "@/lib/genlayer";
+import { getVerification, getSocialVerification, DEFAULT_MAP_ID } from "@/lib/genlayer";
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,9 +10,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "nodeId is required" }, { status: 400 });
     }
 
+    const mapId = request.nextUrl.searchParams.get("mapId") || DEFAULT_MAP_ID;
     const result = type === "social"
-      ? await getSocialVerification(nodeId)
-      : await getVerification(nodeId);
+      ? await getSocialVerification(mapId, nodeId)
+      : await getVerification(mapId, nodeId);
 
     return NextResponse.json(result);
   } catch (error: unknown) {

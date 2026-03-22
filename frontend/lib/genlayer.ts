@@ -5,16 +5,16 @@ import { createClient, createAccount } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
 import type { Address } from "viem";
 
+/** Default map ID for the green panorama prototype */
+export const DEFAULT_MAP_ID = "green-argentina";
+
 /** Extract JSON from a string that may contain markdown code blocks or preamble */
 function parseContractResult(raw: unknown): Record<string, unknown> {
   if (typeof raw !== "string") return raw as Record<string, unknown>;
   const s = raw.trim();
-  // Try direct parse
   try { return JSON.parse(s); } catch { /* continue */ }
-  // Try extracting from ```json ... ```
   const mdMatch = s.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
   if (mdMatch) try { return JSON.parse(mdMatch[1]); } catch { /* continue */ }
-  // Try first { ... } block
   const start = s.indexOf("{");
   const end = s.lastIndexOf("}");
   if (start !== -1 && end > start) {
@@ -23,21 +23,16 @@ function parseContractResult(raw: unknown): Record<string, unknown> {
   return { error: "could_not_parse", raw: s.slice(0, 200) };
 }
 
-// Contract deployed on GenLayer Studio (studionet)
+// VerifiableIndustries contract on GenLayer Studio (studionet)
 const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_GENLAYER_CONTRACT ||
-  "0xb81f386D893cda2016bfAeC6FF9B2027CD35413d") as Address;
+  "0xBBC62F047b30a424031dB0FB0e86c414f8c822E0") as Address;
 
-// Studionet is a simulator — no gas fees, auto-funded accounts
-// No private key needed
 let _client: ReturnType<typeof createClient> | null = null;
 
 function getClient() {
   if (!_client) {
-    const account = createAccount(); // generates fresh funded account on studionet
-    _client = createClient({
-      chain: studionet,
-      account,
-    });
+    const account = createAccount();
+    _client = createClient({ chain: studionet, account });
   }
   return _client;
 }
@@ -47,24 +42,27 @@ export function getContractAddress(): Address {
 }
 
 export async function verifyNode(
+  mapId: string,
   nodeId: string,
   nombre: string,
   link: string,
-  cluster: string,
+  sector: string,
   categoria: string,
   descripcion: string,
+  country: string,
 ): Promise<string> {
   const client = getClient();
   const hash = await client.writeContract({
     address: getContractAddress(),
     functionName: "verify_node",
-    args: [nodeId, nombre, link || "", cluster || "", categoria || "", descripcion || ""],
+    args: [mapId, nodeId, nombre, link || "", sector || "", categoria || "", descripcion || "", country || ""],
     value: 0n,
   });
   return hash;
 }
 
 export async function verifySocial(
+  mapId: string,
   nodeId: string,
   nombre: string,
   socialLinks: string[],
@@ -74,18 +72,14 @@ export async function verifySocial(
   const hash = await client.writeContract({
     address: getContractAddress(),
     functionName: "verify_social",
-    args: [
-      nodeId,
-      nombre,
-      JSON.stringify(socialLinks),
-      JSON.stringify(claimedFollowers),
-    ],
+    args: [mapId, nodeId, nombre, JSON.stringify(socialLinks), JSON.stringify(claimedFollowers)],
     value: 0n,
   });
   return hash;
 }
 
 export async function verifyRelationship(
+  mapId: string,
   edgeId: string,
   nodeAName: string,
   nodeALink: string,
@@ -93,12 +87,14 @@ export async function verifyRelationship(
   nodeBLink: string,
   relationshipType: string,
   relationshipDescription: string,
+  sector: string,
+  country: string,
 ): Promise<string> {
   const client = getClient();
   const hash = await client.writeContract({
     address: getContractAddress(),
     functionName: "verify_relationship",
-    args: [edgeId, nodeAName, nodeALink || "", nodeBName, nodeBLink || "", relationshipType || "", relationshipDescription || ""],
+    args: [mapId, edgeId, nodeAName, nodeALink || "", nodeBName, nodeBLink || "", relationshipType || "", relationshipDescription || "", sector || "", country || ""],
     value: 0n,
   });
   return hash;
@@ -123,11 +119,7 @@ export async function getTransactionStatus(txHash: string) {
     const tx = await client.getTransaction({
       hash: txHash as any, // eslint-disable-line @typescript-eslint/no-explicit-any
     });
-
     const status = normalizeStatus(tx.status ?? tx.statusName);
-
-    // Try to extract leader result from the raw transaction data
-    // The SDK type doesn't expose consensus_data but the RPC response has it
     const rawTx = tx as Record<string, unknown>;
     const consensusData = rawTx.consensus_data as Record<string, unknown> | undefined;
     let leaderResult: Record<string, unknown> | null = null;
@@ -136,56 +128,52 @@ export async function getTransactionStatus(txHash: string) {
       const receipts = consensusData.leader_receipt as Array<Record<string, unknown>>;
       if (receipts[0]) {
         const result = receipts[0].result as Record<string, unknown> | undefined;
-        // SDK returns status "return" (not "success") for successful txs (result code 0)
         if (result && (result.status === "return" || result.status === "success") && result.payload != null) {
           try {
             const payload = result.payload;
             if (typeof payload === "object" && payload !== null) {
-              // SDK already decoded the payload into an object
               leaderResult = payload as Record<string, unknown>;
             } else {
-              // payload is a string — may be base64 or raw JSON
               const payloadStr = String(payload);
               const decoded = payloadStr.startsWith("ey") ? atob(payloadStr) : payloadStr;
               leaderResult = parseContractResult(decoded) as Record<string, unknown>;
             }
-          } catch { /* ignore parse errors */ }
+          } catch { /* ignore */ }
         }
       }
     }
-
     return { status, data: tx, leaderResult };
   } catch {
     return { status: "PENDING", data: null, leaderResult: null };
   }
 }
 
-export async function getVerification(nodeId: string) {
+export async function getVerification(mapId: string, nodeId: string) {
   const client = getClient();
   const result = await client.readContract({
     address: getContractAddress(),
     functionName: "get_verification",
-    args: [nodeId],
+    args: [mapId, nodeId],
   });
   return parseContractResult(result);
 }
 
-export async function getSocialVerification(nodeId: string) {
+export async function getSocialVerification(mapId: string, nodeId: string) {
   const client = getClient();
   const result = await client.readContract({
     address: getContractAddress(),
     functionName: "get_social_verification",
-    args: [nodeId],
+    args: [mapId, nodeId],
   });
   return parseContractResult(result);
 }
 
-export async function getRelationshipVerification(edgeId: string) {
+export async function getRelationshipVerification(mapId: string, edgeId: string) {
   const client = getClient();
   const result = await client.readContract({
     address: getContractAddress(),
     functionName: "get_relationship_verification",
-    args: [edgeId],
+    args: [mapId, edgeId],
   });
   return parseContractResult(result);
 }

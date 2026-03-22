@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyNode } from "@/lib/genlayer";
+import { verifyNode, DEFAULT_MAP_ID } from "@/lib/genlayer";
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,7 +9,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "nodeId and nombre are required" }, { status: 400 });
     }
 
-    const txHash = await verifyNode(nodeId, nombre, link || "", cluster || "", categoria || "", descripcion || "");
+    const txHash = await verifyNode(
+      DEFAULT_MAP_ID, nodeId, nombre, link || "", cluster || "", categoria || "", descripcion || "", "Argentina"
+    );
 
     return NextResponse.json({ txHash, status: "submitted" });
   } catch (error: unknown) {

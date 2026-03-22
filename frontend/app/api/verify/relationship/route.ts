@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyRelationship } from "@/lib/genlayer";
+import { verifyRelationship, DEFAULT_MAP_ID } from "@/lib/genlayer";
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
     }
 
     const txHash = await verifyRelationship(
+      DEFAULT_MAP_ID,
       edgeId,
       nodeAName,
       nodeALink || "",
@@ -18,6 +19,8 @@ export async function POST(request: NextRequest) {
       nodeBLink || "",
       relationshipType || "",
       relationshipDescription || "",
+      "Green/Carbon/Environmental",
+      "Argentina",
     );
 
     return NextResponse.json({ txHash, status: "submitted" });

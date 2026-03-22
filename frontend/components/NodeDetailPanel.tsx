@@ -171,7 +171,7 @@ export default function NodeDetailPanel({
               >
                 {node.cluster}
               </span>
-              <span className="text-xs text-zinc-600 flex items-center">{node.categoria}<FieldDot status={getFieldStatus(node.verification_details, "green_sector")} /></span>
+              <span className="text-xs text-zinc-600 flex items-center">{node.categoria}<FieldDot status={getFieldStatus(node.verification_details, "sector_relevant")} /></span>
             </div>
           </div>
           <button onClick={onClose} className="text-zinc-600 hover:text-[#1a1a1a] transition p-1">
@@ -301,11 +301,11 @@ export default function NodeDetailPanel({
                 <span className="text-zinc-700">{labels.exists}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <CheckIcon ok={verificationState.result.argentina_related} />
+                <CheckIcon ok={verificationState.result.geography_relevant} />
                 <span className="text-zinc-700">{labels.argentina}</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <CheckIcon ok={verificationState.result.green_sector} />
+                <CheckIcon ok={verificationState.result.sector_relevant} />
                 <span className="text-zinc-700">{labels.green}</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -457,7 +457,7 @@ export default function NodeDetailPanel({
         <div>
           <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2 flex items-center">
             {labels.connections} ({outgoing.length + incoming.length})
-            <FieldDot status={getFieldStatus(node.verification_details, "argentina_related")} />
+            <FieldDot status={getFieldStatus(node.verification_details, "geography_relevant")} />
           </h3>
           <div className="space-y-1.5">
             {outgoing.map((edge) => {

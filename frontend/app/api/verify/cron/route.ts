@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { verifyNode, getTransactionStatus, getVerification } from "@/lib/genlayer";
+import { verifyNode, getTransactionStatus, getVerification, DEFAULT_MAP_ID } from "@/lib/genlayer";
 
-/**
- * Verification Cron Endpoint
- *
- * Picks unverified nodes from Supabase, submits them to GenLayer,
- * polls for result, and updates the database.
- *
- * Call: GET /api/verify/cron?count=3
- * Can be triggered by Vercel Cron, external scheduler, or manually.
- */
-export const maxDuration = 300; // 5 min max for Vercel serverless
+export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
   if (!supabase) {
@@ -23,7 +14,6 @@ export async function GET(request: NextRequest) {
     5
   );
 
-  // Get unverified nodes with real URLs (not instagram, not grey, not pending)
   const { data: nodes } = await supabase
     .from("nodes")
     .select("id, nombre, link, cluster, categoria, descripcion, verification_attempts")
@@ -46,20 +36,20 @@ export async function GET(request: NextRequest) {
     const nodeResult: Record<string, unknown> = { nombre: node.nombre, id: node.id };
 
     try {
-      // Mark as pending
       await supabase
         .from("nodes")
         .update({ verification_status: "pending" })
         .eq("id", node.id);
 
-      // Submit to GenLayer
       const txHash = await verifyNode(
+        DEFAULT_MAP_ID,
         node.id,
         node.nombre,
         node.link || "",
         node.cluster || "",
         node.categoria || "",
-        node.descripcion || ""
+        node.descripcion || "",
+        "Argentina"
       );
 
       if (!txHash) {
@@ -70,7 +60,6 @@ export async function GET(request: NextRequest) {
 
       nodeResult.txHash = txHash;
 
-      // Poll for result (max 40 attempts, 8s apart = ~5.3 min)
       let finalStatus = "timeout";
       for (let attempt = 0; attempt < 40; attempt++) {
         await new Promise((r) => setTimeout(r, 8000));
@@ -81,21 +70,17 @@ export async function GET(request: NextRequest) {
         if (status === "ACCEPTED" || status === "FINALIZED") {
           finalStatus = "verified";
 
-          // Read verified result directly from the contract's storage
-          // This is the most reliable source — the contract stores the parsed JSON
-          // Leader result extraction from tx is unreliable due to SDK encoding
           const details: Record<string, unknown> = {};
           try {
-            const contractResult = await getVerification(node.id);
+            const contractResult = await getVerification(DEFAULT_MAP_ID, node.id);
             if (contractResult && !contractResult.error) {
               details.exists = contractResult.exists === "yes" || contractResult.exists === true;
-              details.green_sector = contractResult.green_sector === "yes" || contractResult.green_sector === true;
+              details.sector_relevant = contractResult.sector_relevant === "yes" || contractResult.sector_relevant === true;
               details.description_accurate = contractResult.description_accurate === "yes" || contractResult.description_accurate === true;
-              details.argentina_related = contractResult.argentina_related === "yes" || contractResult.argentina_related === true;
+              details.geography_relevant = contractResult.geography_relevant === "yes" || contractResult.geography_relevant === true;
             }
-          } catch { /* contract read failed, details stays empty */ }
+          } catch { /* contract read failed */ }
 
-          // Update Supabase with per-field details
           await supabase
             .from("nodes")
             .update({
@@ -114,8 +99,6 @@ export async function GET(request: NextRequest) {
         if (status === "UNDETERMINED" || status === "CANCELED") {
           finalStatus = "failed";
           const attempts = (node.verification_attempts || 0) + 1;
-
-          // Extract leader result even on failure for debugging
           const lr = statusResult.leaderResult as Record<string, unknown> | null;
           const failureReason = lr?.reasoning || `GenLayer: ${status}`;
 
@@ -138,7 +121,6 @@ export async function GET(request: NextRequest) {
       nodeResult.status = "error";
       nodeResult.error = msg;
 
-      // Reset from pending
       await supabase
         .from("nodes")
         .update({ verification_status: "unverified" })
@@ -148,13 +130,10 @@ export async function GET(request: NextRequest) {
     results.push(nodeResult);
   }
 
-  const verified = results.filter((r) => r.status === "verified").length;
-  const failed = results.filter((r) => r.status === "failed").length;
-
   return NextResponse.json({
     processed: results.length,
-    verified,
-    failed,
+    verified: results.filter((r) => r.status === "verified").length,
+    failed: results.filter((r) => r.status === "failed").length,
     results,
   });
 }

@@ -3,8 +3,8 @@ export type VerificationStatus = "unverified" | "pending" | "accepted" | "finali
 
 export interface VerificationResult {
   exists: boolean;
-  argentina_related: boolean;
-  green_sector: boolean;
+  geography_relevant: boolean;
+  sector_relevant: boolean;
   description_accurate: boolean;
   accuracy_score: "high" | "medium" | "low";
   reasoning: string;
@@ -54,9 +54,9 @@ export interface GreenNode {
   verification_failure_reason?: string | null;
   verification_details?: {
     exists?: boolean;
-    green_sector?: boolean;
+    sector_relevant?: boolean;
     description_accurate?: boolean;
-    argentina_related?: boolean;
+    geography_relevant?: boolean;
     relationships?: Record<string, boolean>;
     social?: Record<string, boolean>;
   };
