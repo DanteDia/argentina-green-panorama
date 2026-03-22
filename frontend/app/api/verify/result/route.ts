@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getVerification, getSocialVerification, DEFAULT_MAP_ID } from "@/lib/genlayer";
+import { getVerification, getSocialVerification, getRelationshipVerification, DEFAULT_MAP_ID } from "@/lib/genlayer";
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,7 +11,9 @@ export async function GET(request: NextRequest) {
     }
 
     const mapId = request.nextUrl.searchParams.get("mapId") || DEFAULT_MAP_ID;
-    const result = type === "social"
+    const result = type === "relationship"
+      ? await getRelationshipVerification(mapId, nodeId)
+      : type === "social"
       ? await getSocialVerification(mapId, nodeId)
       : await getVerification(mapId, nodeId);
 
