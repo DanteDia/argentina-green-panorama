@@ -1,7 +1,12 @@
-# Green Panorama - Pitch Documentation
+# Verifiable Industries - Pitch Documentation
 
 ## One-Liner
-Interactive AI-powered map of Argentina's green ecosystem with on-chain verification via GenLayer intelligent contracts.
+A protocol for mapping and verifying ANY industry using AI agents and GenLayer intelligent contracts. Green Panorama (Argentina's green sector) is the first live implementation.
+
+## The Big Idea
+What if every industry had a living, verified map? Every company, every fund, every relationship — discovered by AI agents and verified on-chain by multi-validator consensus. Not just green tech. Aviation. Fintech. Healthcare. Any sector, any country.
+
+**Verifiable Industries** is the infrastructure layer. **Green Panorama** is the proof it works.
 
 ## The Problem
 Argentina has massive potential in carbon markets, conservation, and cleantech — but:
@@ -187,8 +192,11 @@ The research agent runs in a Docker container on a VPS, executing a multi-step c
 ### GenLayer (not a regular smart contract)
 - **Why**: Traditional smart contracts can't fetch websites or use AI reasoning. GenLayer's intelligent contracts can do both via `gl.nondet.web.get()` and `gl.nondet.exec_prompt()`.
 - **Consensus**: `prompt_non_comparative` — leader validator does the work, other validators judge if the result is reasonable. More reliable than requiring identical outputs from different LLMs.
-- **Contract address**: Deployed on GenLayer Studionet (address updated on each deployment)
-- **3-source relationship verification**: Unlike v1 which only checked websites, v2 also web-searches for evidence — matching how the research agent discovers relationships via Perplexity
+- **Two contracts**:
+  - `VerifiableIndustries` (generic) — verifies ANY entity in ANY sector/country. Reusable infrastructure.
+  - `GreenPanoramaQA` (sector-specific) — deployed instance for green/carbon sector in Argentina.
+- **3-source relationship verification**: Websites A + B + Google web search — matches how research agents discover via Perplexity
+- **Namespaced storage**: Each industry map (`map_id`) gets its own namespace, so one contract deployment can serve multiple industries
 
 ### react-force-graph-2d (not D3 or Cytoscape)
 - **Why**: WebGL-accelerated, handles hundreds of nodes smoothly, built-in physics simulation, custom canvas rendering for node badges and glow effects
