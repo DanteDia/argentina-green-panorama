@@ -25,7 +25,7 @@ function parseContractResult(raw: unknown): Record<string, unknown> {
 
 // VerifiableIndustries contract on GenLayer Studio (studionet)
 const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_GENLAYER_CONTRACT ||
-  "0xBBC62F047b30a424031dB0FB0e86c414f8c822E0") as Address;
+  "0xd410384E9039F0AC48996eF0da29dE602dee1aCc") as Address;
 
 let _client: ReturnType<typeof createClient> | null = null;
 
