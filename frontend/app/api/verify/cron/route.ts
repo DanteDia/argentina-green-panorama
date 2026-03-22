@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
-import { verifyNode, getTransactionStatus } from "@/lib/genlayer";
+import { verifyNode, getTransactionStatus, getVerification } from "@/lib/genlayer";
 
 /**
  * Verification Cron Endpoint
@@ -82,7 +82,18 @@ export async function GET(request: NextRequest) {
           finalStatus = "verified";
 
           // Extract per-field verification details from leader result
-          const lr = statusResult.leaderResult as Record<string, unknown> | null;
+          let lr = statusResult.leaderResult as Record<string, unknown> | null;
+
+          // Fallback: if leader result extraction failed, read stored result from contract
+          if (!lr) {
+            try {
+              const contractResult = await getVerification(node.id);
+              if (contractResult && !contractResult.error) {
+                lr = contractResult as Record<string, unknown>;
+              }
+            } catch { /* ignore */ }
+          }
+
           const details: Record<string, unknown> = {};
           if (lr) {
             details.exists = lr.exists === "yes" || lr.exists === true;

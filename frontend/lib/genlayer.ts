@@ -136,12 +136,19 @@ export async function getTransactionStatus(txHash: string) {
       const receipts = consensusData.leader_receipt as Array<Record<string, unknown>>;
       if (receipts[0]) {
         const result = receipts[0].result as Record<string, unknown> | undefined;
-        if (result?.status === "success" && result?.payload) {
+        // SDK returns status "return" (not "success") for successful txs (result code 0)
+        if (result && (result.status === "return" || result.status === "success") && result.payload != null) {
           try {
-            // payload may be base64 encoded or raw string
-            const payload = String(result.payload);
-            const decoded = payload.startsWith("ey") ? atob(payload) : payload;
-            leaderResult = parseContractResult(decoded) as Record<string, unknown>;
+            const payload = result.payload;
+            if (typeof payload === "object" && payload !== null) {
+              // SDK already decoded the payload into an object
+              leaderResult = payload as Record<string, unknown>;
+            } else {
+              // payload is a string — may be base64 or raw JSON
+              const payloadStr = String(payload);
+              const decoded = payloadStr.startsWith("ey") ? atob(payloadStr) : payloadStr;
+              leaderResult = parseContractResult(decoded) as Record<string, unknown>;
+            }
           } catch { /* ignore parse errors */ }
         }
       }
