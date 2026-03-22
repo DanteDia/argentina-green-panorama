@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
       nodeResult.txHash = txHash;
 
       let finalStatus = "timeout";
-      for (let attempt = 0; attempt < 40; attempt++) {
+      for (let attempt = 0; attempt < 28; attempt++) {
         await new Promise((r) => setTimeout(r, 8000));
 
         const statusResult = await getTransactionStatus(txHash);
@@ -195,7 +195,7 @@ async function verifyEdges() {
           if (!txHash) { edgeResult.status = "submit_failed"; edgeResults.push(edgeResult); continue; }
 
           // Poll for result
-          for (let attempt = 0; attempt < 40; attempt++) {
+          for (let attempt = 0; attempt < 28; attempt++) {
             await new Promise((r) => setTimeout(r, 8000));
             const statusResult = await getTransactionStatus(txHash);
 
