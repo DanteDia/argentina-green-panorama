@@ -81,26 +81,19 @@ export async function GET(request: NextRequest) {
         if (status === "ACCEPTED" || status === "FINALIZED") {
           finalStatus = "verified";
 
-          // Extract per-field verification details from leader result
-          let lr = statusResult.leaderResult as Record<string, unknown> | null;
-
-          // Fallback: if leader result extraction failed, read stored result from contract
-          if (!lr) {
-            try {
-              const contractResult = await getVerification(node.id);
-              if (contractResult && !contractResult.error) {
-                lr = contractResult as Record<string, unknown>;
-              }
-            } catch { /* ignore */ }
-          }
-
+          // Read verified result directly from the contract's storage
+          // This is the most reliable source — the contract stores the parsed JSON
+          // Leader result extraction from tx is unreliable due to SDK encoding
           const details: Record<string, unknown> = {};
-          if (lr) {
-            details.exists = lr.exists === "yes" || lr.exists === true;
-            details.green_sector = lr.green_sector === "yes" || lr.green_sector === true;
-            details.description_accurate = lr.description_accurate === "yes" || lr.description_accurate === true;
-            details.argentina_related = lr.argentina_related === "yes" || lr.argentina_related === true;
-          }
+          try {
+            const contractResult = await getVerification(node.id);
+            if (contractResult && !contractResult.error) {
+              details.exists = contractResult.exists === "yes" || contractResult.exists === true;
+              details.green_sector = contractResult.green_sector === "yes" || contractResult.green_sector === true;
+              details.description_accurate = contractResult.description_accurate === "yes" || contractResult.description_accurate === true;
+              details.argentina_related = contractResult.argentina_related === "yes" || contractResult.argentina_related === true;
+            }
+          } catch { /* contract read failed, details stays empty */ }
 
           // Update Supabase with per-field details
           await supabase
