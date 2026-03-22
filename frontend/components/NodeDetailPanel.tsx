@@ -455,9 +455,8 @@ export default function NodeDetailPanel({
 
         {/* Connections */}
         <div>
-          <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2 flex items-center">
+          <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-2">
             {labels.connections} ({outgoing.length + incoming.length})
-            <FieldDot status={getFieldStatus(node.verification_details, "geography_relevant")} />
           </h3>
           <div className="space-y-1.5">
             {outgoing.map((edge) => {
