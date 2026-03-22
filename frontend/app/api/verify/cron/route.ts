@@ -9,6 +9,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
   }
 
+  // type=nodes (default) or type=edges — run separately to avoid Vercel 300s timeout
+  const verifyType = request.nextUrl.searchParams.get("type") || "nodes";
+
+  if (verifyType === "edges") {
+    return verifyEdges();
+  }
+
   const count = Math.min(
     parseInt(request.nextUrl.searchParams.get("count") || "3"),
     5
@@ -135,11 +142,21 @@ export async function GET(request: NextRequest) {
     results.push(nodeResult);
   }
 
-  // === RELATIONSHIP VERIFICATION PASS ===
-  // Pick 1 unverified edge from a verified node and verify it
+  // Relationship verification moved to separate ?type=edges call
+  return NextResponse.json({
+    processed: results.length,
+    verified: results.filter((r) => r.status === "verified").length,
+    failed: results.filter((r) => r.status === "failed").length,
+    results,
+  });
+}
+
+async function verifyEdges() {
+  if (!supabase) {
+    return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
+  }
   const edgeResults: Record<string, unknown>[] = [];
   try {
-    // Find edges connected to verified nodes that haven't been relationship-verified
     const { data: edges } = await supabase
       .from("edges")
       .select("id, source_id, target_id, relationship_type, description")
@@ -232,13 +249,12 @@ export async function GET(request: NextRequest) {
         edgeResults.push(edgeResult);
       }
     }
-  } catch { /* relationship verification pass failed, continue */ }
+  } catch { /* relationship verification failed */ }
 
   return NextResponse.json({
-    processed: results.length,
-    verified: results.filter((r) => r.status === "verified").length,
-    failed: results.filter((r) => r.status === "failed").length,
-    results,
-    relationships: edgeResults,
+    processed: edgeResults.length,
+    verified: edgeResults.filter((r) => r.status === "verified").length,
+    failed: edgeResults.filter((r) => r.status === "failed").length,
+    results: edgeResults,
   });
 }
