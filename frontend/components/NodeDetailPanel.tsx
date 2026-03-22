@@ -414,7 +414,7 @@ export default function NodeDetailPanel({
           <div>
             <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center">
               {labels.funding}
-              <FieldDot status="unverified" />
+              <FieldDot status={getFieldStatus(node.verification_details, "funding_accurate")} />
             </h3>
             <p className="text-zinc-700 text-sm">{node.quien_fondea}</p>
           </div>

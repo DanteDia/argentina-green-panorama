@@ -6,6 +6,8 @@ export interface VerificationResult {
   geography_relevant: boolean;
   sector_relevant: boolean;
   description_accurate: boolean;
+  funding_accurate: boolean;
+  verified_funders: string[];
   accuracy_score: "high" | "medium" | "low";
   reasoning: string;
 }
@@ -57,6 +59,8 @@ export interface GreenNode {
     sector_relevant?: boolean;
     description_accurate?: boolean;
     geography_relevant?: boolean;
+    funding_accurate?: boolean;
+    verified_funders?: string[];
     relationships?: Record<string, boolean>;
     social?: Record<string, boolean>;
   };

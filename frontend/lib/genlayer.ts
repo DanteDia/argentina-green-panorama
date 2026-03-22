@@ -50,12 +50,13 @@ export async function verifyNode(
   categoria: string,
   descripcion: string,
   country: string,
+  claimedFunding: string = "",
 ): Promise<string> {
   const client = getClient();
   const hash = await client.writeContract({
     address: getContractAddress(),
     functionName: "verify_node",
-    args: [mapId, nodeId, nombre, link || "", sector || "", categoria || "", descripcion || "", country || ""],
+    args: [mapId, nodeId, nombre, link || "", sector || "", categoria || "", descripcion || "", country || "", claimedFunding || ""],
     value: 0n,
   });
   return hash;

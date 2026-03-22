@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   const { data: nodes } = await supabase
     .from("nodes")
-    .select("id, nombre, link, cluster, categoria, descripcion, verification_attempts")
+    .select("id, nombre, link, cluster, categoria, descripcion, quien_fondea, verification_attempts")
     .eq("verified", false)
     .not("link", "is", null)
     .not("link", "like", "%instagram%")
@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
         node.cluster || "",
         node.categoria || "",
         node.descripcion || "",
-        "Argentina"
+        "Argentina",
+        node.quien_fondea || ""
       );
 
       if (!txHash) {
@@ -78,6 +79,10 @@ export async function GET(request: NextRequest) {
               details.sector_relevant = contractResult.sector_relevant === "yes" || contractResult.sector_relevant === true;
               details.description_accurate = contractResult.description_accurate === "yes" || contractResult.description_accurate === true;
               details.geography_relevant = contractResult.geography_relevant === "yes" || contractResult.geography_relevant === true;
+              details.funding_accurate = contractResult.funding_accurate === "yes" || contractResult.funding_accurate === true;
+              if (contractResult.verified_funders) {
+                details.verified_funders = contractResult.verified_funders;
+              }
             }
           } catch { /* contract read failed */ }
 
