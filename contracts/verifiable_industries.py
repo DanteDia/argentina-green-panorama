@@ -181,14 +181,29 @@ JSON format:
                 except Exception:
                     web_data_b = "WEBSITE_UNAVAILABLE"
 
+            # Search for evidence using bot-friendly search engines
+            # Google blocks bots, so we use DuckDuckGo HTML and Bing
             try:
                 import urllib.parse
-                search_query = urllib.parse.quote(f"{node_a_name} {node_b_name} partnership OR alliance OR investor OR client {country}")
-                search_url = f"https://www.google.com/search?q={search_query}"
+                # Search in both English and Spanish for broader coverage
+                search_query = urllib.parse.quote(f"{node_a_name} {node_b_name}")
+                # DuckDuckGo HTML version is bot-friendly
+                search_url = f"https://html.duckduckgo.com/html/?q={search_query}"
                 search_response = gl.nondet.web.get(search_url)
                 web_search_data = search_response.body.decode("utf-8")[:2500]
             except Exception:
-                web_search_data = "SEARCH_UNAVAILABLE"
+                web_search_data = ""
+
+            # Try a second search source for redundancy
+            web_search_data_2 = ""
+            try:
+                import urllib.parse
+                search_query_2 = urllib.parse.quote(f"{node_a_name} {node_b_name} alianza OR cliente OR inversor OR partnership")
+                search_url_2 = f"https://www.bing.com/search?q={search_query_2}"
+                search_response_2 = gl.nondet.web.get(search_url_2)
+                web_search_data_2 = search_response_2.body.decode("utf-8")[:2000]
+            except Exception:
+                web_search_data_2 = "SEARCH_UNAVAILABLE"
 
             task = f"""You are verifying a claimed relationship between two entities
 in the {sector} sector in {country}.
@@ -205,10 +220,13 @@ EVIDENCE SOURCE 1 — Website A content:
 EVIDENCE SOURCE 2 — Website B content:
 {web_data_b}
 
-EVIDENCE SOURCE 3 — Web search results for "{node_a_name} {node_b_name}":
+EVIDENCE SOURCE 3 — Web search results (DuckDuckGo):
 {web_search_data}
 
-Check ALL THREE sources. Relationships are often mentioned in press releases,
+EVIDENCE SOURCE 4 — Web search results (Bing, Spanish keywords):
+{web_search_data_2}
+
+Check ALL sources. Relationships are often mentioned in press releases,
 news articles, LinkedIn posts — not just company websites.
 
 Determine:
@@ -223,7 +241,7 @@ Determine:
 If the relationship exists but the type is wrong, suggest the correct type.
 
 Respond ONLY as valid JSON:
-{{"relationship_confirmed": true/false, "type_accurate": true/false, "suggested_type": "funds"/"partners_with"/"client_of"/"portfolio"/"regulates", "evidence_found_on": "website_a"/"website_b"/"web_search"/"multiple"/"none", "confidence": "high"/"medium"/"low", "reasoning": "brief explanation of evidence found and where"}}
+{{"relationship_confirmed": true/false, "type_accurate": true/false, "suggested_type": "funds"/"partners_with"/"client_of"/"portfolio"/"regulates", "evidence_found_on": "website_a"/"website_b"/"web_search"/"multiple"/"none", "confidence": "high"/"medium"/"low", "reasoning": "brief explanation of evidence found and where. Mention specific articles or pages if found."}}
 """
             result = gl.nondet.exec_prompt(task)
             parsed = extract_json(result)
