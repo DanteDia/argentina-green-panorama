@@ -153,16 +153,19 @@ JSON format:
         country: str,
     ) -> str:
         """
-        Verify a claimed relationship between two entities using 3 sources:
-        1. Entity A's website
-        2. Entity B's website
-        3. Web search for broader evidence (press releases, news, LinkedIn)
+        Verify a claimed relationship using a hybrid approach:
+        1. Web evidence: company websites + DuckDuckGo search
+        2. LLM training knowledge: what the model knows about these entities
+        3. Cross-reference both sources for final verdict
 
-        This 3-source approach aligns with how research agents discover
-        relationships — many partnerships are announced outside official websites.
+        Confidence levels:
+        - Web evidence + LLM knowledge agree → high confidence
+        - Only LLM knowledge confirms → medium confidence
+        - Neither confirms → relationship not confirmed
         """
 
         def nondet() -> str:
+            # === PHASE 1: Gather web evidence ===
             web_data_a = ""
             web_data_b = ""
             web_search_data = ""
@@ -170,41 +173,28 @@ JSON format:
             if node_a_link:
                 try:
                     response_a = gl.nondet.web.get(node_a_link)
-                    web_data_a = response_a.body.decode("utf-8")[:2500]
+                    web_data_a = response_a.body.decode("utf-8")[:2000]
                 except Exception:
                     web_data_a = "WEBSITE_UNAVAILABLE"
 
             if node_b_link:
                 try:
                     response_b = gl.nondet.web.get(node_b_link)
-                    web_data_b = response_b.body.decode("utf-8")[:2500]
+                    web_data_b = response_b.body.decode("utf-8")[:2000]
                 except Exception:
                     web_data_b = "WEBSITE_UNAVAILABLE"
 
-            # Search for evidence using bot-friendly search engines
-            # Google blocks bots, so we use DuckDuckGo HTML and Bing
+            # DuckDuckGo HTML is bot-friendly (Google blocks bots)
             try:
                 import urllib.parse
-                # Search in both English and Spanish for broader coverage
                 search_query = urllib.parse.quote(f"{node_a_name} {node_b_name}")
-                # DuckDuckGo HTML version is bot-friendly
                 search_url = f"https://html.duckduckgo.com/html/?q={search_query}"
                 search_response = gl.nondet.web.get(search_url)
                 web_search_data = search_response.body.decode("utf-8")[:2500]
             except Exception:
-                web_search_data = ""
+                web_search_data = "SEARCH_UNAVAILABLE"
 
-            # Try a second search source for redundancy
-            web_search_data_2 = ""
-            try:
-                import urllib.parse
-                search_query_2 = urllib.parse.quote(f"{node_a_name} {node_b_name} alianza OR cliente OR inversor OR partnership")
-                search_url_2 = f"https://www.bing.com/search?q={search_query_2}"
-                search_response_2 = gl.nondet.web.get(search_url_2)
-                web_search_data_2 = search_response_2.body.decode("utf-8")[:2000]
-            except Exception:
-                web_search_data_2 = "SEARCH_UNAVAILABLE"
-
+            # === PHASE 2: Cross-reference web evidence + LLM knowledge ===
             task = f"""You are verifying a claimed relationship between two entities
 in the {sector} sector in {country}.
 
@@ -214,34 +204,44 @@ Claimed relationship:
 - Claimed type: {relationship_type}
 - Description: {relationship_description}
 
-EVIDENCE SOURCE 1 — Website A content:
+=== WEB EVIDENCE (gathered from live websites and search) ===
+
+Website A content:
 {web_data_a}
 
-EVIDENCE SOURCE 2 — Website B content:
+Website B content:
 {web_data_b}
 
-EVIDENCE SOURCE 3 — Web search results (DuckDuckGo):
+DuckDuckGo search results for "{node_a_name} {node_b_name}":
 {web_search_data}
 
-EVIDENCE SOURCE 4 — Web search results (Bing, Spanish keywords):
-{web_search_data_2}
+=== YOUR TASK ===
 
-Check ALL sources. Relationships are often mentioned in press releases,
-news articles, LinkedIn posts — not just company websites.
+Use BOTH the web evidence above AND your own training knowledge to determine:
 
-Determine:
-1. Does this relationship exist? (check all 3 sources)
-2. Is the relationship TYPE correct?
+1. Does a relationship between {node_a_name} and {node_b_name} exist?
+   - Check the web evidence for mentions, logos, press releases, news articles
+   - Also consider what you know from your training data about these entities
+   - If you know from training data that they have a relationship but web evidence
+     doesn't show it, that's still valid (medium confidence)
+
+2. What TYPE of relationship is it? Choose the most accurate:
    - "funds": A provides money/investment to B
    - "partners_with": A and B collaborate as allies/partners
    - "client_of": B is a client/customer of A (A provides services to B)
    - "portfolio": B is in A's accelerator/portfolio program
    - "regulates": A has regulatory authority over B
 
-If the relationship exists but the type is wrong, suggest the correct type.
+3. Is the claimed type "{relationship_type}" accurate?
+
+CONFIDENCE RULES:
+- Web evidence + your knowledge agree → "high"
+- Only your knowledge confirms (no web evidence) → "medium"
+- Only web evidence confirms (you don't know about it) → "medium"
+- Neither confirms → "low" and relationship_confirmed should be false
 
 Respond ONLY as valid JSON:
-{{"relationship_confirmed": true/false, "type_accurate": true/false, "suggested_type": "funds"/"partners_with"/"client_of"/"portfolio"/"regulates", "evidence_found_on": "website_a"/"website_b"/"web_search"/"multiple"/"none", "confidence": "high"/"medium"/"low", "reasoning": "brief explanation of evidence found and where. Mention specific articles or pages if found."}}
+{{"relationship_confirmed": true/false, "type_accurate": true/false, "suggested_type": "funds"/"partners_with"/"client_of"/"portfolio"/"regulates", "evidence_found_on": "website_a"/"website_b"/"web_search"/"llm_knowledge"/"multiple"/"none", "confidence": "high"/"medium"/"low", "reasoning": "Explain what evidence you found (web or training knowledge). Be specific about sources."}}
 """
             result = gl.nondet.exec_prompt(task)
             parsed = extract_json(result)
@@ -250,7 +250,7 @@ Respond ONLY as valid JSON:
         result_str = gl.eq_principle.prompt_non_comparative(
             nondet,
             task=f"Verify the {relationship_type} relationship between {node_a_name} and {node_b_name} in the {sector} sector",
-            criteria="The JSON must contain relationship_confirmed (boolean), type_accurate (boolean), suggested_type (string), evidence_found_on (string), confidence (high/medium/low), and reasoning (string). Values should be factually correct based on evidence from websites and web search.",
+            criteria="The JSON must contain relationship_confirmed (boolean), type_accurate (boolean), suggested_type (string), evidence_found_on (string), confidence (high/medium/low), and reasoning (string). The reasoning should reference specific evidence sources. Values should be factually correct.",
         )
         storage_key = f"{map_id}:{edge_id}"
         self.relationship_verifications[storage_key] = result_str
