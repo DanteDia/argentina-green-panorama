@@ -117,6 +117,33 @@
 
 ---
 
+## Brand Identity & Logo Design Brief
+
+Answers from logo design survey (March 2026) — these define the brand essence:
+
+| Question | Answer | Reasoning |
+|----------|--------|-----------|
+| **What do you do?** | We build AI-powered industry intelligence maps. Autonomous research agents discover companies, map relationships, and verify data on blockchain. | Core value prop in one sentence |
+| **Superhero?** | Batman | Works in the shadows (24/7 agents), uses tech & intelligence, methodical, data-driven, always working even when you don't see it |
+| **Famous figure?** | Stephen Hawking — "However difficult life may seem, there is always something you can do." | Pure intelligence applied to complex systems. Science, data, persistence. |
+| **Animal?** | Ant | Autonomous agents working 24/7, each with a role, building something massive piece by piece. Nobody sees them but the result is enormous. |
+| **Movie?** | Back to the Future | Nerdy/smart topic (AI + blockchain + knowledge graphs) but presented in an accessible way people understand immediately. Complex tech, simple experience. |
+| **Primary value proposition?** | A new way to do things | Nobody maps entire industries with autonomous agents + blockchain verification. New category, not incremental improvement. |
+| **Best quote?** | "Innovation distinguishes between a leader and a follower." | We lead, we don't copy. |
+| **What makes it remarkable?** | Ambitious and visionary | Mapping entire industries with autonomous agents verified on blockchain is a big vision. |
+| **Company to look like?** | A company that wants to be a worldwide standard | Like SWIFT for payments or Bloomberg for financial data — but for ecosystem intelligence. |
+| **Typical customer?** | Serious and conventional | VCs, event organizers, investment funds, companies doing due diligence. Real money decisions. |
+| **Perceived as?** | The authority in its field | "Verified" is in the name. The source of truth everyone consults. |
+| **Branding style?** | Universal / gold standard | Clean, timeless, institutional. Think Bloomberg, Moody's, Crunchbase. |
+
+### Logo Direction
+- **Chosen concept**: Layered hexagons (stacked industry layers)
+- **Why**: Clean, scales well (favicon to presentation), represents layers of verified industries
+- **Refinement brief**: Add subtle node/connection dots at hexagon intersection points. Hexagons = industry layers, dots = verified companies, connections = relationships. Dark slate gray (#2d3748) with one accent dot in cyan (#22d3ee) or emerald (#34d399) for "verified". Clean sans-serif typography.
+- **IMPORTANT**: Fix typo — "Industries" not "Indsutries"
+
+---
+
 ## X Account Strategy
 
 ### Personal Account (founder)
