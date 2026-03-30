@@ -21,6 +21,13 @@ interface FilterSidebarProps {
   onSearchSelect?: (node: GreenNode) => void;
   activeEdgeTypes?: Set<string>;
   onToggleEdgeType?: (type: string) => void;
+  title?: string;
+  subtitle?: string;
+  clusterColors?: Record<string, string>;
+  edgeColors?: Record<string, string>;
+  edgeLabelsOverride?: Record<string, string>;
+  hideActivityFeed?: boolean;
+  hideVerification?: boolean;
 }
 
 const EDGE_TYPE_LABELS = {
@@ -80,6 +87,13 @@ export default function FilterSidebar({
   onSearchSelect,
   activeEdgeTypes,
   onToggleEdgeType,
+  title,
+  subtitle,
+  clusterColors,
+  edgeColors,
+  edgeLabelsOverride,
+  hideActivityFeed = false,
+  hideVerification = false,
 }: FilterSidebarProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const t = setTimeout(() => setMounted(true), 50); return () => clearTimeout(t); }, []);
@@ -102,8 +116,8 @@ export default function FilterSidebar({
     <div className={`absolute left-4 top-14 bottom-4 w-72 bg-[#faf8f5]/95 backdrop-blur-md border border-[#ddd8ce] rounded-2xl shadow-lg shadow-black/5 z-40 flex flex-col overflow-y-auto transition-all duration-500 ease-out ${mounted ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0"}`}>
       {/* Header */}
       <div className="p-4 border-b border-[#ddd8ce]">
-        <h1 className="text-lg font-bold text-[#3a9d6e]">{labels.title}</h1>
-        <p className="text-xs text-zinc-600 mt-0.5">{labels.subtitle}</p>
+        <h1 className="text-lg font-bold text-[#3a9d6e]">{title ?? labels.title}</h1>
+        <p className="text-xs text-zinc-600 mt-0.5">{subtitle ?? labels.subtitle}</p>
       </div>
 
       {/* Search with autocomplete */}
@@ -125,7 +139,7 @@ export default function FilterSidebar({
               >
                 <span
                   className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: CLUSTER_COLORS[node.cluster] || "#6b7280" }}
+                  style={{ backgroundColor: (clusterColors ?? CLUSTER_COLORS)[node.cluster] || "#6b7280" }}
                 />
                 <span className="flex-1 truncate">{node.nombre}</span>
                 <span className="text-xs text-zinc-500">{node.cluster}</span>
@@ -180,7 +194,7 @@ export default function FilterSidebar({
             {labels.relationships}
           </h3>
           <div className="space-y-0.5">
-            {Object.entries(EDGE_COLORS).map(([type, color]) => (
+            {Object.entries(edgeColors ?? EDGE_COLORS).map(([type, color]) => (
               <button
                 key={type}
                 onClick={() => onToggleEdgeType(type)}
@@ -196,7 +210,7 @@ export default function FilterSidebar({
                     backgroundColor: activeEdgeTypes.has(type) ? color : "#4b5563",
                   }}
                 />
-                {edgeLabels[type as keyof typeof edgeLabels] || type}
+                {edgeLabelsOverride?.[type] ?? edgeLabels[type as keyof typeof edgeLabels] ?? type}
               </button>
             ))}
           </div>
@@ -204,13 +218,15 @@ export default function FilterSidebar({
       )}
 
       {/* Activity Feed */}
-      <ActivityFeed
-        lang={lang}
-        onNodeClick={(name) => {
-          const node = nodes.find((n) => n.nombre === name);
-          if (node) onSearchSelect?.(node);
-        }}
-      />
+      {!hideActivityFeed && (
+        <ActivityFeed
+          lang={lang}
+          onNodeClick={(name) => {
+            const node = nodes.find((n) => n.nombre === name);
+            if (node) onSearchSelect?.(node);
+          }}
+        />
+      )}
 
       {/* Stats */}
       <div className="mt-auto p-4 border-t border-[#ddd8ce]">
@@ -232,7 +248,7 @@ export default function FilterSidebar({
           </div>
         </div>
 
-        {onBatchVerify && (
+        {onBatchVerify && !hideVerification && (
           <button
             onClick={onBatchVerify}
             disabled={isBatchVerifying}
