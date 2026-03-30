@@ -71,7 +71,7 @@ export interface GreenEdge {
   id: string;
   source_id: string;
   target_id: string;
-  relationship_type: "funds" | "partners_with" | "client_of" | "portfolio" | "regulates";
+  relationship_type: "funds" | "partners_with" | "client_of" | "portfolio" | "regulates" | "sponsors" | "competes_with" | "ecosystem" | "invested_in" | "built_on";
   description: string;
   confidence: number;
   source: string;

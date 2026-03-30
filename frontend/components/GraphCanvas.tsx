@@ -17,6 +17,10 @@ interface GraphCanvasProps {
   verificationStates?: Record<string, NodeVerificationState>;
   highlightedNodes?: string[];
   activeEdgeTypes?: Set<string>;
+  clusterColors?: Record<string, string>;
+  edgeColors?: Record<string, string>;
+  darkMode?: boolean;
+  hideVerificationBadges?: boolean;
 }
 
 interface ForceNode {
@@ -50,6 +54,10 @@ export default function GraphCanvas({
   verificationStates = {},
   highlightedNodes = [],
   activeEdgeTypes,
+  clusterColors,
+  edgeColors,
+  darkMode = false,
+  hideVerificationBadges = false,
 }: GraphCanvasProps) {
   const fgRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -130,7 +138,7 @@ export default function GraphCanvas({
   const paintNode = useCallback(
     (node: ForceNode, ctx: CanvasRenderingContext2D) => {
       const size = getNodeSize(node);
-      const color = CLUSTER_COLORS[node.cluster] || "#6b7280";
+      const color = (clusterColors ?? CLUSTER_COLORS)[node.cluster] || "#6b7280";
       const isHovered = hoveredNode === node.id;
       const isHighlighted = node.highlighted;
       const isSearchMatch =
@@ -152,7 +160,9 @@ export default function GraphCanvas({
       ctx.globalAlpha = 1;
 
       // Border
-      ctx.strokeStyle = isHovered ? "#1a1a1a" : "rgba(26,26,26,0.2)";
+      ctx.strokeStyle = isHovered
+        ? (darkMode ? "#e2e8f0" : "#1a1a1a")
+        : (darkMode ? "rgba(255,255,255,0.15)" : "rgba(26,26,26,0.2)");
       ctx.lineWidth = isHovered ? 2 : 0.5;
       ctx.stroke();
 
@@ -161,7 +171,7 @@ export default function GraphCanvas({
       ctx.shadowBlur = 0;
 
       // Verification badge
-      if (node.verified || node.isGrey || node.verificationStatus === "pending" || node.verificationStatus === "failed") {
+      if (!hideVerificationBadges && (node.verified || node.isGrey || node.verificationStatus === "pending" || node.verificationStatus === "failed")) {
         const badgeX = node.x! + size * 0.7;
         const badgeY = node.y! - size * 0.7;
         const badgeR = node.verified ? 4 : 3;
@@ -195,14 +205,14 @@ export default function GraphCanvas({
         } Inter, Arial, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
-        ctx.fillStyle = "#1a1a1a";
-        ctx.strokeStyle = "rgba(245,243,235,0.8)";
+        ctx.fillStyle = darkMode ? "#e2e8f0" : "#1a1a1a";
+        ctx.strokeStyle = darkMode ? "rgba(10,15,26,0.8)" : "rgba(245,243,235,0.8)";
         ctx.lineWidth = 3;
         ctx.strokeText(node.nombre, node.x!, node.y! + size + 3);
         ctx.fillText(node.nombre, node.x!, node.y! + size + 3);
       }
     },
-    [hoveredNode, searchQuery, getNodeSize]
+    [hoveredNode, searchQuery, getNodeSize, clusterColors, darkMode, hideVerificationBadges]
   );
 
   const paintLink = useCallback(
@@ -211,7 +221,7 @@ export default function GraphCanvas({
       const target = link.target as ForceNode;
       if (!source.x || !target.x) return;
 
-      const color = EDGE_COLORS[link.type] || "#4b5563";
+      const color = (edgeColors ?? EDGE_COLORS)[link.type] || "#4b5563";
 
       ctx.beginPath();
       ctx.moveTo(source.x, source.y!);
@@ -228,7 +238,7 @@ export default function GraphCanvas({
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     },
-    []
+    [edgeColors]
   );
 
   return (
@@ -250,7 +260,7 @@ export default function GraphCanvas({
       onNodeHover={((node: ForceNode | null) =>
         setHoveredNode(node ? node.id : null)
       ) as any}
-      backgroundColor="#f5f3eb"
+      backgroundColor={darkMode ? "#0a0f1a" : "#f5f3eb"}
       d3AlphaDecay={0.02}
       d3VelocityDecay={0.3}
       warmupTicks={100}
