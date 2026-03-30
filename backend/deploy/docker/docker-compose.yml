@@ -15,5 +15,23 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  event-daemon:
+    build:
+      context: ../../../
+      dockerfile: backend/deploy/docker/Dockerfile
+    container_name: green-panorama-event-daemon
+    entrypoint: ["python3", "-m", "agents.event_daemon"]
+    restart: always
+    env_file:
+      - ../../../backend/.env
+    volumes:
+      - event-data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   research-data:
+  event-data:

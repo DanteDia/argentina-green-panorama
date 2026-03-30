@@ -5,6 +5,7 @@ import GraphCanvas from "@/components/GraphCanvas";
 import FilterSidebar from "@/components/FilterSidebar";
 import NodeDetailPanel from "@/components/NodeDetailPanel";
 import AIChatPanel from "@/components/AIChatPanel";
+import OpportunityPanel from "./OpportunityPanel";
 import EventHeader from "./EventHeader";
 import { GreenNode, GreenEdge, NodeVerificationState } from "@/lib/types";
 import { BLOCKCHAIN_CLUSTER_COLORS, EVENT_EDGE_COLORS, EVENT_EDGE_LABELS } from "@/lib/event-types";
@@ -52,6 +53,12 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
   const handleNodeNavigate = useCallback((node: GreenNode) => {
     setSelectedNode(node);
   }, []);
+
+  const handleHighlightNode = useCallback((nodeId: string) => {
+    setHighlightedNodes([nodeId]);
+    const node = nodes.find((n) => n.id === nodeId);
+    if (node) setSelectedNode(node);
+  }, [nodes]);
 
   const handleToggleEdgeType = useCallback((type: string) => {
     setActiveEdgeTypes((prev) => {
@@ -136,6 +143,13 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
           verificationState={verificationStates[selectedNode.id]}
         />
       )}
+
+      {/* Opportunity Matcher */}
+      <OpportunityPanel
+        slug={slug}
+        onHighlightNode={handleHighlightNode}
+        onHighlightNodes={setHighlightedNodes}
+      />
 
       {/* AI Chat */}
       <AIChatPanel
