@@ -32,6 +32,9 @@ interface ForceNode {
   verified: boolean;
   verificationStatus?: string;
   isGrey?: boolean;
+  isParticipant?: boolean;
+  eventRole?: string;
+  sponsorTier?: string;
   highlighted?: boolean;
   x?: number;
   y?: number;
@@ -103,6 +106,9 @@ export default function GraphCanvas({
       verified: n.verified || verificationStates[n.id]?.status === "finalized" || verificationStates[n.id]?.status === "accepted",
       verificationStatus: verificationStates[n.id]?.status,
       isGrey: n.verification_status === "grey",
+      isParticipant: n.is_participant !== false,
+      eventRole: n.event_role,
+      sponsorTier: n.event_sponsor_tier,
       highlighted: highlightSet.has(n.nombre.toLowerCase()),
       __data: n,
     }));
@@ -130,7 +136,13 @@ export default function GraphCanvas({
         (e) => e.source_id === node.id || e.target_id === node.id
       ).length;
       const followerBonus = node.followers ? Math.log10(node.followers + 1) : 0;
-      return Math.max(5, connections * 1.5 + followerBonus + 3);
+      let size = Math.max(5, connections * 1.5 + followerBonus + 3);
+      // Sponsor tier bonus
+      if (node.sponsorTier === "diamond") size *= 1.4;
+      else if (node.sponsorTier === "titanium" || node.sponsorTier === "platinum") size *= 1.2;
+      // Non-participants are smaller
+      if (!node.isParticipant) size *= 0.55;
+      return size;
     },
     [edges]
   );
@@ -151,20 +163,44 @@ export default function GraphCanvas({
         ctx.shadowBlur = 10;
       }
 
-      // Draw node circle — grey mode nodes are desaturated
+      // Draw node circle — grey/non-participant nodes are faded
+      const isNonParticipant = !node.isParticipant;
       ctx.beginPath();
       ctx.arc(node.x!, node.y!, size, 0, 2 * Math.PI);
       ctx.fillStyle = node.isGrey ? "#4b5563" : color;
-      ctx.globalAlpha = node.isGrey ? 0.5 : (isHovered ? 1 : 0.85);
+      ctx.globalAlpha = node.isGrey ? 0.5 : isNonParticipant ? 0.35 : (isHovered ? 1 : 0.85);
       ctx.fill();
       ctx.globalAlpha = 1;
 
-      // Border
-      ctx.strokeStyle = isHovered
-        ? (darkMode ? "#e2e8f0" : "#1a1a1a")
-        : (darkMode ? "rgba(255,255,255,0.15)" : "rgba(26,26,26,0.2)");
-      ctx.lineWidth = isHovered ? 2 : 0.5;
+      // Border — dashed for non-participants
+      if (isNonParticipant) {
+        ctx.setLineDash([2, 2]);
+        ctx.strokeStyle = darkMode ? "rgba(255,255,255,0.2)" : "rgba(26,26,26,0.15)";
+        ctx.lineWidth = 1;
+      } else {
+        ctx.setLineDash([]);
+        ctx.strokeStyle = isHovered
+          ? (darkMode ? "#e2e8f0" : "#1a1a1a")
+          : (darkMode ? "rgba(255,255,255,0.15)" : "rgba(26,26,26,0.2)");
+        ctx.lineWidth = isHovered ? 2 : 0.5;
+      }
       ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Sponsor glow for diamond/titanium
+      if (node.sponsorTier === "diamond" && !isNonParticipant) {
+        ctx.beginPath();
+        ctx.arc(node.x!, node.y!, size + 3, 0, 2 * Math.PI);
+        ctx.strokeStyle = "rgba(251, 191, 36, 0.4)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else if ((node.sponsorTier === "titanium" || node.sponsorTier === "platinum") && !isNonParticipant) {
+        ctx.beginPath();
+        ctx.arc(node.x!, node.y!, size + 2, 0, 2 * Math.PI);
+        ctx.strokeStyle = "rgba(192, 192, 210, 0.3)";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
 
       // Reset shadow
       ctx.shadowColor = "transparent";

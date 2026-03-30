@@ -65,6 +65,10 @@ export interface GreenNode {
     social?: Record<string, boolean>;
   };
   source: "manual" | "agent";
+  // Event-specific fields
+  is_participant?: boolean;
+  event_role?: string;
+  event_sponsor_tier?: string;
 }
 
 export interface GreenEdge {

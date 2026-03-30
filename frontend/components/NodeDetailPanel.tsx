@@ -172,6 +172,16 @@ export default function NodeDetailPanel({
                 {node.cluster}
               </span>
               <span className="text-xs text-zinc-600 flex items-center">{node.categoria}<FieldDot status={getFieldStatus(node.verification_details, "sector_relevant")} /></span>
+              {node.event_role && (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
+                  {node.event_sponsor_tier ? `${node.event_sponsor_tier.charAt(0).toUpperCase() + node.event_sponsor_tier.slice(1)} Sponsor` : node.event_role.charAt(0).toUpperCase() + node.event_role.slice(1)}
+                </span>
+              )}
+              {node.is_participant === false && (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-zinc-200 text-zinc-500">
+                  Connected
+                </span>
+              )}
             </div>
           </div>
           <button onClick={onClose} className="text-zinc-600 hover:text-[#1a1a1a] transition p-1">
