@@ -12,6 +12,9 @@ interface AIChatPanelProps {
   lang: "es" | "en";
   onHighlightNodes?: (names: string[]) => void;
   onNodeSelect?: (name: string) => void;
+  // Optional: passed by EventMapShell but not used (chat has its own data source)
+  nodes?: unknown[];
+  edges?: unknown[];
 }
 
 const t = {
