@@ -3,18 +3,19 @@ import { verifySocial, DEFAULT_MAP_ID } from "@/lib/genlayer";
 
 export async function POST(request: NextRequest) {
   try {
-    const { nodeId, nombre, socialLinks, claimedFollowers } = await request.json();
+    const { nodeId, nombre, platform, socialUrl, claimedFollowers } = await request.json();
 
-    if (!nodeId || !nombre || !socialLinks) {
-      return NextResponse.json({ error: "nodeId, nombre, and socialLinks are required" }, { status: 400 });
+    if (!nodeId || !nombre || !platform || !socialUrl) {
+      return NextResponse.json({ error: "nodeId, nombre, platform, and socialUrl are required" }, { status: 400 });
     }
 
     const txHash = await verifySocial(
       DEFAULT_MAP_ID,
       nodeId,
       nombre,
-      socialLinks,
-      claimedFollowers || {},
+      platform,
+      socialUrl,
+      String(claimedFollowers || "0"),
     );
 
     return NextResponse.json({ txHash, status: "submitted" });

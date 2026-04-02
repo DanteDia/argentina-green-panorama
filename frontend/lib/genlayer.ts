@@ -23,9 +23,9 @@ function parseContractResult(raw: unknown): Record<string, unknown> {
   return { error: "could_not_parse", raw: s.slice(0, 200) };
 }
 
-// VerifiableIndustries contract on GenLayer Studio (studionet)
+// VerifiableIndustries v5 contract on GenLayer Studio
 const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_GENLAYER_CONTRACT ||
-  "0xd410384E9039F0AC48996eF0da29dE602dee1aCc") as Address;
+  "0xe8760c16A5eB8368612d421d1185B76b501F6e11") as Address;
 
 let _client: ReturnType<typeof createClient> | null = null;
 
@@ -41,67 +41,112 @@ export function getContractAddress(): Address {
   return CONTRACT_ADDRESS;
 }
 
-export async function verifyNode(
-  mapId: string,
-  nodeId: string,
-  nombre: string,
-  link: string,
-  sector: string,
-  categoria: string,
-  descripcion: string,
-  country: string,
-  claimedFunding: string = "",
-): Promise<string> {
+// =========================================================================
+// WRITE METHODS — 1 TX per claim, all prompt_comparative
+// =========================================================================
+
+/** Verify entity existence */
+export async function verifyExistence(mapId: string, nodeId: string, name: string, url: string): Promise<string> {
   const client = getClient();
-  const hash = await client.writeContract({
+  return client.writeContract({
     address: getContractAddress(),
-    functionName: "verify_node",
-    args: [mapId, nodeId, nombre, link || "", sector || "", categoria || "", descripcion || "", country || "", claimedFunding || ""],
+    functionName: "verify_existence",
+    args: [mapId, nodeId, name, url || ""],
     value: 0n,
   });
-  return hash;
 }
 
-export async function verifySocial(
-  mapId: string,
-  nodeId: string,
-  nombre: string,
-  socialLinks: string[],
-  claimedFollowers: Record<string, number>,
-): Promise<string> {
+/** Verify entity description accuracy */
+export async function verifyDescription(mapId: string, nodeId: string, name: string, url: string, description: string): Promise<string> {
   const client = getClient();
-  const hash = await client.writeContract({
+  return client.writeContract({
     address: getContractAddress(),
-    functionName: "verify_social",
-    args: [mapId, nodeId, nombre, JSON.stringify(socialLinks), JSON.stringify(claimedFollowers)],
+    functionName: "verify_description",
+    args: [mapId, nodeId, name, url || "", description || ""],
     value: 0n,
   });
-  return hash;
 }
 
-export async function verifyRelationship(
-  mapId: string,
-  edgeId: string,
-  nodeAName: string,
-  nodeALink: string,
-  nodeBName: string,
-  nodeBLink: string,
-  relationshipType: string,
-  relationshipDescription: string,
-  sector: string,
-  country: string,
-): Promise<string> {
+/** Verify entity sector classification */
+export async function verifySector(mapId: string, nodeId: string, name: string, url: string, sector: string, category: string): Promise<string> {
   const client = getClient();
-  const hash = await client.writeContract({
+  return client.writeContract({
+    address: getContractAddress(),
+    functionName: "verify_sector",
+    args: [mapId, nodeId, name, url || "", sector || "", category || ""],
+    value: 0n,
+  });
+}
+
+/** Verify entity is still active */
+export async function verifyRecency(mapId: string, nodeId: string, name: string, url: string, country: string): Promise<string> {
+  const client = getClient();
+  return client.writeContract({
+    address: getContractAddress(),
+    functionName: "verify_recency",
+    args: [mapId, nodeId, name, url || "", country || ""],
+    value: 0n,
+  });
+}
+
+/** Verify a single funding relationship — checks BOTH sides */
+export async function verifyFunding(mapId: string, claimId: string, investorName: string, investorUrl: string, companyName: string, companyUrl: string): Promise<string> {
+  const client = getClient();
+  return client.writeContract({
+    address: getContractAddress(),
+    functionName: "verify_funding",
+    args: [mapId, claimId, investorName, investorUrl || "", companyName, companyUrl || ""],
+    value: 0n,
+  });
+}
+
+/** Verify a single relationship — conflict detection */
+export async function verifyRelationship(mapId: string, edgeId: string, entityA: string, urlA: string, entityB: string, urlB: string, claimedType: string): Promise<string> {
+  const client = getClient();
+  return client.writeContract({
     address: getContractAddress(),
     functionName: "verify_relationship",
-    args: [mapId, edgeId, nodeAName, nodeALink || "", nodeBName, nodeBLink || "", relationshipType || "", relationshipDescription || "", sector || "", country || ""],
+    args: [mapId, edgeId, entityA, urlA || "", entityB, urlB || "", claimedType || ""],
     value: 0n,
   });
-  return hash;
 }
 
-// GenLayer SDK returns numeric status codes — normalize to strings
+/** Verify a single social media profile */
+export async function verifySocial(mapId: string, nodeId: string, name: string, platform: string, socialUrl: string, claimedFollowers: string): Promise<string> {
+  const client = getClient();
+  return client.writeContract({
+    address: getContractAddress(),
+    functionName: "verify_social",
+    args: [mapId, nodeId, name, platform, socialUrl, claimedFollowers || "0"],
+    value: 0n,
+  });
+}
+
+/** Adversarial hallucination detection on full agent output */
+export async function detectHallucination(mapId: string, nodeId: string, name: string, url: string, agentOutput: string): Promise<string> {
+  const client = getClient();
+  return client.writeContract({
+    address: getContractAddress(),
+    functionName: "detect_hallucination",
+    args: [mapId, nodeId, name, url || "", agentOutput],
+    value: 0n,
+  });
+}
+
+// Legacy wrapper — delegates to individual methods
+export async function verifyNode(
+  mapId: string, nodeId: string, nombre: string, link: string,
+  sector: string, categoria: string, descripcion: string,
+  country: string, _claimedFunding: string = "",
+): Promise<string> {
+  // Start with existence check — the most fundamental claim
+  return verifyExistence(mapId, nodeId, nombre, link);
+}
+
+// =========================================================================
+// STATUS + READ METHODS
+// =========================================================================
+
 const STATUS_MAP: Record<number, string> = {
   0: "UNINITIALIZED", 1: "PENDING", 2: "PROPOSING",
   3: "COMMITTING", 4: "REVEALING", 5: "ACCEPTED",
@@ -149,34 +194,40 @@ export async function getTransactionStatus(txHash: string) {
   }
 }
 
-export async function getVerification(mapId: string, nodeId: string) {
+/** Read a specific claim result */
+export async function getClaim(mapId: string, claimKey: string) {
   const client = getClient();
   const result = await client.readContract({
     address: getContractAddress(),
-    functionName: "get_verification",
+    functionName: "get_claim",
+    args: [mapId, claimKey],
+  });
+  return parseContractResult(result);
+}
+
+/** Read all verification claims for a node */
+export async function getNodeVerification(mapId: string, nodeId: string) {
+  const client = getClient();
+  const result = await client.readContract({
+    address: getContractAddress(),
+    functionName: "get_node_verification",
     args: [mapId, nodeId],
   });
   return parseContractResult(result);
 }
 
-export async function getSocialVerification(mapId: string, nodeId: string) {
-  const client = getClient();
-  const result = await client.readContract({
-    address: getContractAddress(),
-    functionName: "get_social_verification",
-    args: [mapId, nodeId],
-  });
-  return parseContractResult(result);
+/** Legacy compatibility */
+export async function getVerification(mapId: string, nodeId: string) {
+  return getNodeVerification(mapId, nodeId);
 }
 
 export async function getRelationshipVerification(mapId: string, edgeId: string) {
-  const client = getClient();
-  const result = await client.readContract({
-    address: getContractAddress(),
-    functionName: "get_relationship_verification",
-    args: [mapId, edgeId],
-  });
-  return parseContractResult(result);
+  return getClaim(mapId, `${edgeId}:relationship`);
+}
+
+export async function getSocialVerification(mapId: string, nodeId: string) {
+  // Social is stored per-platform, return generic lookup
+  return getClaim(mapId, `${nodeId}:social:twitter`);
 }
 
 export async function getContractStats() {

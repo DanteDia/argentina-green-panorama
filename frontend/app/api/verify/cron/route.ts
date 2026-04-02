@@ -186,10 +186,7 @@ async function verifyEdges() {
             sourceNode.link || "",
             targetNode.nombre,
             targetNode.link || "",
-            edge.relationship_type || "",
-            edge.description || "",
-            "Green/Carbon/Environmental",
-            "Argentina"
+            edge.relationship_type || ""
           );
 
           if (!txHash) { edgeResult.status = "submit_failed"; edgeResults.push(edgeResult); continue; }

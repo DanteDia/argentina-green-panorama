@@ -3,7 +3,7 @@ import { verifyRelationship, DEFAULT_MAP_ID } from "@/lib/genlayer";
 
 export async function POST(request: NextRequest) {
   try {
-    const { edgeId, nodeAName, nodeALink, nodeBName, nodeBLink, relationshipType, relationshipDescription } =
+    const { edgeId, nodeAName, nodeALink, nodeBName, nodeBLink, relationshipType } =
       await request.json();
 
     if (!edgeId || !nodeAName || !nodeBName) {
@@ -18,9 +18,6 @@ export async function POST(request: NextRequest) {
       nodeBName,
       nodeBLink || "",
       relationshipType || "",
-      relationshipDescription || "",
-      "Green/Carbon/Environmental",
-      "Argentina",
     );
 
     return NextResponse.json({ txHash, status: "submitted" });
