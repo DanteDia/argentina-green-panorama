@@ -116,7 +116,7 @@ const t = {
   },
 };
 
-export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect, context }: AIChatPanelProps) {
+export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect, context, nodes, edges }: AIChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -146,10 +146,21 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect, cont
     setLoading(true);
 
     try {
+      // Send context + slim graph data so the LLM knows which map we're on
+      const graphData = nodes && edges && (nodes as unknown[]).length > 0 ? {
+        nodes: (nodes as Record<string, unknown>[]).map(n => ({
+          nombre: n.nombre, cluster: n.cluster, categoria: n.categoria,
+          descripcion: n.descripcion, event_role: n.event_role, event_sponsor_tier: n.event_sponsor_tier,
+        })),
+        edges: (edges as Record<string, unknown>[]).map(e => ({
+          source: e.source_id, target: e.target_id, type: e.relationship_type,
+        })),
+      } : null;
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, lang }),
+        body: JSON.stringify({ message: msg, lang, context: context || "green-panorama", graphData }),
       });
       const data = await res.json();
 
