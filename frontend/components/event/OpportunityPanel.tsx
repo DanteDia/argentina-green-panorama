@@ -11,6 +11,8 @@ interface SynergyMatch {
   score: number;
   reasoning: string;
   actionItems: string[];
+  existingRelationship?: boolean;
+  intelSignal?: string;
 }
 
 interface OpportunityPanelProps {
@@ -20,6 +22,7 @@ interface OpportunityPanelProps {
 }
 
 const SYNERGY_LABELS: Record<string, string> = {
+  existing_relationship: "Already Connected",
   potential_client: "Potential Client",
   potential_partner: "Partner",
   investor_match: "Investor Match",
@@ -29,6 +32,7 @@ const SYNERGY_LABELS: Record<string, string> = {
 };
 
 const SYNERGY_COLORS: Record<string, string> = {
+  existing_relationship: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
   potential_client: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
   potential_partner: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   investor_match: "bg-amber-500/20 text-amber-400 border-amber-500/30",
@@ -268,6 +272,20 @@ export default function OpportunityPanel({
                 </div>
 
                 {/* Reasoning */}
+                {/* Existing relationship badge */}
+                {match.existingRelationship && (
+                  <div className="mt-1.5 text-[10px] bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded inline-block">
+                    ★ You already work with this company
+                  </div>
+                )}
+
+                {/* Intel signal */}
+                {match.intelSignal && (
+                  <div className="mt-1.5 text-[10px] text-cyan-400/60 italic">
+                    Signal: {match.intelSignal}
+                  </div>
+                )}
+
                 <p className="mt-2 text-xs text-white/50 leading-relaxed">
                   {match.reasoning}
                 </p>

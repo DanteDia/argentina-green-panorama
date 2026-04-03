@@ -10,12 +10,8 @@ const SONAR_MODEL = "perplexity/sonar";
 const LLM_MODEL = "google/gemini-2.0-flash-001";
 
 const VALID_SYNERGY_TYPES = [
-  "potential_client",
-  "potential_partner",
-  "investor_match",
-  "talent_pipeline",
-  "technology_complement",
-  "market_expansion",
+  "existing_relationship", "potential_client", "potential_partner",
+  "investor_match", "talent_pipeline", "technology_complement", "market_expansion",
 ];
 
 interface SynergyMatch {
@@ -26,22 +22,17 @@ interface SynergyMatch {
   score: number;
   reasoning: string;
   actionItems: string[];
+  existingRelationship?: boolean;
+  intelSignal?: string;
 }
 
 function extractJson(content: string, array: boolean = true): unknown {
-  // Strip markdown code fences
   content = content.replace(/```(?:json)?\s*/g, "").trim();
-
   const openChar = array ? "[" : "{";
   const closeChar = array ? "]" : "}";
-
   const start = content.indexOf(openChar);
   if (start === -1) return null;
-
-  let depth = 0;
-  let inString = false;
-  let escapeNext = false;
-
+  let depth = 0, inString = false, escapeNext = false;
   for (let i = start; i < content.length; i++) {
     const c = content[i];
     if (escapeNext) { escapeNext = false; continue; }
@@ -52,174 +43,251 @@ function extractJson(content: string, array: boolean = true): unknown {
     else if (c === closeChar) {
       depth--;
       if (depth === 0) {
-        try {
-          return JSON.parse(content.slice(start, i + 1));
-        } catch {
-          break;
-        }
+        try { return JSON.parse(content.slice(start, i + 1)); }
+        catch { break; }
       }
     }
   }
-
   return null;
 }
 
-async function callOpenRouter(
-  model: string,
-  messages: { role: string; content: string }[],
-  temperature: number = 0.2,
-  maxTokens: number = 2000
-): Promise<string> {
+async function callOpenRouter(model: string, messages: { role: string; content: string }[], temperature = 0.2, maxTokens = 2000): Promise<string> {
   const res = await fetch(OPENROUTER_BASE, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    }),
+    headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model, messages, temperature, max_tokens: maxTokens }),
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`OpenRouter error ${res.status}: ${text}`);
-  }
-
+  if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
   const data = await res.json();
   return data.choices?.[0]?.message?.content || "";
 }
 
-async function researchCompany(
-  companyUrl: string,
-  companyName?: string
-): Promise<Record<string, unknown>> {
-  const nameHint = companyName ? ` (company name: "${companyName}")` : "";
+// =============================================================================
+// PHASE 1: Deep Company Research — 3 parallel Perplexity queries
+// =============================================================================
 
-  const prompt = `Research the company at this URL: ${companyUrl}${nameHint}
+async function deepResearchCompany(companyUrl: string, companyName?: string): Promise<Record<string, unknown>> {
+  const nameHint = companyName ? `"${companyName}"` : "the company";
 
-Provide a comprehensive profile including:
-1. Company name
-2. What they do (products/services)
-3. Their sector/industry
-4. Target market and customers
-5. Technology stack or key capabilities
-6. Company stage (startup, growth, enterprise)
-7. Geographic focus
-8. Key partnerships or integrations
-9. What they might be looking for (clients, partners, investors, talent)
+  // Query 1: Core identity & specialization
+  const q1 = callOpenRouter(SONAR_MODEL, [{ role: "user", content:
+    `Research ${companyUrl} (${nameHint}) deeply. What makes this company UNIQUE?
 
-Respond ONLY as JSON:
-{
-  "name": "Company Name",
-  "description": "Brief description",
-  "sector": "Their main sector",
-  "products": ["product1", "product2"],
-  "target_market": "Who they sell to",
-  "technology": ["tech1", "tech2"],
-  "stage": "startup|growth|enterprise",
-  "geography": "Where they operate",
-  "looking_for": ["clients", "partners"],
-  "keywords": ["keyword1", "keyword2"]
-}`;
+I need:
+1. Their CORE specialization (the specific niche, NOT generic like "web design" or "consulting")
+2. Specific projects or campaigns they've done (name real examples)
+3. What technology/medium they specialize in (CGI, AI, blockchain, holograms, etc.)
+4. Their company size and stage
 
-  const content = await callOpenRouter(SONAR_MODEL, [{ role: "user", content: prompt }], 0.1, 1000);
-  const data = extractJson(content, false) as Record<string, unknown> | null;
-  return data || { name: companyName || companyUrl, error: "parse_failed" };
+Return JSON: {"core_specialization": "specific niche", "notable_projects": ["project1"], "technology_focus": ["tech1"], "stage": "startup|growth|enterprise"}`
+  }], 0.1, 800);
+
+  // Query 2: Clients, partners, industry connections
+  const q2 = callOpenRouter(SONAR_MODEL, [{ role: "user", content:
+    `Who has ${nameHint} (${companyUrl}) worked with? I need REAL company names.
+
+1. Known clients (companies that paid them for services)
+2. Known partners (companies they collaborate with)
+3. Industry associations or events they participate in
+4. Any crypto/blockchain/Web3 connections
+
+Return JSON: {"known_clients": ["Client1"], "known_partners": ["Partner1"], "events": ["Event1"], "crypto_connections": ["Connection1"]}`
+  }], 0.1, 800);
+
+  // Query 3: Geography & market focus
+  const q3 = callOpenRouter(SONAR_MODEL, [{ role: "user", content:
+    `Where does ${nameHint} (${companyUrl}) operate? What markets do they serve?
+
+1. Headquarters location
+2. Office locations
+3. Geographic markets they serve
+4. Target customer profile (who buys from them)
+
+Return JSON: {"headquarters": "city", "offices": ["city1"], "markets": ["market1"], "target_customers": "description"}`
+  }], 0.1, 600);
+
+  // Run all 3 in parallel
+  const [r1, r2, r3] = await Promise.all([q1, q2, q3]);
+
+  const p1 = (extractJson(r1, false) as Record<string, unknown>) || {};
+  const p2 = (extractJson(r2, false) as Record<string, unknown>) || {};
+  const p3 = (extractJson(r3, false) as Record<string, unknown>) || {};
+
+  // Merge into rich profile
+  return {
+    name: companyName || companyUrl,
+    url: companyUrl,
+    core_specialization: p1.core_specialization || "unknown",
+    notable_projects: p1.notable_projects || [],
+    technology_focus: p1.technology_focus || [],
+    stage: p1.stage || "unknown",
+    known_clients: p2.known_clients || [],
+    known_partners: p2.known_partners || [],
+    events: p2.events || [],
+    crypto_connections: p2.crypto_connections || [],
+    headquarters: p3.headquarters || "",
+    offices: p3.offices || [],
+    markets: p3.markets || [],
+    target_customers: p3.target_customers || "",
+  };
 }
 
-async function fetchEventParticipants(slug: string) {
-  if (!supabase) return [];
+// =============================================================================
+// PHASE 2: Fetch participants + intelligence + detect existing relationships
+// =============================================================================
 
-  const { data: participants, error: partErr } = await supabase
+async function fetchEnrichedParticipants(slug: string, companyProfile: Record<string, unknown>) {
+  if (!supabase) return { participants: [], existingRelationships: [] as string[] };
+
+  // Get participants
+  const { data: parts } = await supabase
     .from("event_participants")
     .select("node_id, role, sponsor_tier")
     .eq("event_slug", slug);
+  if (!parts || parts.length === 0) return { participants: [], existingRelationships: [] as string[] };
 
-  if (partErr || !participants || participants.length === 0) return [];
+  const nodeIds = parts.map((p) => p.node_id);
+  const meta = Object.fromEntries(parts.map((p) => [p.node_id, p]));
 
-  const nodeIds = participants.map((p) => p.node_id);
-
-  const { data: nodes, error: nodesErr } = await supabase
+  // Get node data
+  const { data: nodes } = await supabase
     .from("nodes")
     .select("id, nombre, link, cluster, categoria, descripcion, quien_fondea, aliados_portfolio, clientes")
     .in("id", nodeIds);
+  if (!nodes) return { participants: [], existingRelationships: [] as string[] };
 
-  if (nodesErr || !nodes) return [];
+  // Get intelligence signals for all participants (top 3 per node)
+  const { data: intel } = await supabase
+    .from("node_intelligence")
+    .select("node_id, intel_type, title, content")
+    .in("node_id", nodeIds)
+    .order("engagement_score", { ascending: false })
+    .limit(150);
 
-  const meta = Object.fromEntries(participants.map((p) => [p.node_id, p]));
+  const intelByNode: Record<string, { type: string; title: string; content: string }[]> = {};
+  if (intel) {
+    for (const i of intel) {
+      if (!intelByNode[i.node_id]) intelByNode[i.node_id] = [];
+      if (intelByNode[i.node_id].length < 3) {
+        intelByNode[i.node_id].push({ type: i.intel_type, title: i.title, content: i.content });
+      }
+    }
+  }
 
-  return nodes.map((n) => ({
-    ...n,
-    role: meta[n.id]?.role || "",
-    sponsor_tier: meta[n.id]?.sponsor_tier || "",
-  }));
+  // Detect existing relationships
+  const companyName = String(companyProfile.name || "").toLowerCase();
+  const knownClients = ((companyProfile.known_clients as string[]) || []).map(s => s.toLowerCase());
+  const knownPartners = ((companyProfile.known_partners as string[]) || []).map(s => s.toLowerCase());
+  const existingRelationships: string[] = [];
+
+  const participants = nodes.map((n) => {
+    const nameLower = n.nombre.toLowerCase();
+
+    // Check if user's company is in participant's data
+    const inPartnerList = (n.aliados_portfolio || []).some((p: string) => p.toLowerCase().includes(companyName));
+    const inClientList = (n.clientes || []).some((c: string) => c.toLowerCase().includes(companyName));
+    const inDescription = (n.descripcion || "").toLowerCase().includes(companyName);
+
+    // Check if participant is in user's known clients/partners
+    const isKnownClient = knownClients.some(c => c.includes(nameLower) || nameLower.includes(c));
+    const isKnownPartner = knownPartners.some(p => p.includes(nameLower) || nameLower.includes(p));
+
+    const hasExistingRelationship = inPartnerList || inClientList || inDescription || isKnownClient || isKnownPartner;
+    if (hasExistingRelationship) existingRelationships.push(n.nombre);
+
+    const signals = intelByNode[n.id] || [];
+
+    return {
+      id: n.id,
+      nombre: n.nombre,
+      link: n.link,
+      cluster: n.cluster || "",
+      categoria: n.categoria || "",
+      descripcion: n.descripcion || "",
+      quien_fondea: n.quien_fondea || "",
+      aliados_portfolio: n.aliados_portfolio || [],
+      clientes: n.clientes || [],
+      role: meta[n.id]?.role || "",
+      sponsor_tier: meta[n.id]?.sponsor_tier || "",
+      intelligence: signals,
+      existing_relationship: hasExistingRelationship,
+    };
+  });
+
+  return { participants, existingRelationships };
 }
+
+// =============================================================================
+// PHASE 3: Score synergies with specificity + intelligence
+// =============================================================================
 
 async function scoreSynergies(
   companyProfile: Record<string, unknown>,
-  participants: Record<string, unknown>[]
+  participants: Record<string, unknown>[],
+  existingRelationships: string[],
+  eventName: string,
 ): Promise<SynergyMatch[]> {
-  const participantSummaries = participants.map((p) => ({
-    id: p.id,
-    name: p.nombre,
-    cluster: p.cluster || "",
-    category: p.categoria || "",
-    description: p.descripcion || "",
-    funding: p.quien_fondea || "",
-    partners: p.aliados_portfolio || [],
-    clients: p.clientes || [],
-  }));
+  // Build participant summaries with intelligence
+  const summaries = participants.map((p) => {
+    const intel = (p.intelligence as { type: string; title: string; content: string }[]) || [];
+    const intelText = intel.length > 0
+      ? "\n    Recent signals: " + intel.map(i => `[${i.type}] ${i.title}`).join("; ")
+      : "";
 
-  const prompt = `You are an expert business development analyst at a blockchain/crypto conference.
+    return {
+      id: p.id,
+      name: p.nombre,
+      cluster: p.cluster || "",
+      description: (p.descripcion as string || "").slice(0, 300),
+      role: p.role || "",
+      sponsor_tier: p.sponsor_tier || "",
+      existing_relationship: p.existing_relationship || false,
+      recent_intel: intelText,
+    };
+  });
 
-USER'S COMPANY PROFILE:
+  const prompt = `You are a senior business development advisor preparing someone for ${eventName}.
+Your recommendations must be SPECIFIC and HIGH-VALUE — not generic.
+
+THE USER'S COMPANY (deep profile):
 ${JSON.stringify(companyProfile, null, 2)}
 
-EVENT PARTICIPANTS:
-${JSON.stringify(participantSummaries, null, 2)}
+EXISTING RELATIONSHIPS DETECTED (these companies already work with or know the user):
+${existingRelationships.length > 0 ? existingRelationships.join(", ") : "None detected"}
 
-For each participant, evaluate the synergy with the user's company. Score each match from 0.0 to 1.0.
+EVENT PARTICIPANTS (${summaries.length} companies, enriched with intelligence):
+${JSON.stringify(summaries, null, 2)}
 
-SYNERGY TYPES (choose the best fit):
-- "potential_client": They could buy the user's product/service
-- "potential_partner": Mutual benefit from partnering/integrating
-- "investor_match": They invest in companies like the user's (or vice versa)
-- "talent_pipeline": They could provide talent or the user could hire from them
-- "technology_complement": Their tech complements the user's stack
-- "market_expansion": They could help the user enter new markets
+MATCHING RULES — READ CAREFULLY:
+1. HIGHEST PRIORITY (score 0.9-1.0): Companies the user ALREADY works with → reconnect at the event
+2. HIGH PRIORITY (score 0.7-0.9): Companies whose specific capabilities/needs align with the user's UNIQUE specialization
+3. MEDIUM (score 0.4-0.7): Companies in complementary sectors with concrete synergy
+4. ❌ NEVER suggest generic matches like "they need a website" or "they could use consulting"
+5. ❌ NEVER match based on generic "digital services" — match on SPECIFIC capabilities
+6. Each reasoning must reference a SPECIFIC capability of the user AND a specific need of the participant
+7. Action items must be conference-specific: "At their booth, ask about...", "During the networking session, propose..."
+8. Use intelligence signals when available — recent partnerships, funding, product launches create opportunities
 
-RULES:
-- Only include matches with score >= 0.3
-- Maximum 20 matches
-- Sort by score descending
-- Be specific in reasoning — mention actual products, services, or capabilities
-- Action items should be concrete next steps for the conference
-
-Respond ONLY as a JSON array:
+Return top 10 matches as JSON array:
 [{
   "node_id": "uuid",
   "company_name": "Name",
-  "cluster": "Their cluster",
-  "synergy_type": "potential_client|potential_partner|investor_match|talent_pipeline|technology_complement|market_expansion",
+  "cluster": "Cluster",
+  "synergy_type": "existing_relationship|potential_client|potential_partner|investor_match|technology_complement|market_expansion",
   "score": 0.85,
-  "reasoning": "Specific reason why this is a good match",
-  "action_items": ["Visit their booth", "Propose integration demo"]
+  "reasoning": "SPECIFIC reason referencing both companies' unique capabilities",
+  "action_items": ["Concrete conference action 1", "Action 2"],
+  "intel_signal": "Recent signal that creates this opportunity (or null)"
 }]`;
 
   const content = await callOpenRouter(LLM_MODEL, [{ role: "user", content: prompt }], 0.3, 4000);
   const results = extractJson(content, true) as Record<string, unknown>[] | null;
-
   if (!results || !Array.isArray(results)) return [];
 
   const matches: SynergyMatch[] = [];
   for (const r of results) {
     const score = Number(r.score) || 0;
     if (score < 0.3) continue;
-
     let synergyType = String(r.synergy_type || "potential_partner");
     if (!VALID_SYNERGY_TYPES.includes(synergyType)) synergyType = "potential_partner";
 
@@ -231,82 +299,54 @@ Respond ONLY as a JSON array:
       score: Math.min(1.0, Math.max(0.0, score)),
       reasoning: String(r.reasoning || ""),
       actionItems: Array.isArray(r.action_items) ? r.action_items.map(String) : [],
+      existingRelationship: synergyType === "existing_relationship" || existingRelationships.includes(String(r.company_name || "")),
+      intelSignal: r.intel_signal ? String(r.intel_signal) : undefined,
     });
   }
 
   matches.sort((a, b) => b.score - a.score);
-  return matches.slice(0, 20);
+  return matches.slice(0, 10);
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ slug: string }> }
-) {
+// =============================================================================
+// Event metadata
+// =============================================================================
+
+const EVENT_META: Record<string, string> = {
+  "blockchainrio-2026": "BlockchainRio 2026",
+};
+
+// =============================================================================
+// Main handler
+// =============================================================================
+
+export async function POST(request: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
 
-  if (!supabase) {
-    return NextResponse.json({ error: "Database not configured" }, { status: 500 });
-  }
-
-  if (!OPENROUTER_API_KEY) {
-    return NextResponse.json({ error: "AI service not configured" }, { status: 500 });
-  }
+  if (!supabase) return NextResponse.json({ error: "Database not configured" }, { status: 500 });
+  if (!OPENROUTER_API_KEY) return NextResponse.json({ error: "AI service not configured" }, { status: 500 });
 
   try {
-    const body = await request.json();
-    const { companyUrl, companyName } = body as {
-      companyUrl: string;
-      companyName?: string;
-    };
+    const { companyUrl, companyName } = (await request.json()) as { companyUrl: string; companyName?: string };
+    if (!companyUrl) return NextResponse.json({ error: "companyUrl is required" }, { status: 400 });
 
-    if (!companyUrl) {
-      return NextResponse.json({ error: "companyUrl is required" }, { status: 400 });
-    }
+    const eventName = EVENT_META[slug] || slug;
 
-    // Step 1: Research the user's company
-    const profile = await researchCompany(companyUrl, companyName);
-    if (profile.error) {
-      return NextResponse.json(
-        { error: `Could not research company: ${profile.error}` },
-        { status: 422 }
-      );
-    }
+    // Phase 1: Deep research (3 parallel Perplexity queries)
+    const profile = await deepResearchCompany(companyUrl, companyName);
 
-    // Step 2: Fetch event participants
-    const participants = await fetchEventParticipants(slug);
-    if (participants.length === 0) {
-      return NextResponse.json(
-        { error: "No participants found for this event" },
-        { status: 404 }
-      );
-    }
+    // Phase 2: Fetch enriched participants + detect existing relationships
+    const { participants, existingRelationships } = await fetchEnrichedParticipants(slug, profile);
+    if (participants.length === 0) return NextResponse.json({ error: "No participants found" }, { status: 404 });
 
-    // Step 3: Score synergies
-    const matches = await scoreSynergies(profile, participants);
-
-    // Step 4: Try to store results (non-blocking, don't fail if table doesn't exist)
-    try {
-      const rows = matches.map((m) => ({
-        event_slug: slug,
-        company_url: companyUrl,
-        node_id: m.nodeId,
-        company_name: m.name,
-        synergy_type: m.synergyType,
-        score: m.score,
-        reasoning: m.reasoning,
-        action_items: m.actionItems,
-      }));
-      if (rows.length > 0) {
-        await supabase.from("synergies").insert(rows);
-      }
-    } catch {
-      // Non-critical — table may not exist yet
-    }
+    // Phase 3: Score with specificity + intelligence
+    const matches = await scoreSynergies(profile, participants, existingRelationships, eventName);
 
     return NextResponse.json({
       companyName: profile.name || companyName || companyUrl,
-      companySummary: profile.description || "",
+      companySummary: `${profile.core_specialization}. Notable projects: ${((profile.notable_projects as string[]) || []).join(", ") || "N/A"}. Known clients: ${((profile.known_clients as string[]) || []).join(", ") || "N/A"}.`,
       matches,
+      existingRelationships,
     });
   } catch (err) {
     console.error("Opportunity matching error:", err);
