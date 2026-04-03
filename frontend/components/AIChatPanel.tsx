@@ -2,6 +2,59 @@
 
 import { useState, useRef, useEffect } from "react";
 
+/** Render simple markdown: **bold**, *italic*, bullet lists, line breaks */
+function renderMarkdown(text: string) {
+  // Split into lines for list handling
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+  let listItems: string[] = [];
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={`list-${elements.length}`} className="list-disc pl-4 my-1.5 space-y-0.5">
+          {listItems.map((item, j) => (
+            <li key={j}><span dangerouslySetInnerHTML={{ __html: inlineFormat(item) }} /></li>
+          ))}
+        </ul>
+      );
+      listItems = [];
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) {
+      flushList();
+      continue;
+    }
+    // Bullet list item: * item or - item
+    const bulletMatch = line.match(/^[\*\-]\s+(.+)/);
+    if (bulletMatch) {
+      listItems.push(bulletMatch[1]);
+      continue;
+    }
+    // Numbered list: 1. item
+    const numMatch = line.match(/^\d+\.\s+(.+)/);
+    if (numMatch) {
+      listItems.push(numMatch[1]);
+      continue;
+    }
+    flushList();
+    elements.push(
+      <p key={`p-${i}`} className="my-1" dangerouslySetInnerHTML={{ __html: inlineFormat(line) }} />
+    );
+  }
+  flushList();
+  return elements;
+}
+
+function inlineFormat(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -151,11 +204,11 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
                 <div
                   className={`max-w-[85%] px-3 py-2 rounded-xl text-sm ${
                     msg.role === "user"
-                      ? "bg-[#1a6b4a] text-[#1a1a1a]"
+                      ? "bg-[#1a6b4a] text-white"
                       : "bg-zinc-100 text-zinc-800"
                   }`}
                 >
-                  {msg.content}
+                  <div className="leading-relaxed">{msg.role === "assistant" ? renderMarkdown(msg.content) : msg.content}</div>
                   {msg.highlight && msg.highlight.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {msg.highlight.map((name) => (
