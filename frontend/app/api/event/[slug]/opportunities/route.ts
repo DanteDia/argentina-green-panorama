@@ -69,13 +69,32 @@ async function callOpenRouter(model: string, messages: { role: string; content: 
 async function deepResearchCompany(companyUrl: string, companyName?: string): Promise<Record<string, unknown>> {
   const nameHint = companyName ? `"${companyName}"` : "the company";
 
+  // Step 0: Fetch the actual website to ground the research
+  let websiteContent = "";
+  try {
+    const siteRes = await fetch(companyUrl, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(8000) });
+    if (siteRes.ok) {
+      const html = await siteRes.text();
+      // Strip HTML tags, keep text content
+      websiteContent = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 3000);
+    }
+  } catch { /* timeout or error — proceed without */ }
+
+  const siteContext = websiteContent
+    ? `\n\nHere is the ACTUAL content from their website (${companyUrl}). Use this as ground truth — do NOT confuse this company with any other:\n---\n${websiteContent}\n---\n`
+    : "";
+
   // Query 1: Core identity & specialization
   const q1 = callOpenRouter(SONAR_MODEL, [{ role: "user", content:
-    `Research ${companyUrl} (${nameHint}) deeply. What makes this company UNIQUE?
-
-I need:
+    `Research ${companyUrl} (${nameHint}) deeply. What makes this company UNIQUE?${siteContext}
+Based on their ACTUAL website content above and your knowledge:
 1. Their CORE specialization (the specific niche, NOT generic like "web design" or "consulting")
-2. Specific projects or campaigns they've done (name real examples)
+2. Specific projects or campaigns they've done (name real examples from their portfolio)
 3. What technology/medium they specialize in (CGI, AI, blockchain, holograms, etc.)
 4. Their company size and stage
 
@@ -84,9 +103,9 @@ Return JSON: {"core_specialization": "specific niche", "notable_projects": ["pro
 
   // Query 2: Clients, partners, industry connections
   const q2 = callOpenRouter(SONAR_MODEL, [{ role: "user", content:
-    `Who has ${nameHint} (${companyUrl}) worked with? I need REAL company names.
-
-1. Known clients (companies that paid them for services)
+    `Who has ${nameHint} (${companyUrl}) worked with? I need REAL company names.${siteContext}
+Based on their website portfolio/clients page and your knowledge:
+1. Known clients (companies that paid them for services — look at their portfolio/case studies)
 2. Known partners (companies they collaborate with)
 3. Industry associations or events they participate in
 4. Any crypto/blockchain/Web3 connections
@@ -96,12 +115,11 @@ Return JSON: {"known_clients": ["Client1"], "known_partners": ["Partner1"], "eve
 
   // Query 3: Geography & market focus
   const q3 = callOpenRouter(SONAR_MODEL, [{ role: "user", content:
-    `Where does ${nameHint} (${companyUrl}) operate? What markets do they serve?
-
+    `Where does ${nameHint} (${companyUrl}) operate?${siteContext}
 1. Headquarters location
-2. Office locations
+2. Office locations (look for addresses on their website)
 3. Geographic markets they serve
-4. Target customer profile (who buys from them)
+4. Target customer profile
 
 Return JSON: {"headquarters": "city", "offices": ["city1"], "markets": ["market1"], "target_customers": "description"}`
   }], 0.1, 600);
