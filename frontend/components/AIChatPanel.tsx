@@ -65,10 +65,29 @@ interface AIChatPanelProps {
   lang: "es" | "en";
   onHighlightNodes?: (names: string[]) => void;
   onNodeSelect?: (name: string) => void;
+  /** Context determines suggestions — "green-panorama" (default) or event slug */
+  context?: string;
   // Optional: passed by EventMapShell but not used (chat has its own data source)
   nodes?: unknown[];
   edges?: unknown[];
 }
+
+const EVENT_SUGGESTIONS: Record<string, { en: string[]; es: string[] }> = {
+  "blockchainrio-2026": {
+    en: [
+      "Who are the main sponsors of BlockchainRio?",
+      "Which DeFi companies are attending?",
+      "What are the connections between exchanges?",
+      "Show me Brazilian blockchain companies",
+    ],
+    es: [
+      "Quienes son los principales sponsors de BlockchainRio?",
+      "Que empresas DeFi asisten?",
+      "Cuales son las conexiones entre exchanges?",
+      "Mostrame empresas brasileras de blockchain",
+    ],
+  },
+};
 
 const t = {
   es: {
@@ -97,13 +116,20 @@ const t = {
   },
 };
 
-export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AIChatPanelProps) {
+export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect, context }: AIChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const labels = t[lang];
+
+  // Use event-specific suggestions if context matches an event
+  const eventSuggestions = context ? EVENT_SUGGESTIONS[context]?.[lang] : null;
+  const suggestions = eventSuggestions || labels.suggestions;
+  const placeholder = context && EVENT_SUGGESTIONS[context]
+    ? (lang === "es" ? "Ej: Quienes son los sponsors principales?" : "E.g.: Who are the main sponsors?")
+    : labels.placeholder;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -187,7 +213,7 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
                 <p className="text-xs text-zinc-500 mb-3">
                   {lang === "es" ? "Prueba preguntar:" : "Try asking:"}
                 </p>
-                {labels.suggestions.map((s, i) => (
+                {suggestions.map((s, i) => (
                   <button
                     key={i}
                     onClick={() => sendMessage(s)}
@@ -245,7 +271,7 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect }: AI
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                placeholder={labels.placeholder}
+                placeholder={placeholder}
                 className="flex-1 bg-zinc-100 border border-zinc-600 rounded-lg px-3 py-2 text-sm text-[#1a1a1a] placeholder-zinc-500 focus:outline-none focus:border-green-500 transition"
               />
               <button

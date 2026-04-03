@@ -156,6 +156,7 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
         nodes={nodes}
         edges={edges}
         lang="en"
+        context={slug}
         onHighlightNodes={setHighlightedNodes}
       />
     </div>
