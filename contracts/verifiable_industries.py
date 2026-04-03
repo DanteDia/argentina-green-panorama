@@ -2,119 +2,50 @@
 
 from genlayer import *
 import json
-import re
 
 
-def extract_json(text: str) -> dict:
-    """Extract JSON from LLM response, handling markdown code blocks."""
-    if not text or not text.strip():
-        return {"error": "empty_response"}
-    try:
-        return json.loads(text)
-    except Exception:
-        pass
-    match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except Exception:
-            pass
-    match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(0))
-        except Exception:
-            pass
-    start = text.find('{')
-    end = text.rfind('}')
-    if start != -1 and end != -1 and end > start:
-        try:
-            return json.loads(text[start:end + 1])
-        except Exception:
-            pass
-    return {"error": "could_not_parse", "raw": text[:200]}
+# =========================================================================
+# Helpers — minimal, let GenLayer + LLMs do the heavy lifting
+# =========================================================================
 
-
-def fetch_page(url: str, max_chars: int = 2500) -> str:
+def render_page(url: str, max_chars: int = 4000) -> str:
+    """Render a web page with JavaScript execution. Captures dynamic content."""
     if not url:
         return "NO_URL"
     try:
-        response = gl.nondet.web.get(url)
-        return response.body.decode("utf-8")[:max_chars]
+        content = gl.nondet.web.render(url, mode='html')
+        return content[:max_chars] if isinstance(content, str) else content.decode("utf-8")[:max_chars]
     except Exception:
-        return "UNAVAILABLE"
+        return "[EXTERNAL] Page unavailable"
 
 
-def web_search(query: str, max_chars: int = 2500) -> str:
-    """Search using multiple engines — Bing primary, DuckDuckGo fallback."""
-    import urllib.parse
-    encoded = urllib.parse.quote(query)
-
-    # Try Bing first (most reliable for bots)
+def search_web(query: str, max_chars: int = 3000) -> str:
+    """Search via Bing (bot-friendly). Renders JS for full results."""
     try:
-        url = f"https://www.bing.com/search?q={encoded}"
-        response = gl.nondet.web.get(url)
-        content = response.body.decode("utf-8")[:max_chars]
-        if "results" in content.lower() or "href" in content.lower():
-            return content
+        import urllib.parse
+        url = f"https://www.bing.com/search?q={urllib.parse.quote(query)}"
+        content = gl.nondet.web.render(url, mode='html')
+        return content[:max_chars] if isinstance(content, str) else content.decode("utf-8")[:max_chars]
     except Exception:
-        pass
-
-    # Fallback: DuckDuckGo HTML
-    try:
-        url = f"https://html.duckduckgo.com/html/?q={encoded}"
-        response = gl.nondet.web.get(url)
-        content = response.body.decode("utf-8")[:max_chars]
-        if "anomaly" not in content.lower():
-            return content
-    except Exception:
-        pass
-
-    return "SEARCH_UNAVAILABLE"
-
-
-def fetch_page_smart(url: str, search_terms: list, max_chars: int = 3000) -> str:
-    """Fetch a page, but if it's too large and search terms not found,
-    try common subpages (/sponsors, /partners, /about)."""
-    if not url:
-        return "NO_URL"
-
-    content = fetch_page(url, max_chars)
-
-    # Check if any search term appears
-    content_lower = content.lower()
-    found = any(term.lower() in content_lower for term in search_terms)
-    if found or content == "UNAVAILABLE":
-        return content
-
-    # Content is likely truncated and misses what we need.
-    # Try common subpages where sponsors/partners are listed
-    base = url.rstrip("/")
-    for subpage in ["/sponsors", "/partners", "/patrocinadores", "/about", "/sobre"]:
-        try:
-            sub_content = fetch_page(f"{base}{subpage}", max_chars)
-            if sub_content != "UNAVAILABLE":
-                sub_lower = sub_content.lower()
-                if any(term.lower() in sub_lower for term in search_terms):
-                    return sub_content
-        except Exception:
-            continue
-
-    return content  # Return original if subpages didn't help
+        return "[EXTERNAL] Search unavailable"
 
 
 class VerifiableIndustries(gl.Contract):
     """
-    Anti-Hallucination Verification Layer v5.
+    Anti-Hallucination Verification Layer for Autonomous AI Research Agents.
+    v6 — Built with GenLayer best practices.
 
-    Uses prompt_comparative: every validator independently fetches web evidence
-    and runs their own LLM. 5 different LLMs cross-checking the same sources.
+    Architecture:
+    - 1 transaction = 1 claim (no batching)
+    - web.render() for JS-rendered pages (captures dynamic sponsors, portfolios)
+    - response_format="json" on all exec_prompt calls
+    - prompt_comparative: every validator independently fetches + reasons
+    - Consensus compares DECISIONS (booleans), not raw evidence
 
-    Design principle: 1 transaction = 1 claim. No batching.
-    Each data point gets its own independent consensus.
+    8 write methods: existence, description, sector, recency,
+    funding, relationship, social, hallucination detection.
     """
 
-    # Storage: each claim stored by composite key
     claim_results: TreeMap[str, str]
     verification_count: u256
 
@@ -122,381 +53,289 @@ class VerifiableIndustries(gl.Contract):
         self.verification_count = u256(0)
 
     # =========================================================================
-    # 1. VERIFY EXISTENCE — Does this entity actually exist?
+    # 1. VERIFY EXISTENCE
     # =========================================================================
 
     @gl.public.write
     def verify_existence(self, map_id: str, node_id: str, name: str, url: str) -> str:
-        """1 TX = 1 claim: Does this organization exist and is the URL real?"""
-
         def nondet() -> str:
-            site = fetch_page(url, 3000)
-            search = web_search(f'"{name}"', 2000)
-
-            task = f"""You are fact-checking whether an organization exists.
-
-CLAIM: "{name}" is a real organization with website {url}
+            site = render_page(url)
+            search = search_web(f'"{name}"')
+            result = gl.nondet.exec_prompt(
+                f"""Fact-check: does "{name}" exist as a real organization with website {url}?
 
 EVIDENCE:
-=== Website content ({url}) ===
+=== Rendered website ({url}) ===
 {site}
 
-=== Search results for "{name}" ===
+=== Bing search for "{name}" ===
 {search}
 
-CHECK:
+Determine:
 1. Does the website load and belong to "{name}"?
 2. Do search results confirm this organization exists?
-3. Could this be a different entity with a similar name?
+3. Could this be a DIFFERENT entity with a similar name?
 
-Respond ONLY as valid JSON:
-{{"verified": true/false, "confidence": "high"/"medium"/"low", "evidence": "max 80 words", "entity_confusion_risk": "none"/"low"/"medium"/"high"}}
-"""
-            result = gl.nondet.exec_prompt(task)
-            return json.dumps(extract_json(result), sort_keys=True)
+Return JSON: {{"verified": bool, "confidence": "high"/"medium"/"low", "evidence": "max 80 words", "entity_confusion_risk": "none"/"low"/"medium"/"high"}}""",
+                response_format="json",
+            )
+            return json.dumps(json.loads(result), sort_keys=True)
 
-        result_str = gl.eq_principle.prompt_comparative(
-            nondet,
-            principle="verified boolean must match. confidence must be within one step. entity_confusion_risk must match.",
-        )
-        key = f"{map_id}:{node_id}:existence"
-        self.claim_results[key] = result_str
+        r = gl.eq_principle.prompt_comparative(nondet, principle="verified boolean must match. confidence within one step. entity_confusion_risk must match.")
+        self.claim_results[f"{map_id}:{node_id}:existence"] = r
         self.verification_count = u256(int(self.verification_count) + 1)
-        return result_str
+        return r
 
     # =========================================================================
-    # 2. VERIFY DESCRIPTION — Is the description accurate?
+    # 2. VERIFY DESCRIPTION
     # =========================================================================
 
     @gl.public.write
     def verify_description(self, map_id: str, node_id: str, name: str, url: str, claimed_description: str) -> str:
-        """1 TX = 1 claim: Is this description factually accurate?"""
-
         def nondet() -> str:
-            site = fetch_page(url, 3000)
-
-            task = f"""You are checking if an AI-generated description is accurate or hallucinated.
+            site = render_page(url)
+            result = gl.nondet.exec_prompt(
+                f"""BE ADVERSARIAL. Check if this AI-generated description is accurate or hallucinated.
 
 ENTITY: {name} ({url})
-CLAIMED DESCRIPTION: "{claimed_description}"
+CLAIMED: "{claimed_description}"
 
-EVIDENCE:
-=== Website content ===
+=== Rendered website ===
 {site}
 
-BE ADVERSARIAL. Look for:
-- Does the website actually say what the description claims?
-- Are there buzzwords in the description NOT found on the website?
-- Is this a generic description that could apply to any company?
-- Could the AI have confused this with a different company?
+Red flags:
+- Buzzwords NOT on the actual website
+- Generic description fitting any company
+- Entity confusion with a different company
 
-Respond ONLY as valid JSON:
-{{"verified": true/false, "confidence": "high"/"medium"/"low", "evidence": "max 80 words", "hallucination_risk": "none"/"low"/"medium"/"high", "suggested_correction": null or "corrected description if wrong"}}
-"""
-            result = gl.nondet.exec_prompt(task)
-            return json.dumps(extract_json(result), sort_keys=True)
+Return JSON: {{"verified": bool, "confidence": "high"/"medium"/"low", "evidence": "max 80 words", "hallucination_risk": "none"/"low"/"medium"/"high", "suggested_correction": null or "corrected text"}}""",
+                response_format="json",
+            )
+            return json.dumps(json.loads(result), sort_keys=True)
 
-        result_str = gl.eq_principle.prompt_comparative(
-            nondet,
-            principle="verified boolean must match. hallucination_risk must match. If suggested_correction is provided by both, core meaning must align.",
-        )
-        key = f"{map_id}:{node_id}:description"
-        self.claim_results[key] = result_str
+        r = gl.eq_principle.prompt_comparative(nondet, principle="verified boolean must match. hallucination_risk must match.")
+        self.claim_results[f"{map_id}:{node_id}:description"] = r
         self.verification_count = u256(int(self.verification_count) + 1)
-        return result_str
+        return r
 
     # =========================================================================
-    # 3. VERIFY SECTOR — Does this entity belong to the claimed sector?
+    # 3. VERIFY SECTOR
     # =========================================================================
 
     @gl.public.write
     def verify_sector(self, map_id: str, node_id: str, name: str, url: str, claimed_sector: str, claimed_category: str) -> str:
-        """1 TX = 1 claim: Is this entity in the claimed industry sector?"""
-
         def nondet() -> str:
-            site = fetch_page(url, 2500)
-            search = web_search(f"{name} {claimed_sector}", 2000)
+            site = render_page(url)
+            search = search_web(f"{name} {claimed_sector}")
+            result = gl.nondet.exec_prompt(
+                f"""Does {name}'s CORE business belong to the {claimed_sector} sector?
 
-            task = f"""You are checking if an entity belongs to a specific industry sector.
-
-ENTITY: {name} ({url})
 CLAIMED SECTOR: {claimed_sector}
 CLAIMED CATEGORY: {claimed_category}
 
-EVIDENCE:
-=== Website ===
+=== Rendered website ({url}) ===
 {site}
 
-=== Search "{name} {claimed_sector}" ===
+=== Bing search ===
 {search}
 
-BE SKEPTICAL. A tech company is not "green/environmental" just because it has a sustainability page.
-Only confirm if the entity's CORE business is in the claimed sector.
+BE SKEPTICAL. A tech company with a sustainability page is NOT "green/environmental".
+Only confirm if the core business is in the claimed sector.
 
-Respond ONLY as valid JSON:
-{{"verified": true/false, "confidence": "high"/"medium"/"low", "evidence": "max 80 words", "suggested_sector": null or "correct sector", "suggested_category": null or "correct category"}}
-"""
-            result = gl.nondet.exec_prompt(task)
-            return json.dumps(extract_json(result), sort_keys=True)
+Return JSON: {{"verified": bool, "confidence": "high"/"medium"/"low", "evidence": "max 80 words", "suggested_sector": null or "correct sector", "suggested_category": null or "correct category"}}""",
+                response_format="json",
+            )
+            return json.dumps(json.loads(result), sort_keys=True)
 
-        result_str = gl.eq_principle.prompt_comparative(
-            nondet,
-            principle="verified boolean must match. If both suggest a different sector, suggestions must align.",
-        )
-        key = f"{map_id}:{node_id}:sector"
-        self.claim_results[key] = result_str
+        r = gl.eq_principle.prompt_comparative(nondet, principle="verified boolean must match. If both suggest different sector, suggestions must align.")
+        self.claim_results[f"{map_id}:{node_id}:sector"] = r
         self.verification_count = u256(int(self.verification_count) + 1)
-        return result_str
+        return r
 
     # =========================================================================
-    # 4. VERIFY RECENCY — Is this entity still active?
+    # 4. VERIFY RECENCY
     # =========================================================================
 
     @gl.public.write
     def verify_recency(self, map_id: str, node_id: str, name: str, url: str, country: str) -> str:
-        """1 TX = 1 claim: Is this entity still active and operating?"""
-
         def nondet() -> str:
-            site = fetch_page(url, 2500)
-            search = web_search(f"{name} {country} 2025 OR 2026", 2000)
+            site = render_page(url)
+            search = search_web(f"{name} {country} 2025 OR 2026")
+            result = gl.nondet.exec_prompt(
+                f"""Is {name} still active and operating in {country} as of 2025-2026?
 
-            task = f"""Check if this organization is still active in 2025-2026.
-
-ENTITY: {name} ({url}) in {country}
-
-EVIDENCE:
-=== Website ===
+=== Rendered website ({url}) ===
 {site}
 
-=== Search for recent activity ===
+=== Bing search for recent activity ===
 {search}
 
-Look for:
-- Dates on the website (copyright year, blog posts, news)
-- Recent search results mentioning this entity
-- Signs of abandonment (broken pages, outdated content)
+Look for: copyright year, recent blog posts, recent news, or signs of abandonment.
 
-Respond ONLY as valid JSON:
-{{"verified": true/false, "confidence": "high"/"medium"/"low", "last_activity_evidence": "what date/evidence found", "geography_confirmed": true/false}}
-"""
-            result = gl.nondet.exec_prompt(task)
-            return json.dumps(extract_json(result), sort_keys=True)
+Return JSON: {{"verified": bool, "confidence": "high"/"medium"/"low", "last_activity_evidence": "date or evidence found", "geography_confirmed": bool}}""",
+                response_format="json",
+            )
+            return json.dumps(json.loads(result), sort_keys=True)
 
-        result_str = gl.eq_principle.prompt_comparative(
-            nondet,
-            principle="verified and geography_confirmed booleans must match. confidence within one step.",
-        )
-        key = f"{map_id}:{node_id}:recency"
-        self.claim_results[key] = result_str
+        r = gl.eq_principle.prompt_comparative(nondet, principle="verified and geography_confirmed booleans must match. confidence within one step.")
+        self.claim_results[f"{map_id}:{node_id}:recency"] = r
         self.verification_count = u256(int(self.verification_count) + 1)
-        return result_str
+        return r
 
     # =========================================================================
-    # 5. VERIFY FUNDING — Does investor A actually fund company B?
+    # 5. VERIFY FUNDING — High stakes, checks BOTH sides
     # =========================================================================
 
     @gl.public.write
     def verify_funding(self, map_id: str, claim_id: str, investor_name: str, investor_url: str, company_name: str, company_url: str) -> str:
-        """1 TX = 1 claim: Does this funding relationship exist? Checks BOTH sides."""
-
         def nondet() -> str:
-            investor_site = fetch_page_smart(investor_url, [company_name, "portfolio", "investments"], 2500)
-            company_site = fetch_page_smart(company_url, [investor_name, "backed", "investors", "funded"], 2500)
-            search = web_search(f'"{investor_name}" "{company_name}" investment OR funding OR portfolio', 2500)
-
-            task = f"""HIGH-STAKES financial verification. Being wrong misleads investors.
+            investor_site = render_page(investor_url)
+            company_site = render_page(company_url)
+            search = search_web(f'"{investor_name}" "{company_name}" investment OR funding')
+            result = gl.nondet.exec_prompt(
+                f"""HIGH-STAKES financial verification.
 
 CLAIM: "{investor_name}" funds/invested in "{company_name}"
 
-EVIDENCE:
-=== Investor website ({investor_url}) ===
+=== Investor website ({investor_url}) — rendered with JS ===
 {investor_site}
 
-=== Company website ({company_url}) ===
+=== Company website ({company_url}) — rendered with JS ===
 {company_site}
 
-=== Search for "{investor_name}" + "{company_name}" ===
+=== Bing search ===
 {search}
 
-CROSS-REFERENCE (both sides must confirm):
-1. Does {investor_name}'s website/portfolio LIST {company_name}?
-2. Does {company_name}'s website mention {investor_name} as backer/investor?
-3. Do independent news sources confirm this?
+Cross-reference BOTH sides:
+1. Does investor's website/portfolio list the company?
+2. Does company's website mention the investor as backer?
+3. Do independent news sources confirm?
 
 REQUIRE 2+ sources for "high" confidence. One-sided = "medium" max.
 
-Respond ONLY as valid JSON:
-{{"verified": true/false, "investor_lists_company": true/false, "company_lists_investor": true/false, "news_confirms": true/false, "sources_confirming": 0-3, "confidence": "high"/"medium"/"low", "evidence": "max 80 words", "hallucination_risk": "none"/"low"/"medium"/"high"}}
-"""
-            result = gl.nondet.exec_prompt(task)
-            return json.dumps(extract_json(result), sort_keys=True)
+Return JSON: {{"verified": bool, "investor_lists_company": bool, "company_lists_investor": bool, "news_confirms": bool, "sources_confirming": int, "confidence": "high"/"medium"/"low", "evidence": "max 80 words", "hallucination_risk": "none"/"low"/"medium"/"high"}}""",
+                response_format="json",
+            )
+            return json.dumps(json.loads(result), sort_keys=True)
 
-        result_str = gl.eq_principle.prompt_comparative(
-            nondet,
-            principle="verified, investor_lists_company, company_lists_investor, news_confirms booleans must all match. sources_confirming within 1. hallucination_risk must match.",
-        )
-        key = f"{map_id}:{claim_id}:funding"
-        self.claim_results[key] = result_str
+        r = gl.eq_principle.prompt_comparative(nondet, principle="verified, investor_lists_company, company_lists_investor, news_confirms booleans must all match. sources_confirming within 1. hallucination_risk must match.")
+        self.claim_results[f"{map_id}:{claim_id}:funding"] = r
         self.verification_count = u256(int(self.verification_count) + 1)
-        return result_str
+        return r
 
     # =========================================================================
-    # 6. VERIFY RELATIONSHIP — Does this connection exist and what type?
+    # 6. VERIFY RELATIONSHIP — Conflict detection
     # =========================================================================
 
     @gl.public.write
     def verify_relationship(self, map_id: str, edge_id: str, entity_a: str, url_a: str, entity_b: str, url_b: str, claimed_type: str) -> str:
-        """1 TX = 1 relationship. Checks both sides for conflict detection."""
-
         def nondet() -> str:
-            site_a = fetch_page_smart(url_a, [entity_b], 2500)
-            site_b = fetch_page_smart(url_b, [entity_a], 2500)
-            search = web_search(f'"{entity_a}" "{entity_b}"', 2500)
+            site_a = render_page(url_a)
+            site_b = render_page(url_b)
+            search = search_web(f'"{entity_a}" "{entity_b}"')
+            result = gl.nondet.exec_prompt(
+                f"""Verify: {entity_a} has a "{claimed_type}" relationship with {entity_b}.
 
-            task = f"""Verify a claimed relationship between two entities.
+Types: "funds" (A invests in B), "partners_with" (allies), "client_of" (B is A's customer),
+"portfolio" (B in A's accelerator), "regulates" (A regulates B), "sponsors" (A sponsors B),
+"competes_with" (competitors)
 
-CLAIM: {entity_a} has a "{claimed_type}" relationship with {entity_b}
-
-Relationship types:
-- "funds": A provides money/investment to B
-- "partners_with": A and B collaborate as allies
-- "client_of": B is a client/customer of A
-- "portfolio": B is in A's accelerator/portfolio
-- "regulates": A has regulatory authority over B
-- "sponsors": A sponsors B
-- "competes_with": A and B are competitors
-
-EVIDENCE:
-=== {entity_a} website ({url_a}) ===
+=== {entity_a} website ({url_a}) — rendered with JS ===
 {site_a}
 
-=== {entity_b} website ({url_b}) ===
+=== {entity_b} website ({url_b}) — rendered with JS ===
 {site_b}
 
-=== Search "{entity_a}" + "{entity_b}" ===
+=== Bing search "{entity_a}" + "{entity_b}" ===
 {search}
 
-CONFLICT DETECTION:
-- Does A mention B? Does B mention A? If only one side → flag it.
-- Is the TYPE correct? "partner" vs "client" vs "investor" matters.
+CONFLICT DETECTION: Does A mention B? Does B mention A? One-sided = flag it.
+Is the TYPE correct? "partner" vs "client" vs "sponsor" matters.
 
-Respond ONLY as valid JSON:
-{{"verified": true/false, "type_accurate": true/false, "suggested_type": "{claimed_type}" or corrected type, "a_mentions_b": true/false, "b_mentions_a": true/false, "conflict_detected": null or "description of conflict", "confidence": "high"/"medium"/"low", "evidence": "max 80 words"}}
-"""
-            result = gl.nondet.exec_prompt(task)
-            return json.dumps(extract_json(result), sort_keys=True)
+Return JSON: {{"verified": bool, "type_accurate": bool, "suggested_type": "the correct type", "a_mentions_b": bool, "b_mentions_a": bool, "conflict_detected": null or "describe", "confidence": "high"/"medium"/"low", "evidence": "max 80 words"}}""",
+                response_format="json",
+            )
+            return json.dumps(json.loads(result), sort_keys=True)
 
-        result_str = gl.eq_principle.prompt_comparative(
-            nondet,
-            principle="verified and type_accurate booleans must match. suggested_type must match. a_mentions_b and b_mentions_a must match. If conflict_detected, both must flag a conflict.",
-        )
-        key = f"{map_id}:{edge_id}:relationship"
-        self.claim_results[key] = result_str
+        r = gl.eq_principle.prompt_comparative(nondet, principle="verified and type_accurate booleans must match. suggested_type must match. a_mentions_b and b_mentions_a must match.")
+        self.claim_results[f"{map_id}:{edge_id}:relationship"] = r
         self.verification_count = u256(int(self.verification_count) + 1)
-        return result_str
+        return r
 
     # =========================================================================
-    # 7. VERIFY SOCIAL — Is this social profile real and active?
+    # 7. VERIFY SOCIAL — Per-platform profile check
     # =========================================================================
 
     @gl.public.write
     def verify_social(self, map_id: str, node_id: str, name: str, platform: str, social_url: str, claimed_followers: str) -> str:
-        """1 TX = 1 social profile. Independently verified by all validators."""
-
         def nondet() -> str:
-            content = fetch_page(social_url, 3000)
+            content = render_page(social_url)
+            result = gl.nondet.exec_prompt(
+                f"""Verify this {platform} profile belongs to {name} and is authentic.
 
-            task = f"""Verify a social media profile belongs to an entity and is authentic.
-
-ENTITY: {name}
-PLATFORM: {platform}
-PROFILE URL: {social_url}
+PROFILE: {social_url}
 CLAIMED FOLLOWERS: {claimed_followers}
 
-EVIDENCE:
-=== Profile page content ===
+=== Rendered profile page ===
 {content}
 
-CHECK:
-1. Does this URL load a real {platform} profile?
-2. Does the profile name/bio match "{name}"?
-3. Is this a real account (not impersonator/fake)?
-4. What's the visible follower count?
-5. Does follower count roughly match "{claimed_followers}"?
-6. Is the account active (recent posts)?
+Check: real profile? matches "{name}"? authentic (not fake)? follower count matches? active?
 
-Respond ONLY as valid JSON:
-{{"verified": true/false, "belongs_to_entity": true/false, "is_authentic": true/false, "estimated_followers": "count as string", "follower_match": true/false, "activity_level": "active"/"dormant"/"dead", "confidence": "high"/"medium"/"low"}}
-"""
-            result = gl.nondet.exec_prompt(task)
-            return json.dumps(extract_json(result), sort_keys=True)
+Return JSON: {{"verified": bool, "belongs_to_entity": bool, "is_authentic": bool, "estimated_followers": "count as string", "follower_match": bool, "activity_level": "active"/"dormant"/"dead", "confidence": "high"/"medium"/"low"}}""",
+                response_format="json",
+            )
+            return json.dumps(json.loads(result), sort_keys=True)
 
-        result_str = gl.eq_principle.prompt_comparative(
-            nondet,
-            principle="verified, belongs_to_entity, is_authentic, follower_match booleans must match. activity_level must match. estimated_followers must be in same order of magnitude.",
-        )
-        key = f"{map_id}:{node_id}:social:{platform}"
-        self.claim_results[key] = result_str
+        r = gl.eq_principle.prompt_comparative(nondet, principle="verified, belongs_to_entity, is_authentic, follower_match booleans must match. activity_level must match.")
+        self.claim_results[f"{map_id}:{node_id}:social:{platform}"] = r
         self.verification_count = u256(int(self.verification_count) + 1)
-        return result_str
+        return r
 
     # =========================================================================
-    # 8. DETECT HALLUCINATION — Adversarial check on full agent output
+    # 8. DETECT HALLUCINATION — Adversarial agent output scan
     # =========================================================================
 
     @gl.public.write
     def detect_hallucination(self, map_id: str, node_id: str, name: str, url: str, agent_output: str) -> str:
-        """Adversarial scan of AI agent output. Hunts for what's WRONG."""
-
         def nondet() -> str:
-            site = fetch_page(url, 3000)
-            search = web_search(f'"{name}"', 2000)
-
+            site = render_page(url)
+            search = search_web(f'"{name}"')
             agent_data = json.loads(agent_output)
             funding = agent_data.get("quien_fondea", "")
-            funding_search = web_search(f"{name} funding {funding}", 2000) if funding else ""
-
-            task = f"""You are a SKEPTICAL investigator. Find what's WRONG with this AI-generated data.
-Do NOT confirm things. CHALLENGE every claim.
+            funding_search = search_web(f"{name} funding {funding}") if funding else ""
+            result = gl.nondet.exec_prompt(
+                f"""You are a SKEPTICAL investigator. Find what's WRONG. Do NOT confirm — CHALLENGE every claim.
 
 ENTITY: {name}
 AI-GENERATED DATA:
 {agent_output}
 
-REAL EVIDENCE:
-=== Website ({url}) ===
+=== Rendered website ({url}) ===
 {site}
 
-=== Search "{name}" ===
+=== Bing search "{name}" ===
 {search}
 
 === Funding search ===
 {funding_search}
 
-For each field, ask: "Can I find INDEPENDENT evidence for this claim?"
-If not → flag as potential hallucination.
+For each field: can you find INDEPENDENT evidence? If not → flag as hallucination.
 
-Respond ONLY as valid JSON:
-{{"hallucinations": [{{"field": "field_name", "claim": "the suspect claim", "severity": "critical"/"major"/"minor", "reason": "why suspect"}}], "confirmed_fields": ["list"], "overall_reliability": "reliable"/"mixed"/"unreliable"}}
-"""
-            result = gl.nondet.exec_prompt(task)
-            return json.dumps(extract_json(result), sort_keys=True)
+Return JSON: {{"hallucinations": [{{"field": "name", "claim": "suspect claim", "severity": "critical"/"major"/"minor", "reason": "why suspect"}}], "confirmed_fields": ["list"], "overall_reliability": "reliable"/"mixed"/"unreliable"}}""",
+                response_format="json",
+            )
+            return json.dumps(json.loads(result), sort_keys=True)
 
-        result_str = gl.eq_principle.prompt_comparative(
-            nondet,
-            principle="Hallucinations found must flag the same fields. overall_reliability must match. confirmed_fields must overlap by 70%+.",
-        )
-        key = f"{map_id}:{node_id}:hallucination"
-        self.claim_results[key] = result_str
-        return result_str
+        r = gl.eq_principle.prompt_comparative(nondet, principle="Hallucinations must flag same fields. overall_reliability must match. confirmed_fields must overlap by 70%+.")
+        self.claim_results[f"{map_id}:{node_id}:hallucination"] = r
+        return r
 
     # =========================================================================
-    # READ METHODS — retrieve any verification result
+    # READ METHODS
     # =========================================================================
 
     @gl.public.view
     def get_claim(self, map_id: str, claim_key: str) -> str:
-        """Generic reader. claim_key examples: 'node123:existence', 'edge456:relationship', 'node123:social:twitter'"""
         key = f"{map_id}:{claim_key}"
         if key in self.claim_results:
             return self.claim_results[key]
@@ -504,7 +343,6 @@ Respond ONLY as valid JSON:
 
     @gl.public.view
     def get_node_verification(self, map_id: str, node_id: str) -> str:
-        """Get all claim results for a node (existence, description, sector, recency)."""
         results = {}
         for suffix in ["existence", "description", "sector", "recency", "hallucination"]:
             key = f"{map_id}:{node_id}:{suffix}"
