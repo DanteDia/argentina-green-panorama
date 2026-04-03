@@ -45,14 +45,62 @@ def fetch_page(url: str, max_chars: int = 2500) -> str:
         return "UNAVAILABLE"
 
 
-def search_ddg(query: str, max_chars: int = 2500) -> str:
+def web_search(query: str, max_chars: int = 2500) -> str:
+    """Search using multiple engines — Bing primary, DuckDuckGo fallback."""
+    import urllib.parse
+    encoded = urllib.parse.quote(query)
+
+    # Try Bing first (most reliable for bots)
     try:
-        import urllib.parse
-        url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+        url = f"https://www.bing.com/search?q={encoded}"
         response = gl.nondet.web.get(url)
-        return response.body.decode("utf-8")[:max_chars]
+        content = response.body.decode("utf-8")[:max_chars]
+        if "results" in content.lower() or "href" in content.lower():
+            return content
     except Exception:
-        return "SEARCH_UNAVAILABLE"
+        pass
+
+    # Fallback: DuckDuckGo HTML
+    try:
+        url = f"https://html.duckduckgo.com/html/?q={encoded}"
+        response = gl.nondet.web.get(url)
+        content = response.body.decode("utf-8")[:max_chars]
+        if "anomaly" not in content.lower():
+            return content
+    except Exception:
+        pass
+
+    return "SEARCH_UNAVAILABLE"
+
+
+def fetch_page_smart(url: str, search_terms: list, max_chars: int = 3000) -> str:
+    """Fetch a page, but if it's too large and search terms not found,
+    try common subpages (/sponsors, /partners, /about)."""
+    if not url:
+        return "NO_URL"
+
+    content = fetch_page(url, max_chars)
+
+    # Check if any search term appears
+    content_lower = content.lower()
+    found = any(term.lower() in content_lower for term in search_terms)
+    if found or content == "UNAVAILABLE":
+        return content
+
+    # Content is likely truncated and misses what we need.
+    # Try common subpages where sponsors/partners are listed
+    base = url.rstrip("/")
+    for subpage in ["/sponsors", "/partners", "/patrocinadores", "/about", "/sobre"]:
+        try:
+            sub_content = fetch_page(f"{base}{subpage}", max_chars)
+            if sub_content != "UNAVAILABLE":
+                sub_lower = sub_content.lower()
+                if any(term.lower() in sub_lower for term in search_terms):
+                    return sub_content
+        except Exception:
+            continue
+
+    return content  # Return original if subpages didn't help
 
 
 class VerifiableIndustries(gl.Contract):
@@ -83,7 +131,7 @@ class VerifiableIndustries(gl.Contract):
 
         def nondet() -> str:
             site = fetch_page(url, 3000)
-            search = search_ddg(f'"{name}"', 2000)
+            search = web_search(f'"{name}"', 2000)
 
             task = f"""You are fact-checking whether an organization exists.
 
@@ -167,7 +215,7 @@ Respond ONLY as valid JSON:
 
         def nondet() -> str:
             site = fetch_page(url, 2500)
-            search = search_ddg(f"{name} {claimed_sector}", 2000)
+            search = web_search(f"{name} {claimed_sector}", 2000)
 
             task = f"""You are checking if an entity belongs to a specific industry sector.
 
@@ -210,7 +258,7 @@ Respond ONLY as valid JSON:
 
         def nondet() -> str:
             site = fetch_page(url, 2500)
-            search = search_ddg(f"{name} {country} 2025 OR 2026", 2000)
+            search = web_search(f"{name} {country} 2025 OR 2026", 2000)
 
             task = f"""Check if this organization is still active in 2025-2026.
 
@@ -252,9 +300,9 @@ Respond ONLY as valid JSON:
         """1 TX = 1 claim: Does this funding relationship exist? Checks BOTH sides."""
 
         def nondet() -> str:
-            investor_site = fetch_page(investor_url, 2500)
-            company_site = fetch_page(company_url, 2500)
-            search = search_ddg(f'"{investor_name}" "{company_name}" investment OR funding OR portfolio', 2500)
+            investor_site = fetch_page_smart(investor_url, [company_name, "portfolio", "investments"], 2500)
+            company_site = fetch_page_smart(company_url, [investor_name, "backed", "investors", "funded"], 2500)
+            search = web_search(f'"{investor_name}" "{company_name}" investment OR funding OR portfolio', 2500)
 
             task = f"""HIGH-STAKES financial verification. Being wrong misleads investors.
 
@@ -301,9 +349,9 @@ Respond ONLY as valid JSON:
         """1 TX = 1 relationship. Checks both sides for conflict detection."""
 
         def nondet() -> str:
-            site_a = fetch_page(url_a, 2000)
-            site_b = fetch_page(url_b, 2000)
-            search = search_ddg(f'"{entity_a}" "{entity_b}"', 2500)
+            site_a = fetch_page_smart(url_a, [entity_b], 2500)
+            site_b = fetch_page_smart(url_b, [entity_a], 2500)
+            search = web_search(f'"{entity_a}" "{entity_b}"', 2500)
 
             task = f"""Verify a claimed relationship between two entities.
 
@@ -402,11 +450,11 @@ Respond ONLY as valid JSON:
 
         def nondet() -> str:
             site = fetch_page(url, 3000)
-            search = search_ddg(f'"{name}"', 2000)
+            search = web_search(f'"{name}"', 2000)
 
             agent_data = json.loads(agent_output)
             funding = agent_data.get("quien_fondea", "")
-            funding_search = search_ddg(f"{name} funding {funding}", 2000) if funding else ""
+            funding_search = web_search(f"{name} funding {funding}", 2000) if funding else ""
 
             task = f"""You are a SKEPTICAL investigator. Find what's WRONG with this AI-generated data.
 Do NOT confirm things. CHALLENGE every claim.
