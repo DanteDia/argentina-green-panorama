@@ -71,7 +71,7 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0f1a] flex items-center justify-center">
+      <div className="h-screen bg-[#0a0f1a] flex items-center justify-center">
         <div className="text-center">
           <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-white/60 text-sm">Loading {eventName} map...</p>
@@ -81,84 +81,88 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0f1a] relative overflow-hidden">
+    <div className="h-screen bg-[#0a0f1a] flex flex-col overflow-hidden">
+      {/* Fixed header */}
       <EventHeader
         eventName={eventName}
         eventDates={eventDates}
         eventLocation={eventLocation}
       />
 
-      {/* Sidebar */}
-      <div className="pt-12">
-        <FilterSidebar
-          clusters={clusters}
-          selectedCluster={selectedCluster}
-          onClusterSelect={setSelectedCluster}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          nodeCount={nodes.length}
-          edgeCount={edges.length}
-          verifiedCount={verifiedCount}
-          lang="en"
-          onLangToggle={() => {}}
-          nodes={nodes}
-          onSearchSelect={handleNodeClick}
-          activeEdgeTypes={activeEdgeTypes}
-          onToggleEdgeType={handleToggleEdgeType}
-          title={eventName}
-          subtitle={`${eventLocation} | ${eventDates}`}
-          clusterColors={BLOCKCHAIN_CLUSTER_COLORS}
-          edgeColors={EVENT_EDGE_COLORS}
-          edgeLabelsOverride={EVENT_EDGE_LABELS}
-          hideActivityFeed={true}
-        />
+      {/* Main content — fills remaining viewport height */}
+      <div className="flex-1 relative overflow-hidden">
+        {/* Sidebar — fixed height, scrollable */}
+        <div className="absolute left-0 top-0 bottom-0 w-72 z-40">
+          <FilterSidebar
+            clusters={clusters}
+            selectedCluster={selectedCluster}
+            onClusterSelect={setSelectedCluster}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            nodeCount={nodes.length}
+            edgeCount={edges.length}
+            verifiedCount={verifiedCount}
+            lang="en"
+            onLangToggle={() => {}}
+            nodes={nodes}
+            onSearchSelect={handleNodeClick}
+            activeEdgeTypes={activeEdgeTypes}
+            onToggleEdgeType={handleToggleEdgeType}
+            title={eventName}
+            subtitle={`${eventLocation} | ${eventDates}`}
+            clusterColors={BLOCKCHAIN_CLUSTER_COLORS}
+            edgeColors={EVENT_EDGE_COLORS}
+            edgeLabelsOverride={EVENT_EDGE_LABELS}
+            hideActivityFeed={true}
+          />
+        </div>
+
+        {/* Graph — fills remaining width */}
+        <div className="absolute left-72 top-0 right-0 bottom-0">
+          <GraphCanvas
+            nodes={nodes}
+            edges={edges}
+            selectedCluster={selectedCluster}
+            searchQuery={searchQuery}
+            onNodeClick={handleNodeClick}
+            verificationStates={verificationStates}
+            highlightedNodes={highlightedNodes}
+            activeEdgeTypes={activeEdgeTypes}
+            clusterColors={BLOCKCHAIN_CLUSTER_COLORS}
+            edgeColors={EVENT_EDGE_COLORS}
+            darkMode={true}
+          />
+        </div>
+
+        {/* Node Detail Panel — right side overlay */}
+        {selectedNode && (
+          <NodeDetailPanel
+            node={selectedNode}
+            edges={edges}
+            allNodes={nodes}
+            onClose={() => setSelectedNode(null)}
+            onNodeNavigate={handleNodeNavigate}
+            lang="en"
+            verificationState={verificationStates[selectedNode.id]}
+          />
+        )}
+
+        {/* Floating buttons — fixed to bottom-right of the content area */}
+        <div className="absolute bottom-0 right-0 z-50">
+          <OpportunityPanel
+            slug={slug}
+            onHighlightNode={handleHighlightNode}
+            onHighlightNodes={setHighlightedNodes}
+          />
+          <AIChatPanel
+            nodes={nodes}
+            edges={edges}
+            lang="en"
+            context={slug}
+            onHighlightNodes={setHighlightedNodes}
+          />
+        </div>
       </div>
-
-      {/* Graph */}
-      <div className="ml-[304px] pt-12">
-        <GraphCanvas
-          nodes={nodes}
-          edges={edges}
-          selectedCluster={selectedCluster}
-          searchQuery={searchQuery}
-          onNodeClick={handleNodeClick}
-          verificationStates={verificationStates}
-          highlightedNodes={highlightedNodes}
-          activeEdgeTypes={activeEdgeTypes}
-          clusterColors={BLOCKCHAIN_CLUSTER_COLORS}
-          edgeColors={EVENT_EDGE_COLORS}
-          darkMode={true}
-        />
-      </div>
-
-      {/* Node Detail Panel */}
-      {selectedNode && (
-        <NodeDetailPanel
-          node={selectedNode}
-          edges={edges}
-          allNodes={nodes}
-          onClose={() => setSelectedNode(null)}
-          onNodeNavigate={handleNodeNavigate}
-          lang="en"
-          verificationState={verificationStates[selectedNode.id]}
-        />
-      )}
-
-      {/* Opportunity Matcher */}
-      <OpportunityPanel
-        slug={slug}
-        onHighlightNode={handleHighlightNode}
-        onHighlightNodes={setHighlightedNodes}
-      />
-
-      {/* AI Chat */}
-      <AIChatPanel
-        nodes={nodes}
-        edges={edges}
-        lang="en"
-        context={slug}
-        onHighlightNodes={setHighlightedNodes}
-      />
     </div>
   );
 }
