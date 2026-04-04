@@ -194,8 +194,8 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect, cont
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className={`absolute z-50 bg-[#1a6b4a] hover:bg-[#155a3e] text-[#1a1a1a] rounded-full flex items-center justify-center shadow-lg shadow-[#1a6b4a]/30 transition-all hover:scale-105 ${
-            isMobile ? "bottom-4 right-4 w-12 h-12" : "bottom-6 right-6 w-14 h-14"
+          className={`z-50 bg-[#1a6b4a] hover:bg-[#155a3e] text-[#1a1a1a] rounded-full flex items-center justify-center shadow-lg shadow-[#1a6b4a]/30 transition-all hover:scale-105 ${
+            isMobile ? "fixed bottom-4 right-4 w-12 h-12" : "absolute bottom-6 right-6 w-14 h-14"
           }`}
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -206,10 +206,10 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect, cont
 
       {/* Chat panel */}
       {isOpen && (
-        <div className={`absolute z-50 bg-[#faf8f5]/95 backdrop-blur-md border border-[#ddd8ce] shadow-2xl flex flex-col overflow-hidden ${
+        <div className={`z-50 bg-[#faf8f5]/95 backdrop-blur-md border border-[#ddd8ce] shadow-2xl flex flex-col overflow-hidden ${
           isMobile
-            ? "bottom-0 right-0 left-0 max-h-[85vh] rounded-t-2xl"
-            : "bottom-6 right-6 w-96 max-h-[500px] rounded-2xl"
+            ? "fixed bottom-0 right-0 left-0 max-h-[85vh] rounded-t-2xl"
+            : "absolute bottom-6 right-6 w-96 max-h-[500px] rounded-2xl"
         }`}>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#ddd8ce] bg-zinc-100/50">

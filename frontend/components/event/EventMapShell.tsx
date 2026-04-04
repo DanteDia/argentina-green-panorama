@@ -174,23 +174,40 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
           />
         )}
 
-        {/* Floating buttons — fixed to bottom-right of the content area */}
-        <div className="absolute bottom-0 right-0 z-50">
-          <OpportunityPanel
-            slug={slug}
-            onHighlightNode={handleHighlightNode}
-            onHighlightNodes={setHighlightedNodes}
-            isMobile={isMobile}
-          />
-          <AIChatPanel
-            nodes={nodes}
-            edges={edges}
-            lang="en"
-            context={slug}
-            onHighlightNodes={setHighlightedNodes}
-            isMobile={isMobile}
-          />
-        </div>
+        {/* Floating panels — bottom-right wrapper on desktop, direct children on mobile */}
+        {isMobile ? (
+          <>
+            <OpportunityPanel
+              slug={slug}
+              onHighlightNode={handleHighlightNode}
+              onHighlightNodes={setHighlightedNodes}
+              isMobile={isMobile}
+            />
+            <AIChatPanel
+              nodes={nodes}
+              edges={edges}
+              lang="en"
+              context={slug}
+              onHighlightNodes={setHighlightedNodes}
+              isMobile={isMobile}
+            />
+          </>
+        ) : (
+          <div className="absolute bottom-0 right-0 z-50">
+            <OpportunityPanel
+              slug={slug}
+              onHighlightNode={handleHighlightNode}
+              onHighlightNodes={setHighlightedNodes}
+            />
+            <AIChatPanel
+              nodes={nodes}
+              edges={edges}
+              lang="en"
+              context={slug}
+              onHighlightNodes={setHighlightedNodes}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

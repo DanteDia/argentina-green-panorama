@@ -129,8 +129,8 @@ export default function OpportunityPanel({
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className={`absolute z-50 bg-cyan-600 hover:bg-cyan-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-cyan-600/30 transition-all hover:scale-105 ${
-            isMobile ? "bottom-4 right-[4.5rem] w-12 h-12" : "bottom-6 right-24 w-14 h-14"
+          className={`z-50 bg-cyan-600 hover:bg-cyan-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-cyan-600/30 transition-all hover:scale-105 ${
+            isMobile ? "fixed bottom-4 right-[4.5rem] w-12 h-12" : "absolute bottom-6 right-24 w-14 h-14"
           }`}
           title="Find Opportunities"
         >
@@ -144,10 +144,10 @@ export default function OpportunityPanel({
 
       {/* Panel */}
       {isOpen && (
-        <div className={`absolute z-50 bg-[#0d1424]/95 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/40 flex flex-col overflow-hidden ${
+        <div className={`z-50 bg-[#0d1424]/95 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/40 flex flex-col overflow-hidden ${
           isMobile
-            ? "bottom-0 right-0 left-0 max-h-[85vh] rounded-t-2xl"
-            : "bottom-6 right-24 w-[420px] max-h-[600px] rounded-2xl"
+            ? "fixed bottom-0 right-0 left-0 max-h-[85vh] rounded-t-2xl"
+            : "absolute bottom-6 right-24 w-[420px] max-h-[600px] rounded-2xl"
         }`}>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/5">
