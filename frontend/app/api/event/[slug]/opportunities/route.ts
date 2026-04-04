@@ -244,6 +244,8 @@ async function scoreSynergies(
   participants: Record<string, unknown>[],
   existingRelationships: string[],
   eventName: string,
+  goals?: string[],
+  specificContext?: string,
 ): Promise<SynergyMatch[]> {
   // Build participant summaries with intelligence
   const summaries = participants.map((p) => {
@@ -276,9 +278,15 @@ ${existingRelationships.length > 0 ? existingRelationships.join(", ") : "None de
 EVENT PARTICIPANTS (${summaries.length} companies, enriched with intelligence):
 ${JSON.stringify(summaries, null, 2)}
 
-MATCHING RULES — READ CAREFULLY:
+${goals && goals.length > 0 ? `THE USER'S GOALS AT THIS EVENT:
+- Looking for: ${goals.join(", ")}
+${specificContext ? `- Specific context: "${specificContext}"` : ""}
+
+MATCHING RULES (goal-oriented):
+1. HIGHEST PRIORITY (score 0.9-1.0): Companies the user ALREADY works with + companies that directly serve the stated goals
+2. HIGH PRIORITY (score 0.7-0.9): Companies whose capabilities match the user's goals` : `MATCHING RULES — READ CAREFULLY:
 1. HIGHEST PRIORITY (score 0.9-1.0): Companies the user ALREADY works with → reconnect at the event
-2. HIGH PRIORITY (score 0.7-0.9): Companies whose specific capabilities/needs align with the user's UNIQUE specialization
+2. HIGH PRIORITY (score 0.7-0.9): Companies whose specific capabilities/needs align with the user's UNIQUE specialization`}
 3. MEDIUM (score 0.4-0.7): Companies in complementary sectors with concrete synergy
 4. ❌ NEVER suggest generic matches like "they need a website" or "they could use consulting"
 5. ❌ NEVER match based on generic "digital services" — match on SPECIFIC capabilities
@@ -345,7 +353,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   if (!OPENROUTER_API_KEY) return NextResponse.json({ error: "AI service not configured" }, { status: 500 });
 
   try {
-    const { companyUrl, companyName } = (await request.json()) as { companyUrl: string; companyName?: string };
+    const { companyUrl, companyName, goals, specificContext } = (await request.json()) as {
+      companyUrl: string; companyName?: string; goals?: string[]; specificContext?: string;
+    };
     if (!companyUrl) return NextResponse.json({ error: "companyUrl is required" }, { status: 400 });
 
     const eventName = EVENT_META[slug] || slug;
@@ -357,8 +367,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     const { participants, existingRelationships } = await fetchEnrichedParticipants(slug, profile);
     if (participants.length === 0) return NextResponse.json({ error: "No participants found" }, { status: 404 });
 
-    // Phase 3: Score with specificity + intelligence
-    const matches = await scoreSynergies(profile, participants, existingRelationships, eventName);
+    // Phase 3: Score with specificity + intelligence + user goals
+    const matches = await scoreSynergies(profile, participants, existingRelationships, eventName, goals, specificContext);
 
     return NextResponse.json({
       companyName: profile.name || companyName || companyUrl,

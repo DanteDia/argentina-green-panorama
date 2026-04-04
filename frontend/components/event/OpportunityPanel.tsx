@@ -61,6 +61,9 @@ export default function OpportunityPanel({
   const [error, setError] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
+  const [showGoals, setShowGoals] = useState(false);
+  const [selectedGoals, setSelectedGoals] = useState<Set<string>>(new Set());
+  const [specificContext, setSpecificContext] = useState("");
 
   const handleSubmit = async (url?: string) => {
     const targetUrl = url || companyUrl.trim();
@@ -76,7 +79,11 @@ export default function OpportunityPanel({
       const res = await fetch(`/api/event/${slug}/opportunities`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyUrl: targetUrl }),
+        body: JSON.stringify({
+          companyUrl: targetUrl,
+          goals: selectedGoals.size > 0 ? [...selectedGoals] : undefined,
+          specificContext: specificContext.trim() || undefined,
+        }),
       });
 
       const data = await res.json();
@@ -174,8 +181,57 @@ export default function OpportunityPanel({
               </button>
             </div>
 
+            {/* Goals section — collapsible */}
+            <button
+              onClick={() => setShowGoals(!showGoals)}
+              className="mt-2 flex items-center gap-1.5 text-xs text-white/40 hover:text-white/60 transition"
+            >
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor" className={`transition-transform ${showGoals ? "rotate-90" : ""}`}>
+                <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+              </svg>
+              What are you looking for? (optional)
+            </button>
+
+            {showGoals && (
+              <div className="mt-2 space-y-2.5">
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: "partners", label: "Partners", icon: "🤝" },
+                    { id: "investors", label: "Investors", icon: "💰" },
+                    { id: "clients", label: "Clients", icon: "👥" },
+                    { id: "tech_integrations", label: "Tech Integrations", icon: "🔧" },
+                    { id: "market_entry", label: "Market Entry", icon: "🌎" },
+                  ].map((goal) => (
+                    <button
+                      key={goal.id}
+                      onClick={() => setSelectedGoals((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(goal.id)) next.delete(goal.id);
+                        else next.add(goal.id);
+                        return next;
+                      })}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                        selectedGoals.has(goal.id)
+                          ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-300"
+                          : "bg-white/5 border-white/10 text-white/50 hover:text-white/70 hover:border-white/20"
+                      }`}
+                    >
+                      {goal.icon} {goal.label}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  value={specificContext}
+                  onChange={(e) => setSpecificContext(e.target.value)}
+                  placeholder='e.g. "Looking for L2s to deploy our contracts on"'
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-white/25 focus:outline-none focus:border-cyan-500/40 transition"
+                />
+              </div>
+            )}
+
             {/* Suggested prompts */}
-            {!hasSearched && (
+            {!hasSearched && !showGoals && (
               <div className="mt-3 space-y-1.5">
                 <p className="text-xs text-white/30">Or try a quick search:</p>
                 {SUGGESTED_PROMPTS.map((prompt, i) => (
