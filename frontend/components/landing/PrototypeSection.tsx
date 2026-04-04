@@ -7,6 +7,7 @@ import NodeDetailPanel from "@/components/NodeDetailPanel";
 import AIChatPanel from "@/components/AIChatPanel";
 import { GreenNode, GreenEdge, NodeVerificationState } from "@/lib/types";
 import { fetchGraph } from "@/lib/api";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 export default function PrototypeSection({ lang = "en" }: { lang?: "es" | "en" }) {
   const [nodes, setNodes] = useState<GreenNode[]>([]);
@@ -23,6 +24,8 @@ export default function PrototypeSection({ lang = "en" }: { lang?: "es" | "en" }
     new Set(["funds", "partners_with", "client_of", "portfolio", "regulates"])
   );
   const sectionRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     fetchGraph()
@@ -303,34 +306,62 @@ export default function PrototypeSection({ lang = "en" }: { lang?: "es" | "en" }
       ) : (
         <>
           {/* Section header */}
-          <div className="absolute top-0 left-0 right-0 z-30 flex items-center gap-3 px-6 py-3 bg-[#f5f3eb]/80 backdrop-blur-sm border-b border-[#ddd8ce]">
+          <div className="absolute top-0 left-0 right-0 z-30 flex items-center gap-2 md:gap-3 px-4 md:px-6 py-3 bg-[#f5f3eb]/80 backdrop-blur-sm border-b border-[#ddd8ce]">
+            {isMobile && (
+              <button
+                onClick={() => setSidebarOpen((v) => !v)}
+                className="text-zinc-600 hover:text-[#1a1a1a] p-1 -ml-1 flex-shrink-0"
+                aria-label="Toggle filters"
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10zm0 5.25a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75z" clipRule="evenodd" />
+                </svg>
+              </button>
+            )}
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#1a6b4a]/10 text-[#1a6b4a] text-xs font-medium rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-[#1a6b4a] animate-pulse" />
               Live Prototype
             </span>
-            <span className="text-sm text-zinc-500">Green Industry &bull; Argentina</span>
+            <span className="text-sm text-zinc-500 hidden sm:inline">Green Industry &bull; Argentina</span>
           </div>
 
-          <FilterSidebar
-            clusters={clusters}
-            selectedCluster={selectedCluster}
-            onClusterSelect={setSelectedCluster}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            nodeCount={nodes.length}
-            edgeCount={edges.length}
-            verifiedCount={verifiedCount}
-            lang={lang}
-            onLangToggle={() => {}}
-            onBatchVerify={handleBatchVerify}
-            isBatchVerifying={isBatchVerifying}
-            nodes={nodes}
-            onSearchSelect={handleSearchSelect}
-            activeEdgeTypes={activeEdgeTypes}
-            onToggleEdgeType={handleToggleEdgeType}
-          />
+          {/* Mobile sidebar backdrop */}
+          {isMobile && sidebarOpen && (
+            <div
+              className="absolute inset-0 bg-black/30 z-35"
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
 
-          <div className="ml-[304px] mt-14 mr-4 mb-4 rounded-2xl overflow-hidden ring-1 ring-[#ddd8ce]">
+          {/* Sidebar — drawer on mobile */}
+          <div className={`${isMobile ? `absolute top-0 bottom-0 left-0 w-72 z-40 transition-transform duration-300 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}` : ""}`}>
+            <FilterSidebar
+              clusters={clusters}
+              selectedCluster={selectedCluster}
+              onClusterSelect={(cluster) => {
+                setSelectedCluster(cluster);
+                if (isMobile) setSidebarOpen(false);
+              }}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              nodeCount={nodes.length}
+              edgeCount={edges.length}
+              verifiedCount={verifiedCount}
+              lang={lang}
+              onLangToggle={() => {}}
+              onBatchVerify={handleBatchVerify}
+              isBatchVerifying={isBatchVerifying}
+              nodes={nodes}
+              onSearchSelect={(node) => {
+                handleSearchSelect(node);
+                if (isMobile) setSidebarOpen(false);
+              }}
+              activeEdgeTypes={activeEdgeTypes}
+              onToggleEdgeType={handleToggleEdgeType}
+            />
+          </div>
+
+          <div className={`${isMobile ? "ml-0 mt-14 mx-2" : "ml-[304px] mt-14 mr-4"} mb-4 rounded-2xl overflow-hidden ring-1 ring-[#ddd8ce]`}>
             <GraphCanvas
               nodes={nodes}
               edges={edges}
@@ -340,6 +371,7 @@ export default function PrototypeSection({ lang = "en" }: { lang?: "es" | "en" }
               verificationStates={verificationStates}
               highlightedNodes={highlightedNodes}
               activeEdgeTypes={activeEdgeTypes}
+              isMobile={isMobile}
             />
           </div>
 
@@ -354,6 +386,7 @@ export default function PrototypeSection({ lang = "en" }: { lang?: "es" | "en" }
               verificationState={verificationStates[selectedNode.id]}
               onVerify={handleVerify}
               onSocialAudit={handleSocialAudit}
+              isMobile={isMobile}
             />
           )}
 
@@ -361,6 +394,7 @@ export default function PrototypeSection({ lang = "en" }: { lang?: "es" | "en" }
             lang={lang}
             onHighlightNodes={handleHighlightNodes}
             onNodeSelect={handleChatNodeSelect}
+            isMobile={isMobile}
           />
         </>
       )}

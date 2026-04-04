@@ -9,6 +9,7 @@ import OpportunityPanel from "./OpportunityPanel";
 import EventHeader from "./EventHeader";
 import { GreenNode, GreenEdge, NodeVerificationState } from "@/lib/types";
 import { BLOCKCHAIN_CLUSTER_COLORS, EVENT_EDGE_COLORS, EVENT_EDGE_LABELS } from "@/lib/event-types";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 interface EventMapShellProps {
   slug: string;
@@ -29,6 +30,8 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
   const [activeEdgeTypes, setActiveEdgeTypes] = useState<Set<string>>(
     new Set(Object.keys(EVENT_EDGE_COLORS))
   );
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     fetch(`/api/event/${slug}/graph`)
@@ -87,16 +90,35 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
         eventName={eventName}
         eventDates={eventDates}
         eventLocation={eventLocation}
+        isMobile={isMobile}
+        onMenuToggle={() => setSidebarOpen((v) => !v)}
       />
 
       {/* Main content — fills remaining viewport height */}
       <div className="flex-1 relative overflow-hidden">
-        {/* Sidebar — fixed height, scrollable */}
-        <div className="absolute left-0 top-0 bottom-0 w-72 z-40">
+        {/* Mobile sidebar backdrop */}
+        {isMobile && sidebarOpen && (
+          <div
+            className="absolute inset-0 bg-black/50 z-30 transition-opacity"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* Sidebar — drawer on mobile, fixed on desktop */}
+        <div
+          className={`absolute top-0 bottom-0 z-40 transition-transform duration-300 ${
+            isMobile
+              ? `left-0 w-72 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`
+              : "left-0 w-72"
+          }`}
+        >
           <FilterSidebar
             clusters={clusters}
             selectedCluster={selectedCluster}
-            onClusterSelect={setSelectedCluster}
+            onClusterSelect={(cluster) => {
+              setSelectedCluster(cluster);
+              if (isMobile) setSidebarOpen(false);
+            }}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             nodeCount={nodes.length}
@@ -105,7 +127,10 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
             lang="en"
             onLangToggle={() => {}}
             nodes={nodes}
-            onSearchSelect={handleNodeClick}
+            onSearchSelect={(node) => {
+              handleNodeClick(node);
+              if (isMobile) setSidebarOpen(false);
+            }}
             activeEdgeTypes={activeEdgeTypes}
             onToggleEdgeType={handleToggleEdgeType}
             title={eventName}
@@ -117,8 +142,8 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
           />
         </div>
 
-        {/* Graph — fills remaining width */}
-        <div className="absolute left-72 top-0 right-0 bottom-0">
+        {/* Graph — full width on mobile, offset on desktop */}
+        <div className={`absolute top-0 right-0 bottom-0 ${isMobile ? "left-0" : "left-72"}`}>
           <GraphCanvas
             nodes={nodes}
             edges={edges}
@@ -131,10 +156,11 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
             clusterColors={BLOCKCHAIN_CLUSTER_COLORS}
             edgeColors={EVENT_EDGE_COLORS}
             darkMode={true}
+            isMobile={isMobile}
           />
         </div>
 
-        {/* Node Detail Panel — right side overlay */}
+        {/* Node Detail Panel — right side overlay (full screen on mobile) */}
         {selectedNode && (
           <NodeDetailPanel
             node={selectedNode}
@@ -144,6 +170,7 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
             onNodeNavigate={handleNodeNavigate}
             lang="en"
             verificationState={verificationStates[selectedNode.id]}
+            isMobile={isMobile}
           />
         )}
 
@@ -153,6 +180,7 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
             slug={slug}
             onHighlightNode={handleHighlightNode}
             onHighlightNodes={setHighlightedNodes}
+            isMobile={isMobile}
           />
           <AIChatPanel
             nodes={nodes}
@@ -160,6 +188,7 @@ export default function EventMapShell({ slug, eventName, eventDates, eventLocati
             lang="en"
             context={slug}
             onHighlightNodes={setHighlightedNodes}
+            isMobile={isMobile}
           />
         </div>
       </div>

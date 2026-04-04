@@ -21,6 +21,7 @@ interface GraphCanvasProps {
   edgeColors?: Record<string, string>;
   darkMode?: boolean;
   hideVerificationBadges?: boolean;
+  isMobile?: boolean;
 }
 
 interface ForceNode {
@@ -61,6 +62,7 @@ export default function GraphCanvas({
   edgeColors,
   darkMode = false,
   hideVerificationBadges = false,
+  isMobile = false,
 }: GraphCanvasProps) {
   const fgRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -69,14 +71,14 @@ export default function GraphCanvas({
   useEffect(() => {
     const updateSize = () => {
       setDimensions({
-        width: window.innerWidth - 288, // subtract sidebar width (w-72 = 288px)
+        width: isMobile ? window.innerWidth : window.innerWidth - 288, // full width on mobile, subtract sidebar on desktop
         height: window.innerHeight,
       });
     };
     updateSize();
     window.addEventListener("resize", updateSize);
     return () => window.removeEventListener("resize", updateSize);
-  }, []);
+  }, [isMobile]);
 
   // Build graph data for force-graph
   const graphData = useMemo(() => {

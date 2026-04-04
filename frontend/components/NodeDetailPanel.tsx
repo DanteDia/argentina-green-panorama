@@ -27,6 +27,7 @@ interface NodeDetailPanelProps {
   verificationState?: NodeVerificationState;
   onVerify?: (node: GreenNode) => void;
   onSocialAudit?: (node: GreenNode) => void;
+  isMobile?: boolean;
 }
 
 const explorerUrl = process.env.NEXT_PUBLIC_GENLAYER_EXPLORER || "https://explorer-bradbury.genlayer.com";
@@ -139,6 +140,7 @@ export default function NodeDetailPanel({
   verificationState,
   onVerify,
   onSocialAudit,
+  isMobile = false,
 }: NodeDetailPanelProps) {
   const labels = t[lang];
   const clusterColor = CLUSTER_COLORS[node.cluster] || "#6b7280";
@@ -158,7 +160,11 @@ export default function NodeDetailPanel({
   const hasSocialLink = node.link && /instagram|linkedin|twitter|x\.com|facebook|tiktok|youtube/.test(node.link);
 
   return (
-    <div className="absolute right-4 top-14 bottom-4 w-96 bg-[#faf8f5]/95 backdrop-blur-md border border-[#ddd8ce] rounded-2xl overflow-y-auto z-50 shadow-lg shadow-black/5">
+    <div className={`absolute bg-[#faf8f5]/95 backdrop-blur-md border border-[#ddd8ce] overflow-y-auto z-50 shadow-lg shadow-black/5 ${
+      isMobile
+        ? "inset-0 rounded-none"
+        : "right-4 top-14 bottom-4 w-96 rounded-2xl"
+    }`}>
       {/* Header */}
       <div className="sticky top-0 bg-[#faf8f5]/95 backdrop-blur-md p-4 border-b border-[#ddd8ce] z-10 rounded-t-2xl">
         <div className="flex items-start justify-between">

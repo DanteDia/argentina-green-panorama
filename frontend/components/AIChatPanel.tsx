@@ -70,6 +70,7 @@ interface AIChatPanelProps {
   // Optional: passed by EventMapShell but not used (chat has its own data source)
   nodes?: unknown[];
   edges?: unknown[];
+  isMobile?: boolean;
 }
 
 const EVENT_SUGGESTIONS: Record<string, { en: string[]; es: string[] }> = {
@@ -116,7 +117,7 @@ const t = {
   },
 };
 
-export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect, context, nodes, edges }: AIChatPanelProps) {
+export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect, context, nodes, edges, isMobile = false }: AIChatPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -193,7 +194,9 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect, cont
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="absolute bottom-6 right-6 z-50 bg-[#1a6b4a] hover:bg-[#155a3e] text-[#1a1a1a] rounded-full w-14 h-14 flex items-center justify-center shadow-lg shadow-[#1a6b4a]/30 transition-all hover:scale-105"
+          className={`absolute z-50 bg-[#1a6b4a] hover:bg-[#155a3e] text-[#1a1a1a] rounded-full flex items-center justify-center shadow-lg shadow-[#1a6b4a]/30 transition-all hover:scale-105 ${
+            isMobile ? "bottom-4 right-4 w-12 h-12" : "bottom-6 right-6 w-14 h-14"
+          }`}
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -203,7 +206,11 @@ export default function AIChatPanel({ lang, onHighlightNodes, onNodeSelect, cont
 
       {/* Chat panel */}
       {isOpen && (
-        <div className="absolute bottom-6 right-6 z-50 w-96 max-h-[500px] bg-[#faf8f5]/95 backdrop-blur-md border border-[#ddd8ce] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className={`absolute z-50 bg-[#faf8f5]/95 backdrop-blur-md border border-[#ddd8ce] shadow-2xl flex flex-col overflow-hidden ${
+          isMobile
+            ? "bottom-0 right-0 left-0 max-h-[85vh] rounded-t-2xl"
+            : "bottom-6 right-6 w-96 max-h-[500px] rounded-2xl"
+        }`}>
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#ddd8ce] bg-zinc-100/50">
             <div className="flex items-center gap-2">
