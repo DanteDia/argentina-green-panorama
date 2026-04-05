@@ -3,6 +3,15 @@
 import { useState, useRef, useEffect } from "react";
 import { BLOCKCHAIN_CLUSTER_COLORS } from "@/lib/event-types";
 
+interface ContactInfo {
+  email?: string;
+  linkedin?: string;
+  twitter?: string;
+  website?: string;
+  contact_form?: string;
+  contact_person?: string;
+}
+
 interface SynergyMatch {
   nodeId: string;
   name: string;
@@ -13,6 +22,7 @@ interface SynergyMatch {
   actionItems: string[];
   existingRelationship?: boolean;
   intelSignal?: string;
+  contactInfo?: ContactInfo;
 }
 
 interface OpportunityPanelProps {
@@ -156,23 +166,36 @@ export default function OpportunityPanel({
     setChatLoading(true);
 
     try {
-      // Build context from opportunity results
-      const matchSummaries = matches.map((m) =>
-        `- ${m.name} (${m.cluster}): ${m.synergyType}, score ${Math.round(m.score * 100)}%, reasoning: ${m.reasoning}${m.actionItems.length ? ". Actions: " + m.actionItems.join("; ") : ""}${m.intelSignal ? ". Signal: " + m.intelSignal : ""}`
-      ).join("\n");
+      // Build context from opportunity results including contact info
+      const matchSummaries = matches.map((m) => {
+        const contactParts: string[] = [];
+        if (m.contactInfo?.email) contactParts.push(`email: ${m.contactInfo.email}`);
+        if (m.contactInfo?.linkedin) contactParts.push(`LinkedIn: ${m.contactInfo.linkedin}`);
+        if (m.contactInfo?.twitter) contactParts.push(`Twitter/X: ${m.contactInfo.twitter}`);
+        if (m.contactInfo?.website) contactParts.push(`website: ${m.contactInfo.website}`);
+        if (m.contactInfo?.contact_form) contactParts.push(`contact form: ${m.contactInfo.contact_form}`);
+        if (m.contactInfo?.contact_person) contactParts.push(`key contact: ${m.contactInfo.contact_person}`);
+        const contactStr = contactParts.length > 0 ? `. Contact: ${contactParts.join(", ")}` : "";
+        return `- ${m.name} (${m.cluster}): ${m.synergyType}, score ${Math.round(m.score * 100)}%, reasoning: ${m.reasoning}${m.actionItems.length ? ". Actions: " + m.actionItems.join("; ") : ""}${m.intelSignal ? ". Signal: " + m.intelSignal : ""}${contactStr}`;
+      }).join("\n");
 
       const contextMessage = `You are a business development advisor. The user searched for opportunities at an event and got these results:
 
 Company: ${companyName}
 Summary: ${companySummary}
 
-Matches found:
+Matches found (with contact info where available):
 ${matchSummaries}
 
 Previous conversation:
 ${chatMessages.map((m) => `${m.role}: ${m.content}`).join("\n")}
 
-Now answer the user's follow-up question. Be specific, reference the actual companies and data above. Keep it concise (max 200 words). Use **bold** for company names.
+INSTRUCTIONS:
+- Answer the user's follow-up question. Be specific, reference the actual companies and data above.
+- When the user asks how to contact or reach a company, provide their SPECIFIC contact info (email, LinkedIn, Twitter, website, contact form, key contact person) from the data above.
+- If contact info is available, format it clearly: "Email them at **email@company.com**" or "Connect on **LinkedIn**: [link]"
+- If no contact info is available for a company, suggest checking their website or approaching them at the event.
+- Keep it concise (max 200 words). Use **bold** for company names and contact details.
 
 User's question: ${msg}`;
 
@@ -443,6 +466,47 @@ User's question: ${msg}`;
                       </li>
                     ))}
                   </ul>
+                )}
+
+                {/* Contact info */}
+                {match.contactInfo && Object.keys(match.contactInfo).length > 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-white/5 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {match.contactInfo.email && (
+                      <a href={`mailto:${match.contactInfo.email}`} className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 hover:bg-emerald-500/25 transition">
+                        <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 00-2 2v1.161l8.441 4.221a1.25 1.25 0 001.118 0L19 7.162V6a2 2 0 00-2-2H3z"/><path d="M19 8.839l-7.77 3.885a2.75 2.75 0 01-2.46 0L1 8.839V14a2 2 0 002 2h14a2 2 0 002-2V8.839z"/></svg>
+                        {match.contactInfo.email}
+                      </a>
+                    )}
+                    {match.contactInfo.linkedin && (
+                      <a href={match.contactInfo.linkedin} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/20 hover:bg-blue-500/25 transition">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                        LinkedIn
+                      </a>
+                    )}
+                    {match.contactInfo.twitter && (
+                      <a href={match.contactInfo.twitter} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] bg-white/10 text-white/60 px-2 py-0.5 rounded-full border border-white/10 hover:bg-white/15 transition">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                        X
+                      </a>
+                    )}
+                    {match.contactInfo.website && (
+                      <a href={match.contactInfo.website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] bg-white/10 text-white/60 px-2 py-0.5 rounded-full border border-white/10 hover:bg-white/15 transition">
+                        <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.012 6.012 0 011.912-2.706C6.512 5.73 6.974 6 7.5 6A1.5 1.5 0 019 7.5V8a2 2 0 004 0 2 2 0 011.523-1.943A5.977 5.977 0 0116 10c0 .34-.028.675-.083 1H15a2 2 0 00-2 2v2.197A5.973 5.973 0 0110 16v-2a2 2 0 00-2-2 2 2 0 01-2-2 2 2 0 00-1.668-1.973z"/></svg>
+                        Website
+                      </a>
+                    )}
+                    {match.contactInfo.contact_form && (
+                      <a href={match.contactInfo.contact_form} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[10px] bg-white/10 text-white/60 px-2 py-0.5 rounded-full border border-white/10 hover:bg-white/15 transition">
+                        <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clipRule="evenodd"/></svg>
+                        Contact Form
+                      </a>
+                    )}
+                    {match.contactInfo.contact_person && (
+                      <span className="text-[10px] text-white/40 px-1">
+                        Contact: {match.contactInfo.contact_person}
+                      </span>
+                    )}
+                  </div>
                 )}
               </button>
             ))}

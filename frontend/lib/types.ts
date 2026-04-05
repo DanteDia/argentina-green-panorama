@@ -65,6 +65,16 @@ export interface GreenNode {
     social?: Record<string, boolean>;
   };
   source: "manual" | "agent";
+  // Contact information
+  contact_info?: {
+    email?: string;
+    linkedin?: string;
+    twitter?: string;
+    website?: string;
+    phone?: string;
+    contact_form?: string;
+    contact_person?: string;
+  };
   // Event-specific fields
   is_participant?: boolean;
   event_role?: string;

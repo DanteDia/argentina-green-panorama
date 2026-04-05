@@ -14,6 +14,15 @@ const VALID_SYNERGY_TYPES = [
   "investor_match", "talent_pipeline", "technology_complement", "market_expansion",
 ];
 
+interface ContactInfo {
+  email?: string;
+  linkedin?: string;
+  twitter?: string;
+  website?: string;
+  contact_form?: string;
+  contact_person?: string;
+}
+
 interface SynergyMatch {
   nodeId: string;
   name: string;
@@ -24,6 +33,7 @@ interface SynergyMatch {
   actionItems: string[];
   existingRelationship?: boolean;
   intelSignal?: string;
+  contactInfo?: ContactInfo;
 }
 
 function extractJson(content: string, array: boolean = true): unknown {
@@ -170,7 +180,7 @@ async function fetchEnrichedParticipants(slug: string, companyProfile: Record<st
   // Get node data
   const { data: nodes } = await supabase
     .from("nodes")
-    .select("id, nombre, link, cluster, categoria, descripcion, quien_fondea, aliados_portfolio, clientes")
+    .select("id, nombre, link, cluster, categoria, descripcion, quien_fondea, aliados_portfolio, clientes, contact_info")
     .in("id", nodeIds);
   if (!nodes) return { participants: [], existingRelationships: [] as string[] };
 
@@ -229,6 +239,7 @@ async function fetchEnrichedParticipants(slug: string, companyProfile: Record<st
       sponsor_tier: meta[n.id]?.sponsor_tier || "",
       intelligence: signals,
       existing_relationship: hasExistingRelationship,
+      contact_info: n.contact_info || {},
     };
   });
 
@@ -335,6 +346,97 @@ Return top 10 matches as JSON array:
 }
 
 // =============================================================================
+// PHASE 4: Research contact info for top matches
+// =============================================================================
+
+async function researchContactInfo(
+  matches: SynergyMatch[],
+  participants: Record<string, unknown>[],
+): Promise<void> {
+  if (matches.length === 0) return;
+
+  // Build lookup for participant data (link, contact_info from DB)
+  const participantMap = new Map<string, Record<string, unknown>>();
+  for (const p of participants) {
+    participantMap.set(String(p.nombre), p);
+  }
+
+  // First, apply any existing contact_info from the database
+  for (const match of matches) {
+    const p = participantMap.get(match.name);
+    if (p) {
+      const dbContact = (p.contact_info || {}) as ContactInfo;
+      const link = p.link as string | null;
+      if (Object.keys(dbContact).length > 0 || link) {
+        match.contactInfo = {
+          ...dbContact,
+          website: dbContact.website || (link && !link.includes("instagram") && !link.includes("twitter") && !link.includes("linkedin") ? link : undefined),
+          linkedin: dbContact.linkedin || (link && link.includes("linkedin") ? link : undefined),
+          twitter: dbContact.twitter || (link && (link.includes("twitter") || link.includes("x.com")) ? link : undefined),
+        };
+      }
+    }
+  }
+
+  // Research contact info for top 5 matches that don't already have email/linkedin
+  const needsResearch = matches
+    .filter((m) => !m.contactInfo?.email && !m.contactInfo?.linkedin)
+    .slice(0, 5);
+
+  if (needsResearch.length === 0) return;
+
+  const companyList = needsResearch.map((m) => {
+    const p = participantMap.get(m.name);
+    const link = p?.link ? ` (${p.link})` : "";
+    return `- ${m.name}${link}`;
+  }).join("\n");
+
+  try {
+    const content = await callOpenRouter(SONAR_MODEL, [{ role: "user", content:
+      `Find REAL business contact information for these companies. I need ways to actually reach them — emails, LinkedIn pages, Twitter/X accounts, contact forms.
+
+Companies:
+${companyList}
+
+For EACH company, find:
+1. General business email (info@, contact@, hello@, partnerships@, bizdev@)
+2. LinkedIn company page URL
+3. Twitter/X handle
+4. Official website
+5. Contact form URL (if they have one)
+6. Key contact person for business development (name + title if findable)
+
+IMPORTANT: Only return REAL, verified information. Do NOT make up emails or URLs. If you can't find something, omit it.
+
+Return JSON array:
+[{"name": "Company", "email": "real@email.com", "linkedin": "https://linkedin.com/company/x", "twitter": "https://twitter.com/x", "website": "https://...", "contact_form": "https://.../contact", "contact_person": "Name, Title"}]`
+    }], 0.1, 1500);
+
+    const results = extractJson(content, true) as Record<string, unknown>[] | null;
+    if (!results) return;
+
+    // Map results back to matches
+    for (const r of results) {
+      const name = String(r.name || "").toLowerCase();
+      const match = needsResearch.find((m) => m.name.toLowerCase() === name || name.includes(m.name.toLowerCase()));
+      if (match) {
+        match.contactInfo = {
+          ...(match.contactInfo || {}),
+          email: r.email ? String(r.email) : match.contactInfo?.email,
+          linkedin: r.linkedin ? String(r.linkedin) : match.contactInfo?.linkedin,
+          twitter: r.twitter ? String(r.twitter) : match.contactInfo?.twitter,
+          website: r.website ? String(r.website) : match.contactInfo?.website,
+          contact_form: r.contact_form ? String(r.contact_form) : match.contactInfo?.contact_form,
+          contact_person: r.contact_person ? String(r.contact_person) : match.contactInfo?.contact_person,
+        };
+      }
+    }
+  } catch {
+    // Contact research is best-effort — don't fail the whole request
+  }
+}
+
+// =============================================================================
 // Event metadata
 // =============================================================================
 
@@ -369,6 +471,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
 
     // Phase 3: Score with specificity + intelligence + user goals
     const matches = await scoreSynergies(profile, participants, existingRelationships, eventName, goals, specificContext);
+
+    // Phase 4: Research contact info for top matches (best-effort, in parallel with response prep)
+    await researchContactInfo(matches, participants);
 
     return NextResponse.json({
       companyName: profile.name || companyName || companyUrl,
