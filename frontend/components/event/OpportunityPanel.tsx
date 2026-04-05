@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { BLOCKCHAIN_CLUSTER_COLORS } from "@/lib/event-types";
 
 interface SynergyMatch {
@@ -48,6 +48,25 @@ const SUGGESTED_PROMPTS = [
   { label: "I'm a developer looking for jobs", url: "" },
 ];
 
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+function renderSimpleMarkdown(text: string) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-white">$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, "<br />");
+}
+
+const FOLLOW_UP_SUGGESTIONS = [
+  "Which match should I prioritize and why?",
+  "How should I approach the top-scored company?",
+  "Any companies here that could be investors?",
+  "What's the best networking strategy for this event?",
+];
+
 export default function OpportunityPanel({
   slug,
   onHighlightNode,
@@ -66,6 +85,12 @@ export default function OpportunityPanel({
   const [showGoals, setShowGoals] = useState(false);
   const [selectedGoals, setSelectedGoals] = useState<Set<string>>(new Set());
   const [specificContext, setSpecificContext] = useState("");
+
+  // Follow-up chat state
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleSubmit = async (url?: string) => {
     const targetUrl = url || companyUrl.trim();
@@ -113,6 +138,60 @@ export default function OpportunityPanel({
   const handleMatchClick = (match: SynergyMatch) => {
     if (onHighlightNode) {
       onHighlightNode(match.nodeId);
+    }
+  };
+
+  // Auto-scroll chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
+  const sendFollowUp = async (text?: string) => {
+    const msg = text || chatInput.trim();
+    if (!msg || chatLoading) return;
+
+    setChatInput("");
+    const userMsg: ChatMessage = { role: "user", content: msg };
+    setChatMessages((prev) => [...prev, userMsg]);
+    setChatLoading(true);
+
+    try {
+      // Build context from opportunity results
+      const matchSummaries = matches.map((m) =>
+        `- ${m.name} (${m.cluster}): ${m.synergyType}, score ${Math.round(m.score * 100)}%, reasoning: ${m.reasoning}${m.actionItems.length ? ". Actions: " + m.actionItems.join("; ") : ""}${m.intelSignal ? ". Signal: " + m.intelSignal : ""}`
+      ).join("\n");
+
+      const contextMessage = `You are a business development advisor. The user searched for opportunities at an event and got these results:
+
+Company: ${companyName}
+Summary: ${companySummary}
+
+Matches found:
+${matchSummaries}
+
+Previous conversation:
+${chatMessages.map((m) => `${m.role}: ${m.content}`).join("\n")}
+
+Now answer the user's follow-up question. Be specific, reference the actual companies and data above. Keep it concise (max 200 words). Use **bold** for company names.
+
+User's question: ${msg}`;
+
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: contextMessage,
+          lang: "en",
+          context: slug,
+        }),
+      });
+      const data = await res.json();
+      const answer = data.answer || data.error || "No response";
+      setChatMessages((prev) => [...prev, { role: "assistant", content: answer }]);
+    } catch {
+      setChatMessages((prev) => [...prev, { role: "assistant", content: "Failed to get response" }]);
+    } finally {
+      setChatLoading(false);
     }
   };
 
@@ -375,7 +454,80 @@ export default function OpportunityPanel({
                 <p className="text-white/20 text-xs">Try a different company URL</p>
               </div>
             )}
+
+            {/* Follow-up chat section — appears after results */}
+            {matches.length > 0 && !loading && (
+              <div className="mt-2 pt-3 border-t border-white/10">
+                {/* Follow-up suggestions (only when no chat yet) */}
+                {chatMessages.length === 0 && (
+                  <div className="space-y-1.5 mb-3">
+                    <p className="text-xs text-white/30">Dig deeper:</p>
+                    {FOLLOW_UP_SUGGESTIONS.map((s, i) => (
+                      <button
+                        key={i}
+                        onClick={() => sendFollowUp(s)}
+                        className="block w-full text-left text-xs bg-white/5 hover:bg-white/10 text-white/60 hover:text-white/80 px-3 py-2 rounded-lg transition border border-white/5"
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Chat messages */}
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`flex mb-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
+                        msg.role === "user"
+                          ? "bg-cyan-600 text-white"
+                          : "bg-white/10 text-white/80"
+                      }`}
+                    >
+                      {msg.role === "assistant" ? (
+                        <span dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(msg.content) }} />
+                      ) : (
+                        msg.content
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {chatLoading && (
+                  <div className="flex justify-start mb-2">
+                    <div className="bg-white/10 text-white/50 px-3 py-2 rounded-xl text-xs flex items-center gap-2">
+                      <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                      Thinking...
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+            )}
           </div>
+
+          {/* Follow-up chat input — sticky at bottom */}
+          {matches.length > 0 && !loading && (
+            <div className="p-3 border-t border-white/10">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && sendFollowUp()}
+                  placeholder="Ask about these matches..."
+                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-cyan-500/50 transition"
+                />
+                <button
+                  onClick={() => sendFollowUp()}
+                  disabled={chatLoading || !chatInput.trim()}
+                  className="bg-cyan-600 hover:bg-cyan-500 disabled:bg-white/10 disabled:text-white/30 text-white px-3 py-2 rounded-lg text-sm font-medium transition"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </>
