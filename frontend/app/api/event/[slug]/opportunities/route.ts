@@ -165,13 +165,17 @@ Return JSON: {"headquarters": "city", "offices": ["city1"], "markets": ["market1
 // =============================================================================
 
 async function fetchEnrichedParticipants(slug: string, companyProfile: Record<string, unknown>) {
-  if (!supabase) return { participants: [], existingRelationships: [] as string[] };
+  if (!supabase) {
+    console.error("[opp] supabase client is null");
+    return { participants: [], existingRelationships: [] as string[] };
+  }
 
   // Get participants
-  const { data: parts } = await supabase
+  const { data: parts, error: partErr } = await supabase
     .from("event_participants")
     .select("node_id, role, sponsor_tier")
     .eq("event_slug", slug);
+  console.log(`[opp] event_participants for slug=${slug}: ${parts?.length || 0} rows, err=${partErr?.message || "none"}`);
   if (!parts || parts.length === 0) return { participants: [], existingRelationships: [] as string[] };
 
   const nodeIds = parts.map((p) => p.node_id);
