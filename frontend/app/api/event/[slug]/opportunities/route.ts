@@ -181,11 +181,24 @@ async function fetchEnrichedParticipants(slug: string, companyProfile: Record<st
   const nodeIds = parts.map((p) => p.node_id);
   const meta = Object.fromEntries(parts.map((p) => [p.node_id, p]));
 
-  // Get node data
-  const { data: nodes } = await supabase
-    .from("nodes")
-    .select("id, nombre, link, cluster, categoria, descripcion, quien_fondea, aliados_portfolio, clientes, contact_info")
-    .in("id", nodeIds);
+  // Get node data — try with contact_info first; fall back if column doesn't exist yet
+  let nodes: Record<string, unknown>[] | null = null;
+  {
+    const { data, error } = await supabase
+      .from("nodes")
+      .select("id, nombre, link, cluster, categoria, descripcion, quien_fondea, aliados_portfolio, clientes, contact_info")
+      .in("id", nodeIds);
+    if (error) {
+      // Likely contact_info column doesn't exist — retry without it
+      const fallback = await supabase
+        .from("nodes")
+        .select("id, nombre, link, cluster, categoria, descripcion, quien_fondea, aliados_portfolio, clientes")
+        .in("id", nodeIds);
+      nodes = fallback.data;
+    } else {
+      nodes = data;
+    }
+  }
   if (!nodes) return { participants: [], existingRelationships: [] as string[] };
 
   // Get intelligence signals for all participants (top 3 per node)
