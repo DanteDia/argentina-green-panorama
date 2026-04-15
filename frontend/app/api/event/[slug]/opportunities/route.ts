@@ -182,7 +182,19 @@ async function fetchEnrichedParticipants(slug: string, companyProfile: Record<st
   const meta = Object.fromEntries(parts.map((p) => [p.node_id, p]));
 
   // Get node data — try with contact_info first; fall back if column doesn't exist yet
-  let nodes: Record<string, unknown>[] | null = null;
+  interface NodeRow {
+    id: string;
+    nombre: string;
+    link: string | null;
+    cluster: string | null;
+    categoria: string | null;
+    descripcion: string | null;
+    quien_fondea: string | null;
+    aliados_portfolio: string[] | null;
+    clientes: string[] | null;
+    contact_info?: ContactInfo | null;
+  }
+  let nodes: NodeRow[] | null = null;
   {
     const { data, error } = await supabase
       .from("nodes")
@@ -194,9 +206,9 @@ async function fetchEnrichedParticipants(slug: string, companyProfile: Record<st
         .from("nodes")
         .select("id, nombre, link, cluster, categoria, descripcion, quien_fondea, aliados_portfolio, clientes")
         .in("id", nodeIds);
-      nodes = fallback.data;
+      nodes = (fallback.data as NodeRow[] | null);
     } else {
-      nodes = data;
+      nodes = (data as NodeRow[] | null);
     }
   }
   if (!nodes) return { participants: [], existingRelationships: [] as string[] };
