@@ -304,6 +304,7 @@ async def outbound_bd_contacts(req: OutboundRequest):
 
     return {
         "company": search.company,
+        "company_x_handle": search.company_x_handle,
         "people": people,
         "messages": messages,
         "errors": search.errors,

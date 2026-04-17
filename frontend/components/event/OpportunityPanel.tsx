@@ -111,9 +111,11 @@ function xHandleFromUrl(url: string): string | null {
 function BDContactRow({
   person,
   messages,
+  contactEmail,
 }: {
   person: BDPerson;
   messages?: OutboundMessages;
+  contactEmail?: string;
 }) {
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -147,6 +149,7 @@ function BDContactRow({
       </div>
 
       <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {/* Profile link */}
         <a
           href={person.profile_url}
           target="_blank"
@@ -157,20 +160,30 @@ function BDContactRow({
               : "bg-blue-500/15 text-blue-400 border-blue-500/20 hover:bg-blue-500/25"
           }`}
         >
-          {isX ? "X profile" : "LinkedIn"}
+          {isX ? `@${handle || "X"}` : "LinkedIn"}
         </a>
 
+        {/* X: Send DM (deep-link) + Copy DM fallback */}
         {isX && handle && messages?.x_dm && (
-          <a
-            href={buildXComposeUrl(handle, messages.x_dm)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[10px] px-2 py-0.5 rounded-full border bg-cyan-500/15 text-cyan-300 border-cyan-500/20 hover:bg-cyan-500/25 transition"
-          >
-            Send DM
-          </a>
+          <>
+            <a
+              href={buildXComposeUrl(handle, messages.x_dm)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] px-2 py-0.5 rounded-full border bg-cyan-500/15 text-cyan-300 border-cyan-500/20 hover:bg-cyan-500/25 transition"
+            >
+              Send DM
+            </a>
+            <button
+              onClick={() => copy("xdm", messages.x_dm!)}
+              className="text-[10px] px-2 py-0.5 rounded-full border bg-white/5 text-white/50 border-white/10 hover:bg-white/10 transition"
+            >
+              {copied === "xdm" ? "Copied!" : "Copy DM"}
+            </button>
+          </>
         )}
 
+        {/* LinkedIn: copy note + open profile */}
         {!isX && messages?.linkedin_note && (
           <button
             onClick={() => {
@@ -183,13 +196,14 @@ function BDContactRow({
           </button>
         )}
 
+        {/* Email: prefilled mailto */}
         {messages?.email_subject && messages?.email_body && (
           <a
-            href={buildMailto("", messages.email_subject, messages.email_body)}
+            href={buildMailto(contactEmail || "", messages.email_subject, messages.email_body)}
             className="text-[10px] px-2 py-0.5 rounded-full border bg-emerald-500/15 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/25 transition"
-            title="Opens your mail client with subject + body prefilled"
+            title={contactEmail ? `Email ${contactEmail}` : "Opens mail client with prefilled message"}
           >
-            Draft email
+            {contactEmail ? "Send email" : "Draft email"}
           </a>
         )}
       </div>
@@ -604,11 +618,12 @@ User's question: ${msg}`;
                     <p className="text-[10px] uppercase tracking-wider text-white/30">
                       BD contacts
                     </p>
-                    {match.bdPeople.slice(0, 3).map((person, k) => (
+                    {match.bdPeople.slice(0, 4).map((person, k) => (
                       <BDContactRow
                         key={`${person.profile_url}-${k}`}
                         person={person}
                         messages={match.outboundMessages}
+                        contactEmail={match.contactInfo?.email}
                       />
                     ))}
                   </div>

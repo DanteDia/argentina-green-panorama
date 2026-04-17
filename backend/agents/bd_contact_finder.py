@@ -64,6 +64,7 @@ class BDSearchResult:
     query_linkedin: str = ""
     query_x: str = ""
     people: list[BDPerson] = field(default_factory=list)
+    company_x_handle: str = ""  # Official company X handle as fallback
     errors: list[str] = field(default_factory=list)
 
 
@@ -80,6 +81,11 @@ def build_x_query(company_name: str) -> str:
         f'(site:x.com OR site:twitter.com) -inurl:status -inurl:search '
         f'({_titles_disjunction(BD_TITLES[:5])}) "{company_name}"'
     )
+
+
+def build_x_company_query(company_name: str) -> str:
+    """Find the company's official X profile (not individual BD people)."""
+    return f'site:x.com "{company_name}" -inurl:status -inurl:search'
 
 
 async def _fetch_html(url: str, params: dict[str, str] | None = None) -> str | None:
@@ -261,16 +267,20 @@ Search for their LinkedIn profiles and X/Twitter handles. Look for titles like:
 Head of BD, Head of Partnerships, Business Development Lead, Growth Lead,
 Strategic Partnerships, Ecosystem Lead, BD Manager.
 
-Return ONLY a JSON array. For each person found:
-- name: full name
-- title: their job title at {company_name}
-- linkedin_url: LinkedIn profile URL (if found)
-- x_url: X/Twitter profile URL (if found)
+Also find the company's official X/Twitter handle (e.g., @StellarOrg for Stellar).
+
+Return ONLY a JSON object:
+{{
+  "company_x_handle": "@handle or empty string",
+  "people": [
+    {{"name": "...", "title": "...", "linkedin_url": "...", "x_handle": "@..."}}
+  ]
+}}
 
 Maximum {max_results} people. Only include people you can verify actually work at {company_name}.
-If no BD people found, return [].
+If no BD people found, return {{"company_x_handle": "@...", "people": []}}.
 
-JSON array:"""
+JSON:"""
 
     try:
         response = await asyncio.to_thread(
@@ -284,19 +294,36 @@ JSON array:"""
         content = response.choices[0].message.content or "[]"
         content = _PERPLEXITY_JSON_BLOCK.sub("", content).strip()
 
-        # Extract JSON array
-        start = content.find("[")
-        if start == -1:
-            return []
-        end = content.rfind("]")
-        if end <= start:
-            return []
-
         import json as _json
 
-        items = _json.loads(content[start : end + 1])
-        if not isinstance(items, list):
-            return []
+        # Try parsing as object first (new format), then array (old format)
+        data = None
+        for start_char, end_char in [("{", "}"), ("[", "]")]:
+            start = content.find(start_char)
+            if start == -1:
+                continue
+            end = content.rfind(end_char)
+            if end <= start:
+                continue
+            try:
+                data = _json.loads(content[start : end + 1])
+                break
+            except _json.JSONDecodeError:
+                continue
+
+        if data is None:
+            return [], ""
+
+        # Handle both object and array response formats
+        company_x = ""
+        items = []
+        if isinstance(data, dict):
+            company_x = str(data.get("company_x_handle", "")).strip()
+            items = data.get("people", [])
+            if not isinstance(items, list):
+                items = []
+        elif isinstance(data, list):
+            items = data
 
         people: list[BDPerson] = []
         for item in items[:max_results]:
@@ -306,7 +333,7 @@ JSON array:"""
             name = str(item["name"]).strip()
             title = str(item.get("title", "")).strip()
             linkedin = str(item.get("linkedin_url", "")).strip()
-            x_url = str(item.get("x_url", "")).strip()
+            x_handle = str(item.get("x_handle", item.get("x_url", ""))).strip()
 
             # Prefer LinkedIn if available
             if linkedin and "linkedin.com/in/" in linkedin:
@@ -318,18 +345,28 @@ JSON array:"""
                     confidence=0.75,
                 ))
 
-            # Also add X if available
-            if x_url and ("x.com/" in x_url or "twitter.com/" in x_url):
-                people.append(BDPerson(
-                    name=name,
-                    title=title,
-                    platform="x",
-                    profile_url=x_url.split("?")[0],
-                    confidence=0.7,
-                ))
+            # Also add X if available (handle or URL)
+            if x_handle:
+                handle_clean = x_handle.lstrip("@")
+                if handle_clean and len(handle_clean) <= 15:
+                    people.append(BDPerson(
+                        name=name,
+                        title=title,
+                        platform="x",
+                        profile_url=f"https://x.com/{handle_clean}",
+                        confidence=0.7,
+                    ))
+                elif "x.com/" in x_handle or "twitter.com/" in x_handle:
+                    people.append(BDPerson(
+                        name=name,
+                        title=title,
+                        platform="x",
+                        profile_url=x_handle.split("?")[0],
+                        confidence=0.7,
+                    ))
 
             # If neither URL, still include with lower confidence
-            if not linkedin and not x_url:
+            if not linkedin and not x_handle:
                 people.append(BDPerson(
                     name=name,
                     title=title,
@@ -338,7 +375,7 @@ JSON array:"""
                     confidence=0.4,
                 ))
 
-        return people
+        return people, company_x
 
     except Exception:
         return []
@@ -412,9 +449,11 @@ async def find_bd_contacts(
 
     # Strategy 1: Serper.dev Google API (best option — structured, no CAPTCHAs)
     if os.getenv("SERPER_API_KEY"):
-        linkedin_results, x_results = await asyncio.gather(
+        # Search LinkedIn BD people + X BD people + company X handle in parallel
+        linkedin_results, x_results, x_company_results = await asyncio.gather(
             _search_serper(result.query_linkedin, num=10),
             _search_serper(result.query_x, num=10),
+            _search_serper(build_x_company_query(company_name), num=5),
         )
 
         for url, title, snippet in linkedin_results:
@@ -427,15 +466,30 @@ async def find_bd_contacts(
             if person:
                 people.append(person)
 
+        # Extract company X handle from search results
+        for url, title, snippet in x_company_results:
+            m = _X_HANDLE.search(url)
+            if m and not result.company_x_handle:
+                handle = m.group(1)
+                # Skip generic/noise handles
+                if handle.lower() not in ("home", "search", "explore", "i", "intent"):
+                    result.company_x_handle = f"@{handle}"
+                    break
+
         if people:
             result.people = _dedupe(people)[: max_per_platform * 2]
             return result
         result.errors.append("serper: no BD profiles found in Google results")
 
-    # Strategy 2: Perplexity Sonar
-    perplexity_people = await _search_bd_perplexity(company_name, max_results=max_per_platform)
+    # Strategy 2: Perplexity Sonar (also finds company X handle)
+    perplexity_people, perplexity_x_handle = await _search_bd_perplexity(
+        company_name, max_results=max_per_platform,
+    )
+    if perplexity_x_handle and not result.company_x_handle:
+        result.company_x_handle = perplexity_x_handle
     if perplexity_people:
-        result.people = _dedupe(perplexity_people)[: max_per_platform * 2]
+        people.extend(perplexity_people)
+        result.people = _dedupe(people)[: max_per_platform * 2]
         return result
     if not os.getenv("SERPER_API_KEY"):
         result.errors.append("perplexity: no results")

@@ -523,10 +523,19 @@ async function enrichWithBDContacts(
 
         const data = (await res.json()) as {
           people?: BDPerson[];
+          company_x_handle?: string;
           messages?: OutboundMessages | null;
         };
 
         if (data.people?.length) match.bdPeople = data.people;
+        // Add company X handle as a fallback contact if no individual X profiles found
+        if (data.company_x_handle && !data.people?.some(p => p.platform === "x")) {
+          const handle = data.company_x_handle.replace(/^@/, "");
+          match.bdPeople = [
+            ...(match.bdPeople || []),
+            { name: match.name, title: "Official X account", platform: "x" as const, profile_url: `https://x.com/${handle}`, confidence: 0.6 },
+          ];
+        }
         if (data.messages) match.outboundMessages = data.messages;
       } catch {
         // Outbound enrichment is best-effort
