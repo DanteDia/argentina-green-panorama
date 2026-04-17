@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       const nodeId = String(i + 1);
 
       try {
-        const txHash = await verifyNode(
+        const result = await verifyNode(
           DEFAULT_MAP_ID,
           nodeId,
           node.nombre,
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
           node.descripcion || "",
           "Argentina",
         );
-        results.push({ nodeId, nombre: node.nombre, txHash });
+        results.push({ nodeId, nombre: node.nombre, txHash: result.txHash });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Unknown error";
         results.push({ nodeId, nombre: node.nombre, error: message });

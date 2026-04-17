@@ -51,6 +51,13 @@ CREATE TABLE IF NOT EXISTS agent_runs (
   completed_at TIMESTAMPTZ
 );
 
+-- Health monitor snapshots
+CREATE TABLE IF NOT EXISTS health_snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  snapshot JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_nodes_cluster ON nodes(cluster);
 CREATE INDEX IF NOT EXISTS idx_nodes_verified ON nodes(verified);
@@ -72,3 +79,7 @@ CREATE POLICY "Public read access for agent_runs" ON agent_runs FOR SELECT USING
 CREATE POLICY "Service role full access nodes" ON nodes FOR ALL USING (true);
 CREATE POLICY "Service role full access edges" ON edges FOR ALL USING (true);
 CREATE POLICY "Service role full access agent_runs" ON agent_runs FOR ALL USING (true);
+
+ALTER TABLE health_snapshots ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read access for health_snapshots" ON health_snapshots FOR SELECT USING (true);
+CREATE POLICY "Service role full access health_snapshots" ON health_snapshots FOR ALL USING (true);

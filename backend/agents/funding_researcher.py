@@ -183,7 +183,12 @@ If no funding info found, return: {{"funders": [], "summary": "Unknown"}}"""
     return FundingResult(company_name=company_name, error="parse_failed")
 
 
-def search_partners_perplexity(company_name: str, url: str | None = None) -> list[dict]:
+def search_partners_perplexity(
+    company_name: str,
+    url: str | None = None,
+    industry: str = "green/environmental/sustainability",
+    region: str = "Argentina",
+) -> list[dict]:
     """Use Perplexity Sonar Pro to find partners with real web citations.
 
     Replaces hallucination-prone search_for_partners() for seed nodes.
@@ -193,15 +198,15 @@ def search_partners_perplexity(company_name: str, url: str | None = None) -> lis
         return []
 
     url_context = f" (website: {url})" if url else ""
+    region_context = f" in {region}" if region and region != "global" else ""
 
-    prompt = f"""Research "{company_name}"{url_context} in Argentina's green/environmental sector.
+    prompt = f"""Research "{company_name}"{url_context}{region_context} in the {industry} sector.
 
 List their known partners, allies, portfolio companies, clients, and funders that interact
-with Argentina's green/sustainability ecosystem.
+with the {industry} ecosystem{region_context}.
 
 CONSTRAINTS:
-- Only include organizations operating in or with specific programs in Argentina
-- Only include organizations connected to green/environmental/sustainability
+- Only include organizations genuinely connected to {industry}
 - Maximum 10 organizations
 - Must be real, verifiable organizations
 
@@ -279,7 +284,12 @@ If no funding info found, return: []"""
     return []
 
 
-def discover_relationships_deep(company_name: str, url: str | None = None) -> list[dict]:
+def discover_relationships_deep(
+    company_name: str,
+    url: str | None = None,
+    industry: str = "green/environmental/sustainability",
+    region: str = "Argentina",
+) -> list[dict]:
     """Use Perplexity Sonar to find relationships from non-website sources.
 
     Specifically targets: newsletters, press releases, LinkedIn announcements,
@@ -292,9 +302,10 @@ def discover_relationships_deep(company_name: str, url: str | None = None) -> li
         return []
 
     url_context = f" (website: {url})" if url else ""
+    region_context = f" in {region}" if region and region != "global" else ""
 
     prompt = f"""Search for recent partnerships, collaborations, alliances, and business relationships
-involving "{company_name}"{url_context} in Argentina's green/environmental/sustainability sector.
+involving "{company_name}"{url_context} in the {industry} sector{region_context}.
 
 IMPORTANT: Focus on sources OUTSIDE the company's official website:
 - Press releases and news articles
@@ -305,18 +316,17 @@ IMPORTANT: Focus on sources OUTSIDE the company's official website:
 - MoU (Memorandum of Understanding) signings
 - Joint project announcements
 - Social media announcements (Twitter/X, Instagram business posts)
-- Government gazette entries for joint programs
 - Industry reports mentioning partnerships
 
 For each relationship found, provide:
 - name: the partner/allied organization name
 - link: their website URL if available
-- relationship: partner, funder, client, portfolio_company, ally, co_investor, project_partner
-- evidence: ONE sentence describing where this relationship was announced (e.g. "Announced in LinkedIn post March 2025", "Listed in BYMA accelerator cohort 2024")
+- relationship: partner, funder, client, portfolio_company, ally, co_investor, project_partner, ecosystem, integration, built_on
+- evidence: ONE sentence describing where this relationship was announced
 
 CONSTRAINTS:
 - Only real, verifiable relationships with evidence
-- Only organizations connected to green/environmental/sustainability in Argentina
+- Only organizations genuinely connected to the {industry} sector
 - Maximum 12 organizations
 - Do NOT include relationships already obvious from {company_name}'s official website
 

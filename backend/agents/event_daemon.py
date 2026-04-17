@@ -13,6 +13,7 @@ Run:
 """
 
 import argparse
+import asyncio
 import json
 import logging
 import os
@@ -54,6 +55,11 @@ INTEL_TYPES = [
 ]
 
 SONAR_MODEL = "perplexity/sonar"
+EXTRACT_MODEL = "google/gemini-3.1-flash-lite-preview"  # Free model for signal extraction
+
+# Relationship discovery budgets per cycle
+MAX_PERPLEXITY_PER_CYCLE = 3   # Deep discovery calls (~$0.03/cycle)
+MAX_SIGNAL_EXTRACTIONS_PER_CYCLE = 10  # Free Gemini calls
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -320,6 +326,383 @@ def store_signals(node_id: str, signals: list[dict]) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Verification — submit event companies to GenLayer via Vercel API
+# ---------------------------------------------------------------------------
+
+VERIFY_API_BASE = os.environ.get("VERIFY_API_BASE", "https://green-panorama-ar.vercel.app")
+MAX_VERIFY_PER_CYCLE = 3
+VERIFY_POLL_ATTEMPTS = 60  # 60 * 10s = 10 min max
+
+
+async def verify_event_companies(event_slug: str, max_nodes: int = MAX_VERIFY_PER_CYCLE) -> dict:
+    """Find unverified event participants and submit for GenLayer verification."""
+    sb = get_supabase()
+
+    # Get event participants joined with node verification status
+    participants = fetch_event_participants(event_slug)
+    if not participants:
+        return {"verified": 0, "failed": 0, "skipped": 0}
+
+    node_ids = [str(p["node_id"]) for p in participants]
+    nodes_resp = (
+        sb.table("nodes")
+        .select("id, nombre, link, cluster, categoria, descripcion, verification_status, verified")
+        .in_("id", node_ids)
+        .execute()
+    )
+
+    # Filter to unverified nodes (not verified, not pending, not grey)
+    unverified = [
+        n for n in (nodes_resp.data or [])
+        if not n.get("verified") and n.get("verification_status") not in ("verified", "pending", "grey")
+    ]
+
+    if not unverified:
+        log.info("All event participants are already verified or pending.")
+        return {"verified": 0, "failed": 0, "skipped": 0}
+
+    log.info(f"Found {len(unverified)} unverified event participants, verifying up to {max_nodes}")
+    batch = unverified[:max_nodes]
+    results = {"verified": 0, "failed": 0, "timeout": 0}
+
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            for node in batch:
+                node_id = str(node["id"])
+                nombre = node["nombre"]
+                link = node.get("link", "")
+
+                # Mark as pending
+                sb.table("nodes").update({"verification_status": "pending"}).eq("id", node_id).execute()
+
+                # Submit verification
+                payload = {
+                    "nodeId": node_id,
+                    "nombre": nombre,
+                    "link": link,
+                    "cluster": node.get("cluster", ""),
+                    "categoria": node.get("categoria", ""),
+                    "descripcion": node.get("descripcion", ""),
+                    "country": "Brazil",
+                }
+
+                try:
+                    async with session.post(f"{VERIFY_API_BASE}/api/verify", json=payload) as resp:
+                        data = await resp.json()
+                        tx_hash = data.get("txHash")
+                        if not tx_hash:
+                            log.warning(f"  No txHash for {nombre}: {data.get('error', 'unknown')}")
+                            sb.table("nodes").update({"verification_status": "unverified"}).eq("id", node_id).execute()
+                            results["failed"] += 1
+                            continue
+
+                    log.info(f"  Verification submitted for {nombre}: {tx_hash}")
+
+                    # Poll for result
+                    for attempt in range(VERIFY_POLL_ATTEMPTS):
+                        await asyncio.sleep(10)
+                        async with session.get(f"{VERIFY_API_BASE}/api/verify/status?txHash={tx_hash}") as resp:
+                            status_data = await resp.json()
+                            status = status_data.get("status", "unknown")
+
+                        if status in ("FINALIZED", "ACCEPTED", "accepted", "finalized"):
+                            log.info(f"  Verification PASSED for {nombre}")
+                            sb.table("nodes").update({
+                                "verified": True,
+                                "verification_tx": tx_hash,
+                                "verification_status": "verified",
+                                "verification_failure_reason": None,
+                            }).eq("id", node_id).execute()
+                            results["verified"] += 1
+                            break
+
+                        if status in ("UNDETERMINED", "CANCELED", "undetermined", "canceled"):
+                            log.warning(f"  Verification FAILED for {nombre}: {status}")
+                            sb.table("nodes").update({
+                                "verification_status": "failed",
+                                "verification_failure_reason": f"Consensus: {status}",
+                            }).eq("id", node_id).execute()
+                            results["failed"] += 1
+                            break
+                    else:
+                        log.warning(f"  Verification timed out for {nombre}")
+                        sb.table("nodes").update({"verification_status": "unverified"}).eq("id", node_id).execute()
+                        results["timeout"] += 1
+
+                except Exception as e:
+                    log.error(f"  Verification error for {nombre}: {e}")
+                    sb.table("nodes").update({"verification_status": "unverified"}).eq("id", node_id).execute()
+                    results["failed"] += 1
+
+                await asyncio.sleep(2)  # Brief pause between nodes
+
+    except ImportError:
+        log.error("aiohttp not installed — cannot run verification. pip install aiohttp")
+        return results
+
+    log.info(f"Event verification: {results['verified']} verified, {results['failed']} failed, {results['timeout']} timeout")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Relationship discovery — convert signals + Perplexity into graph edges
+# ---------------------------------------------------------------------------
+
+# Lazy imports to avoid circular dependencies at module level
+_research_imports_loaded = False
+_insert_edge = None
+_insert_node_with_edge_fn = None
+_get_all_names = None
+_get_agent_node_count = None
+_MAX_AGENT_NODES = 500
+_check_duplicate = None
+_discover_relationships_deep = None
+_research_company_for_event = None
+
+
+def _load_research_imports():
+    """Lazy-load research daemon functions to avoid circular imports."""
+    global _research_imports_loaded, _insert_edge, _insert_node_with_edge_fn
+    global _get_all_names, _get_agent_node_count, _MAX_AGENT_NODES
+    global _check_duplicate, _discover_relationships_deep, _research_company_for_event
+
+    if _research_imports_loaded:
+        return
+
+    try:
+        from agents.research_daemon import (
+            insert_edge, insert_node_with_edge, get_all_names,
+            get_agent_node_count, MAX_AGENT_NODES,
+        )
+        from agents.funding_researcher import discover_relationships_deep
+        from agents.db_helpers import check_duplicate
+        from agents.research_agent import research_company_for_event
+
+        _insert_edge = insert_edge
+        _insert_node_with_edge_fn = insert_node_with_edge
+        _get_all_names = get_all_names
+        _get_agent_node_count = get_agent_node_count
+        _MAX_AGENT_NODES = MAX_AGENT_NODES
+        _check_duplicate = check_duplicate
+        _discover_relationships_deep = discover_relationships_deep
+        _research_company_for_event = research_company_for_event
+        _research_imports_loaded = True
+    except ImportError as e:
+        log.error(f"Could not import research functions: {e}")
+
+
+def extract_partner_from_signal(signal: dict) -> str | None:
+    """Use a cheap LLM to extract the partner company name from an intelligence signal."""
+    title = signal.get("title", "")
+    content = signal.get("content", "")
+    text = f"{title}. {content}".strip()
+    if not text or len(text) < 10:
+        return None
+
+    try:
+        client = get_openrouter()
+        response = client.chat.completions.create(
+            model=EXTRACT_MODEL,
+            messages=[{"role": "user", "content": f"""Extract the OTHER company name from this business signal.
+Return ONLY the company name, nothing else. If no clear partner company is mentioned, return "NONE".
+
+Signal: {text}"""}],
+            temperature=0.0,
+            max_tokens=50,
+        )
+        result = (response.choices[0].message.content or "").strip()
+        if result and result.upper() != "NONE" and len(result) < 100:
+            return result
+    except Exception as e:
+        log.debug(f"Signal extraction failed: {e}")
+    return None
+
+
+def convert_signals_to_edges(batch: list[dict], signals_by_node: dict) -> dict:
+    """Phase A: Convert partnership/funding signals into graph edges.
+
+    Args:
+        batch: list of participant dicts with node info
+        signals_by_node: dict mapping node_id -> list of signals just stored
+    """
+    _load_research_imports()
+    if not _insert_edge or not _get_all_names:
+        return {"edges_created": 0, "nodes_created": 0}
+
+    results = {"edges_created": 0, "nodes_created": 0, "extractions": 0}
+    all_names = _get_all_names()
+    all_names_lower = {n.lower() for n in all_names}
+    sb = get_supabase()
+
+    for participant in batch:
+        node = participant["node"]
+        node_id = str(participant["node_id"])
+        company_name = node["nombre"]
+        signals = signals_by_node.get(node_id, [])
+
+        # Only look at partnership and funding signals
+        relevant = [s for s in signals if s.get("intel_type") in ("partnership", "funding_round")]
+        for sig in relevant[:MAX_SIGNAL_EXTRACTIONS_PER_CYCLE]:
+            partner_name = extract_partner_from_signal(sig)
+            if not partner_name:
+                continue
+            results["extractions"] += 1
+
+            # Skip if it's the same company
+            if partner_name.lower() == company_name.lower():
+                continue
+
+            # Determine relationship type from signal
+            rel_type = "partners_with"
+            if sig.get("intel_type") == "funding_round":
+                rel_type = "funds"
+
+            # Check if partner already exists
+            if partner_name.lower() in all_names_lower:
+                if _insert_edge(company_name, partner_name, rel_type,
+                               discovery_method="signal_extraction", confidence=0.6):
+                    results["edges_created"] += 1
+                    log.info(f"    + Edge from signal: {company_name} --{rel_type}--> {partner_name}")
+            else:
+                # Check fuzzy match
+                is_dup, match, score = _check_duplicate(partner_name, all_names)
+                if is_dup:
+                    if _insert_edge(company_name, match, rel_type,
+                                   discovery_method="signal_extraction", confidence=0.6):
+                        results["edges_created"] += 1
+                        log.info(f"    + Edge from signal: {company_name} --{rel_type}--> {match} (fuzzy)")
+                elif _get_agent_node_count() < _MAX_AGENT_NODES and _research_company_for_event:
+                    # New company — research and classify
+                    classified = _research_company_for_event(partner_name, None, industry="blockchain/crypto/web3")
+                    if classified and _insert_node_with_edge_fn:
+                        node_res, edge_ok = _insert_node_with_edge_fn(
+                            classified, discovered_from=company_name,
+                            source_name=company_name, rel_type=rel_type,
+                            depth=1, discovery_method="signal_extraction", confidence=0.6,
+                        )
+                        if node_res:
+                            results["nodes_created"] += 1
+                            all_names.append(partner_name)
+                            all_names_lower.add(partner_name.lower())
+                            if edge_ok:
+                                results["edges_created"] += 1
+                            log.info(f"    + New node from signal: {partner_name}")
+
+    if results["edges_created"] > 0 or results["nodes_created"] > 0:
+        log.info(f"  Signals→Edges: {results['extractions']} extracted, "
+                 f"{results['edges_created']} edges, {results['nodes_created']} new nodes")
+    return results
+
+
+def discover_event_relationships(event_slug: str, state: dict, max_nodes: int = MAX_PERPLEXITY_PER_CYCLE) -> dict:
+    """Phase B: Deep Perplexity discovery for event participants."""
+    _load_research_imports()
+    if not _discover_relationships_deep or not _insert_edge:
+        return {"searched": 0, "edges_created": 0, "nodes_created": 0}
+
+    sb = get_supabase()
+    results = {"searched": 0, "edges_created": 0, "nodes_created": 0}
+
+    # Get participants not yet relationship-discovered
+    discovered_ids = set(state.get("relationship_discovered_ids", []))
+    participants = fetch_event_participants(event_slug)
+    pending = [p for p in participants if str(p["node_id"]) not in discovered_ids]
+
+    if not pending:
+        # Reset for next round
+        state["relationship_discovered_ids"] = []
+        return results
+
+    all_names = _get_all_names()
+    all_names_lower = {n.lower() for n in all_names}
+    batch = pending[:max_nodes]
+
+    for participant in batch:
+        node = participant["node"]
+        node_id = str(participant["node_id"])
+        company_name = node["nombre"]
+        url = node.get("link")
+
+        log.info(f"  Deep discovery: {company_name}")
+
+        # Get event industry/region from event config
+        relationships = _discover_relationships_deep(
+            company_name, url,
+            industry="blockchain/crypto/web3",
+            region="global",
+        )
+        results["searched"] += 1
+
+        for rel in (relationships or []):
+            partner_name = rel.get("name", "").strip()
+            if not partner_name or partner_name.lower() == company_name.lower():
+                continue
+
+            partner_url = rel.get("link")
+            relationship = rel.get("relationship", "partner")
+
+            # Map relationship type
+            rel_type = "partners_with"
+            if relationship in ("funder", "investor", "co_investor", "backed_by"):
+                rel_type = "funds"
+            elif relationship in ("client", "customer"):
+                rel_type = "client_of"
+            elif relationship in ("portfolio", "portfolio_company"):
+                rel_type = "portfolio"
+            elif relationship in ("ecosystem", "integration", "built_on"):
+                rel_type = relationship
+
+            # Check if partner already exists
+            if partner_name.lower() in all_names_lower:
+                if _insert_edge(company_name, partner_name, rel_type,
+                               discovery_method="perplexity_event", confidence=0.7):
+                    results["edges_created"] += 1
+                    evidence = rel.get("evidence", "")[:60]
+                    log.info(f"    + Edge: {company_name} --{rel_type}--> {partner_name} [{evidence}]")
+                continue
+
+            # Fuzzy match
+            is_dup, match, score = _check_duplicate(partner_name, all_names)
+            if is_dup:
+                if _insert_edge(company_name, match, rel_type,
+                               discovery_method="perplexity_event", confidence=0.7):
+                    results["edges_created"] += 1
+                continue
+
+            # New company — research and add if budget allows
+            if _get_agent_node_count() >= _MAX_AGENT_NODES:
+                continue
+
+            if _research_company_for_event:
+                classified = _research_company_for_event(
+                    partner_name, partner_url, industry="blockchain/crypto/web3",
+                )
+                if classified and _insert_node_with_edge_fn:
+                    node_res, edge_ok = _insert_node_with_edge_fn(
+                        classified, discovered_from=company_name,
+                        source_name=company_name, rel_type=rel_type,
+                        depth=1, discovery_method="perplexity_event", confidence=0.7,
+                    )
+                    if node_res:
+                        results["nodes_created"] += 1
+                        all_names.append(partner_name)
+                        all_names_lower.add(partner_name.lower())
+                        if edge_ok:
+                            results["edges_created"] += 1
+                        log.info(f"    + New node: {partner_name}")
+
+        # Mark as discovered
+        discovered_ids.add(node_id)
+        state["relationship_discovered_ids"] = list(discovered_ids)
+
+    if results["edges_created"] > 0 or results["nodes_created"] > 0:
+        log.info(f"  Deep discovery: {results['searched']} searched, "
+                 f"{results['edges_created']} edges, {results['nodes_created']} new nodes")
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Cycle logic
 # ---------------------------------------------------------------------------
 
@@ -347,10 +730,11 @@ def run_one_cycle(event_slug: str) -> dict:
         save_state(state)
         return {"status": "cycle_complete", "total": len(participants), "new_signals": 0}
 
-    # Process a batch
+    # Process a batch — intelligence signals
     batch = pending[:COMPANIES_PER_CYCLE]
     total_signals = 0
     results = []
+    signals_by_node = {}  # Track for Phase A
 
     for participant in batch:
         node = participant["node"]
@@ -370,6 +754,7 @@ def run_one_cycle(event_slug: str) -> dict:
         signals = research_company_signals(company_name, url, context)
         stored = store_signals(node_id, signals)
         total_signals += stored
+        signals_by_node[node_id] = signals  # Keep for Phase A
 
         # Mark as researched
         researched_ids.add(node_id)
@@ -384,12 +769,38 @@ def run_one_cycle(event_slug: str) -> dict:
         # Brief pause between API calls
         time.sleep(2)
 
+    # Phase A: Convert partnership signals into graph edges (free LLM calls)
+    log.info("--- Phase A: Converting signals to edges ---")
+    signal_edge_results = convert_signals_to_edges(batch, signals_by_node)
+
+    # Phase B: Deep relationship discovery via Perplexity (3 per cycle)
+    log.info("--- Phase B: Deep relationship discovery ---")
+    deep_results = discover_event_relationships(event_slug, state, max_nodes=MAX_PERPLEXITY_PER_CYCLE)
+
+    # Run verification pass on event companies
+    verify_results = asyncio.run(verify_event_companies(event_slug))
+
     # Update state
     state["researched_node_ids"] = list(researched_ids)
     state["cycle_count"] = state.get("cycle_count", 0) + 1
     state["stats"]["total_signals"] = state["stats"].get("total_signals", 0) + total_signals
+    state["stats"]["total_verified"] = state["stats"].get("total_verified", 0) + verify_results.get("verified", 0)
+    state["stats"]["signal_edges_created"] = (
+        state["stats"].get("signal_edges_created", 0) + signal_edge_results.get("edges_created", 0)
+    )
+    state["stats"]["deep_edges_created"] = (
+        state["stats"].get("deep_edges_created", 0) + deep_results.get("edges_created", 0)
+    )
+    state["stats"]["connection_nodes_created"] = (
+        state["stats"].get("connection_nodes_created", 0)
+        + signal_edge_results.get("nodes_created", 0)
+        + deep_results.get("nodes_created", 0)
+    )
     state["last_cycle"] = datetime.now(timezone.utc).isoformat()
     save_state(state)
+
+    total_new_edges = signal_edge_results.get("edges_created", 0) + deep_results.get("edges_created", 0)
+    total_new_nodes = signal_edge_results.get("nodes_created", 0) + deep_results.get("nodes_created", 0)
 
     summary = {
         "status": "ok",
@@ -398,11 +809,15 @@ def run_one_cycle(event_slug: str) -> dict:
         "companies_researched": len(batch),
         "companies_remaining": len(pending) - len(batch),
         "new_signals": total_signals,
+        "new_edges": total_new_edges,
+        "new_connection_nodes": total_new_nodes,
+        "verification": verify_results,
         "results": results,
     }
     log.info(
         f"Cycle {state['cycle_count']} done: {len(batch)} companies, "
-        f"{total_signals} new signals, {len(pending) - len(batch)} remaining"
+        f"{total_signals} signals, {total_new_edges} edges, {total_new_nodes} new nodes, "
+        f"{len(pending) - len(batch)} remaining"
     )
     return summary
 

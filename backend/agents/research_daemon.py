@@ -251,6 +251,7 @@ async def trigger_verification(node_id: str, nombre: str, link: str, cluster: st
                 "cluster": cluster or "",
                 "categoria": categoria or "",
                 "descripcion": descripcion or "",
+                "country": "Argentina",
             }
             async with session.post(f"{VERIFY_API_BASE}/api/verify", json=payload) as resp:
                 data = await resp.json()
@@ -260,6 +261,10 @@ async def trigger_verification(node_id: str, nombre: str, link: str, cluster: st
                 tx_hash = data.get("txHash")
                 if not tx_hash:
                     return {"status": "no_txhash"}
+                # Log additional verification TXs if present
+                tx_hashes = data.get("txHashes", {})
+                if tx_hashes:
+                    log.info(f"  Verification TXs for {nombre}: {list(tx_hashes.keys())}")
 
             log.info(f"  Verification submitted for {nombre}: {tx_hash}")
 
@@ -311,6 +316,8 @@ async def trigger_verification(node_id: str, nombre: str, link: str, cluster: st
                     log.info(f"  Still verifying {nombre}... ({status}, attempt {attempt + 1})")
 
             log.warning(f"  Verification timed out for {nombre}")
+            # Reset from "pending" so verify_unverified_batch() can retry this node
+            sb.table("nodes").update({"verification_status": "unverified"}).eq("id", node_id).execute()
             return {"status": "timeout"}
 
     except Exception as e:
@@ -319,7 +326,11 @@ async def trigger_verification(node_id: str, nombre: str, link: str, cluster: st
 
 
 def extract_failure_reason(leader_result) -> str:
-    """Extract human-readable failure reason from GenLayer leader result."""
+    """Extract human-readable failure reason from GenLayer leader result.
+
+    Handles both old contract format (exists, argentina_related, green_sector)
+    and new v7 contract format (verified, confidence, evidence, entity_confusion_risk).
+    """
     if not leader_result:
         return "No feedback from validators"
 
@@ -330,8 +341,30 @@ def extract_failure_reason(leader_result) -> str:
             return f"Validator feedback: {str(leader_result)[:200]}"
 
     if isinstance(leader_result, dict):
-        # Extract specific failure fields from the contract response
         reasons = []
+
+        # New v7 contract format (verifiable_industries.py)
+        if "verified" in leader_result:
+            if leader_result.get("verified") is False:
+                reasons.append("Verification failed")
+            if leader_result.get("confidence") == "low":
+                reasons.append("Low confidence")
+            risk = leader_result.get("entity_confusion_risk")
+            if risk and risk not in ("none", "low"):
+                reasons.append(f"Entity confusion risk: {risk}")
+            hallucination = leader_result.get("hallucination_risk")
+            if hallucination and hallucination not in ("none", "low"):
+                reasons.append(f"Hallucination risk: {hallucination}")
+            suggested = leader_result.get("suggested_sector")
+            if suggested:
+                reasons.append(f"Suggested sector: {suggested}")
+            if leader_result.get("geography_confirmed") is False:
+                reasons.append("Geography not confirmed")
+            evidence = leader_result.get("evidence") or leader_result.get("last_activity_evidence")
+            if evidence:
+                reasons.append(f"Evidence: {str(evidence)[:200]}")
+
+        # Old contract format (green_panorama_qa.py) — keep for backward compat
         if leader_result.get("exists") is False:
             reasons.append("Company website not found or not accessible")
         if leader_result.get("argentina_related") is False:
@@ -351,7 +384,8 @@ def extract_failure_reason(leader_result) -> str:
 
 
 # Failure types where GenLayer consensus should be trusted — skip straight to grey
-CONSENSUS_TRUST_FAILURES = {"green", "sector", "argentina"}
+# Covers both old format ("green", "argentina") and new v7 format ("geography", "suggested sector")
+CONSENSUS_TRUST_FAILURES = {"green", "sector", "argentina", "geography", "suggested sector", "entity confusion"}
 
 
 async def re_research_failed_node(node_id: str, nombre: str, link: str, failure_reason: str) -> dict:

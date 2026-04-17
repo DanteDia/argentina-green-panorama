@@ -32,6 +32,25 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  health-monitor:
+    build:
+      context: ../../../
+      dockerfile: backend/deploy/docker/Dockerfile
+    container_name: green-panorama-health-monitor
+    entrypoint: ["python3", "-m", "agents.health_monitor"]
+    command: ["--interval", "1800", "--unstick"]
+    restart: always
+    env_file:
+      - ../../../backend/.env
+    volumes:
+      - health-data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   research-data:
   event-data:
+  health-data:

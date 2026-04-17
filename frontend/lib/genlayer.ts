@@ -111,36 +111,53 @@ export async function verifyRelationship(mapId: string, edgeId: string, entityA:
   });
 }
 
-/** Verify a single social media profile */
-export async function verifySocial(mapId: string, nodeId: string, name: string, platform: string, socialUrl: string, claimedFollowers: string): Promise<string> {
+/** Verify a single social media profile via reverse verification (checks company website for social link) */
+export async function verifySocial(mapId: string, nodeId: string, name: string, platform: string, socialUrl: string, companyUrl: string): Promise<string> {
   const client = getClient();
   return client.writeContract({
     address: getContractAddress(),
     functionName: "verify_social",
-    args: [mapId, nodeId, name, platform, socialUrl, claimedFollowers || "0"],
+    args: [mapId, nodeId, name, platform, socialUrl, companyUrl || ""],
     value: 0n,
   });
 }
 
-/** Adversarial hallucination detection on full agent output */
-export async function detectHallucination(mapId: string, nodeId: string, name: string, url: string, agentOutput: string): Promise<string> {
-  const client = getClient();
-  return client.writeContract({
-    address: getContractAddress(),
-    functionName: "detect_hallucination",
-    args: [mapId, nodeId, name, url || "", agentOutput],
-    value: 0n,
-  });
-}
-
-// Legacy wrapper — delegates to individual methods
+/**
+ * Full 4-step verification: existence → description → sector → recency.
+ * Each step is a separate on-chain TX. Returns all tx hashes so the daemon
+ * can poll any of them (the first one — existence — is the gate check).
+ */
 export async function verifyNode(
   mapId: string, nodeId: string, nombre: string, link: string,
   sector: string, categoria: string, descripcion: string,
   country: string, _claimedFunding: string = "",
-): Promise<string> {
-  // Start with existence check — the most fundamental claim
-  return verifyExistence(mapId, nodeId, nombre, link);
+): Promise<{ txHash: string; txHashes: Record<string, string> }> {
+  // Step 1: Existence — the gate check. If this fails, the rest won't help.
+  const existenceTx = await verifyExistence(mapId, nodeId, nombre, link);
+
+  // Steps 2-4: Fire remaining verifications in parallel — they're independent.
+  // If any individual call fails, we still return what succeeded.
+  const parallel: Record<string, Promise<string>> = {};
+  if (descripcion) {
+    parallel.description = verifyDescription(mapId, nodeId, nombre, link, descripcion);
+  }
+  if (sector || categoria) {
+    parallel.sector = verifySector(mapId, nodeId, nombre, link, sector, categoria);
+  }
+  parallel.recency = verifyRecency(mapId, nodeId, nombre, link, country);
+
+  const txHashes: Record<string, string> = { existence: existenceTx };
+  const entries = Object.entries(parallel);
+  const settled = await Promise.allSettled(entries.map(([, p]) => p));
+  for (let i = 0; i < entries.length; i++) {
+    const [key] = entries[i];
+    const result = settled[i];
+    if (result.status === "fulfilled") {
+      txHashes[key] = result.value;
+    }
+  }
+
+  return { txHash: existenceTx, txHashes };
 }
 
 // =========================================================================
@@ -205,7 +222,59 @@ export async function getClaim(mapId: string, claimKey: string) {
   return parseContractResult(result);
 }
 
-/** Read all verification claims for a node */
+// =========================================================================
+// RESPONSE ADAPTERS — map new contract format to frontend-expected format
+// =========================================================================
+
+type AnyRecord = Record<string, unknown>;
+
+/** Adapt new contract's per-claim node verification to the flat format the frontend expects */
+function adaptNodeVerification(raw: AnyRecord): AnyRecord {
+  const existence = raw?.existence as AnyRecord | undefined;
+  const description = raw?.description as AnyRecord | undefined;
+  const sector = raw?.sector as AnyRecord | undefined;
+  const recency = raw?.recency as AnyRecord | undefined;
+  return {
+    exists: existence?.verified ?? false,
+    sector_relevant: sector?.verified ?? false,
+    description_accurate: description?.verified ?? false,
+    geography_relevant: recency?.geography_confirmed ?? recency?.verified ?? false,
+    funding_accurate: false,
+    verified_funders: [],
+    accuracy_score: existence?.confidence ?? "low",
+    reasoning: [existence?.evidence, description?.evidence, sector?.evidence, recency?.last_activity_evidence]
+      .filter(Boolean).join(" | "),
+  };
+}
+
+/** Adapt relationship verification response */
+function adaptRelationshipVerification(raw: AnyRecord): AnyRecord {
+  return {
+    relationship_confirmed: raw?.verified ?? false,
+    type_accurate: raw?.type_accurate ?? false,
+    suggested_type: raw?.suggested_type ?? "",
+    confidence: raw?.confidence ?? "low",
+    evidence: raw?.evidence ?? "",
+  };
+}
+
+/** Adapt social verification response */
+function adaptSocialVerification(raw: AnyRecord): AnyRecord {
+  return {
+    platforms: {},
+    overall_social_score: raw?.confidence ?? "low",
+    reasoning: raw?.evidence ?? "",
+    verified: raw?.verified ?? false,
+    is_authentic: raw?.is_authentic ?? false,
+    website_links_to_social: raw?.website_links_to_social ?? false,
+  };
+}
+
+// =========================================================================
+// READ METHODS (with adapters)
+// =========================================================================
+
+/** Read all verification claims for a node — adapted to frontend format */
 export async function getNodeVerification(mapId: string, nodeId: string) {
   const client = getClient();
   const result = await client.readContract({
@@ -213,7 +282,12 @@ export async function getNodeVerification(mapId: string, nodeId: string) {
     functionName: "get_node_verification",
     args: [mapId, nodeId],
   });
-  return parseContractResult(result);
+  const raw = parseContractResult(result);
+  // If the response has the new per-claim structure, adapt it
+  if (raw?.existence || raw?.description || raw?.sector || raw?.recency) {
+    return adaptNodeVerification(raw);
+  }
+  return raw; // Already in old format or error
 }
 
 /** Legacy compatibility */
@@ -222,12 +296,23 @@ export async function getVerification(mapId: string, nodeId: string) {
 }
 
 export async function getRelationshipVerification(mapId: string, edgeId: string) {
-  return getClaim(mapId, `${edgeId}:relationship`);
+  const raw = await getClaim(mapId, `${edgeId}:relationship`);
+  if (raw?.verified !== undefined && raw?.relationship_confirmed === undefined) {
+    return adaptRelationshipVerification(raw);
+  }
+  return raw;
 }
 
 export async function getSocialVerification(mapId: string, nodeId: string) {
-  // Social is stored per-platform, return generic lookup
-  return getClaim(mapId, `${nodeId}:social:twitter`);
+  // Try twitter/x first, then generic
+  let raw = await getClaim(mapId, `${nodeId}:social:x`);
+  if (raw?.error === "not_found") {
+    raw = await getClaim(mapId, `${nodeId}:social:twitter`);
+  }
+  if (raw?.verified !== undefined && raw?.platforms === undefined) {
+    return adaptSocialVerification(raw);
+  }
+  return raw;
 }
 
 export async function getContractStats() {

@@ -167,6 +167,69 @@ Respond ONLY as JSON:
     return None
 
 
+def research_company_for_event(
+    name: str,
+    url: str | None,
+    industry: str = "blockchain/crypto/web3",
+    region: str = "global",
+) -> DiscoveredNode | None:
+    """Research a discovered company and classify it for an event context.
+
+    Like research_company() but accepts any industry/region instead of hardcoded
+    Argentina green. Used by the event daemon to classify companies discovered
+    through sponsor connections.
+    """
+    region_context = f" in {region}" if region and region != "global" else ""
+    prompt = f"""Research this company/organization and classify it.
+Company name: {name}
+Website: {url or 'unknown'}
+
+Determine:
+1. Cluster: one of L1/L2 Blockchain, Exchange, DeFi/Payments, Infrastructure, Gaming/NFT, TradFi/Banking, Government/Regulation, Education/Community, Startup, Empresa Privada, ONG, Fondo Verde, Aceleradora, Consultora
+2. Category (e.g., smart contracts, layer-2, DEX, stablecoin, wallet, NFT marketplace, custody, compliance, lending, blockchain analytics, venture capital)
+3. Brief description in English (1-2 sentences, factual only)
+4. Who funds/backs this company? (investors, accelerators, grants). If unknown, say so.
+5. Does this company interact with the {industry} sector{region_context}?
+
+ACCEPT if the company:
+- Operates in the {industry} sector
+- Funds, invests in, or partners with {industry} companies
+- Provides services or infrastructure to {industry} companies
+- Has specific programs or products related to {industry}
+
+REJECT if the company:
+- Has NO connection to {industry}
+- Does not exist or you cannot verify any information about it
+
+Respond ONLY as JSON:
+{{"cluster": "...", "categoria": "...", "descripcion": "...", "quien_fondea": "...", "is_relevant": true/false}}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=DEFAULT_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=500,
+        )
+        content = response.choices[0].message.content or "{}"
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group())
+            if data.get("is_relevant", False):
+                return DiscoveredNode(
+                    nombre=name,
+                    link=url,
+                    cluster=data.get("cluster", "Startup"),
+                    categoria=data.get("categoria", ""),
+                    descripcion=data.get("descripcion", ""),
+                    quien_fondea=data.get("quien_fondea", ""),
+                )
+    except Exception as e:
+        print(f"Error researching {name} for event: {e}")
+    return None
+
+
 def search_for_partners(company_name: str) -> list[dict]:
     """Use LLM knowledge to find partners/connections for a company.
 
