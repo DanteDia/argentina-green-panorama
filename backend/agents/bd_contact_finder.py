@@ -40,6 +40,7 @@ BD_TITLES = [
 ]
 
 DDG_HTML = "https://html.duckduckgo.com/html/"
+SERPER_API_URL = "https://google.serper.dev/search"
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -229,39 +230,236 @@ def _dedupe(people: list[BDPerson]) -> list[BDPerson]:
     return sorted(seen.values(), key=lambda x: x.confidence, reverse=True)
 
 
+# ---------------------------------------------------------------------------
+# Perplexity-powered BD search (primary, more reliable than DDG dorks)
+# ---------------------------------------------------------------------------
+
+SONAR_MODEL = "perplexity/sonar"
+
+_PERPLEXITY_JSON_BLOCK = re.compile(r"```(?:json)?\s*|\s*```", re.IGNORECASE)
+
+
+async def _search_bd_perplexity(company_name: str, max_results: int = 5) -> list[BDPerson]:
+    """Use Perplexity Sonar to find BD/partnerships people at a company.
+
+    Returns structured results with LinkedIn/X URLs when available.
+    Cost: ~$0.006 per query.
+    """
+    import os
+
+    api_key = os.getenv("OPENROUTER_API_KEY", "")
+    if not api_key:
+        return []
+
+    from openai import OpenAI
+
+    client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+
+    prompt = f"""Find people at "{company_name}" who work in Business Development, Partnerships, or Growth.
+
+Search for their LinkedIn profiles and X/Twitter handles. Look for titles like:
+Head of BD, Head of Partnerships, Business Development Lead, Growth Lead,
+Strategic Partnerships, Ecosystem Lead, BD Manager.
+
+Return ONLY a JSON array. For each person found:
+- name: full name
+- title: their job title at {company_name}
+- linkedin_url: LinkedIn profile URL (if found)
+- x_url: X/Twitter profile URL (if found)
+
+Maximum {max_results} people. Only include people you can verify actually work at {company_name}.
+If no BD people found, return [].
+
+JSON array:"""
+
+    try:
+        response = await asyncio.to_thread(
+            lambda: client.chat.completions.create(
+                model=SONAR_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=1500,
+            )
+        )
+        content = response.choices[0].message.content or "[]"
+        content = _PERPLEXITY_JSON_BLOCK.sub("", content).strip()
+
+        # Extract JSON array
+        start = content.find("[")
+        if start == -1:
+            return []
+        end = content.rfind("]")
+        if end <= start:
+            return []
+
+        import json as _json
+
+        items = _json.loads(content[start : end + 1])
+        if not isinstance(items, list):
+            return []
+
+        people: list[BDPerson] = []
+        for item in items[:max_results]:
+            if not isinstance(item, dict) or not item.get("name"):
+                continue
+
+            name = str(item["name"]).strip()
+            title = str(item.get("title", "")).strip()
+            linkedin = str(item.get("linkedin_url", "")).strip()
+            x_url = str(item.get("x_url", "")).strip()
+
+            # Prefer LinkedIn if available
+            if linkedin and "linkedin.com/in/" in linkedin:
+                people.append(BDPerson(
+                    name=name,
+                    title=title,
+                    platform="linkedin",
+                    profile_url=linkedin.split("?")[0],
+                    confidence=0.75,
+                ))
+
+            # Also add X if available
+            if x_url and ("x.com/" in x_url or "twitter.com/" in x_url):
+                people.append(BDPerson(
+                    name=name,
+                    title=title,
+                    platform="x",
+                    profile_url=x_url.split("?")[0],
+                    confidence=0.7,
+                ))
+
+            # If neither URL, still include with lower confidence
+            if not linkedin and not x_url:
+                people.append(BDPerson(
+                    name=name,
+                    title=title,
+                    platform="linkedin",
+                    profile_url=f"https://www.linkedin.com/search/results/people/?keywords={urllib.parse.quote(f'{name} {company_name}')}",
+                    confidence=0.4,
+                ))
+
+        return people
+
+    except Exception:
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Serper.dev — Google search API (no CAPTCHAs, free tier: 2500 searches)
+# ---------------------------------------------------------------------------
+
+
+async def _search_serper(query: str, num: int = 10) -> list[tuple[str, str, str]]:
+    """Search Google via Serper.dev API. Returns list of (url, title, snippet).
+
+    Requires SERPER_API_KEY env var. Free tier: 2,500 searches.
+    Sign up at https://serper.dev — no credit card required.
+    """
+    import os
+
+    api_key = os.getenv("SERPER_API_KEY", "")
+    if not api_key:
+        return []
+
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                SERPER_API_URL,
+                json={"q": query, "num": num},
+                headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
+            )
+            if resp.status_code != 200:
+                return []
+            data = resp.json()
+            results = []
+            for item in data.get("organic", []):
+                url = item.get("link", "")
+                title = item.get("title", "")
+                snippet = item.get("snippet", "")
+                if url:
+                    results.append((url, title, snippet))
+            return results
+    except Exception:
+        return []
+
+
+# ---------------------------------------------------------------------------
+# Main entry point — Serper (Google API) primary, Perplexity + DDG fallback
+# ---------------------------------------------------------------------------
+
+
 async def find_bd_contacts(
     company_name: str,
     max_per_platform: int = 5,
 ) -> BDSearchResult:
-    """Find BD-flavored profiles for `company_name` on LinkedIn and X."""
+    """Find BD-flavored profiles for `company_name`.
+
+    Strategy:
+    1. Serper.dev (primary) — Google search API, no CAPTCHAs, structured results
+    2. Perplexity Sonar (secondary) — when Serper key not set
+    3. DDG dorks (last resort) — free but rate-limited from VPS IPs
+    """
     result = BDSearchResult(
         company=company_name,
         query_linkedin=build_linkedin_query(company_name),
         query_x=build_x_query(company_name),
     )
 
+    people: list[BDPerson] = []
+    import os
+
+    # Strategy 1: Serper.dev Google API (best option — structured, no CAPTCHAs)
+    if os.getenv("SERPER_API_KEY"):
+        linkedin_results, x_results = await asyncio.gather(
+            _search_serper(result.query_linkedin, num=10),
+            _search_serper(result.query_x, num=10),
+        )
+
+        for url, title, snippet in linkedin_results:
+            person = parse_linkedin_result(url, title, snippet, company_name)
+            if person:
+                people.append(person)
+
+        for url, title, snippet in x_results:
+            person = parse_x_result(url, title, snippet, company_name)
+            if person:
+                people.append(person)
+
+        if people:
+            result.people = _dedupe(people)[: max_per_platform * 2]
+            return result
+        result.errors.append("serper: no BD profiles found in Google results")
+
+    # Strategy 2: Perplexity Sonar
+    perplexity_people = await _search_bd_perplexity(company_name, max_results=max_per_platform)
+    if perplexity_people:
+        result.people = _dedupe(perplexity_people)[: max_per_platform * 2]
+        return result
+    if not os.getenv("SERPER_API_KEY"):
+        result.errors.append("perplexity: no results")
+
+    # Strategy 3: DDG dorks (last resort, likely rate-limited on VPS)
     linkedin_html, x_html = await asyncio.gather(
         _fetch_html(DDG_HTML, {"q": result.query_linkedin}),
         _fetch_html(DDG_HTML, {"q": result.query_x}),
     )
-
-    people: list[BDPerson] = []
 
     if linkedin_html:
         for url, title, snippet in parse_ddg_results(linkedin_html)[: max_per_platform * 3]:
             person = parse_linkedin_result(url, title, snippet, company_name)
             if person:
                 people.append(person)
-    else:
-        result.errors.append("linkedin: empty SERP (likely rate-limited)")
 
     if x_html:
         for url, title, snippet in parse_ddg_results(x_html)[: max_per_platform * 3]:
             person = parse_x_result(url, title, snippet, company_name)
             if person:
                 people.append(person)
-    else:
-        result.errors.append("x: empty SERP (likely rate-limited)")
+
+    if not people:
+        result.errors.append("all_sources: no BD contacts found")
 
     result.people = _dedupe(people)[: max_per_platform * 2]
     return result
