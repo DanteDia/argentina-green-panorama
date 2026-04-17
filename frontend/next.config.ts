@@ -10,6 +10,13 @@ const nextConfig: NextConfig = {
           { key: "X-Robots-Tag", value: "noindex" },
         ],
       },
+      {
+        source: "/panorama/embed",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors *" },
+          { key: "X-Robots-Tag", value: "noindex" },
+        ],
+      },
     ];
   },
 };

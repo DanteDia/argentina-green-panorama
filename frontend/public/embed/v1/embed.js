@@ -2,7 +2,7 @@
   "use strict";
 
   var EMBED_ORIGIN = "__EMBED_ORIGIN__";
-  var SELECTOR = "[data-green-panorama-event]";
+  var SELECTOR = "[data-green-panorama-event],[data-green-panorama-map]";
   var MOUNTED_ATTR = "data-gp-mounted";
   var DEFAULT_HEIGHT = 720;
 
@@ -17,23 +17,31 @@
     }
   }
 
-  function buildSrc(slug, opts) {
+  function resolveTarget(el, opts) {
+    var eventSlug = opts.eventSlug || el.getAttribute("data-green-panorama-event");
+    if (eventSlug) return { kind: "event", slug: eventSlug, path: "/event/" + encodeURIComponent(eventSlug) + "/embed" };
+    var mapSlug = opts.mapSlug || el.getAttribute("data-green-panorama-map") || "panorama";
+    var path = mapSlug === "panorama" ? "/panorama/embed" : "/map/" + encodeURIComponent(mapSlug) + "/embed";
+    return { kind: "map", slug: mapSlug, path: path };
+  }
+
+  function buildSrc(target, opts) {
     var qs = [];
     if (opts.theme) qs.push("theme=" + encodeURIComponent(opts.theme));
     if (opts.primary) qs.push("primary=" + encodeURIComponent(opts.primary));
     if (opts.locale) qs.push("locale=" + encodeURIComponent(opts.locale));
     if (opts.autoHeight) qs.push("height=auto");
     var query = qs.length ? "?" + qs.join("&") : "";
-    return EMBED_ORIGIN + "/event/" + encodeURIComponent(slug) + "/embed" + query;
+    return EMBED_ORIGIN + target.path + query;
   }
 
   function mount(el, opts) {
     if (!el || el.getAttribute(MOUNTED_ATTR) === "1") return null;
     opts = opts || {};
 
-    var slug = opts.slug || el.getAttribute("data-green-panorama-event") || el.getAttribute("data-slug");
-    if (!slug) {
-      emit("error", { el: el, message: "Missing slug (data-green-panorama-event)" });
+    var target = resolveTarget(el, opts);
+    if (!target.slug) {
+      emit("error", { el: el, message: "Missing slug" });
       return null;
     }
 
@@ -42,13 +50,13 @@
     var fixedHeight = autoHeight ? null : parseInt(heightAttr, 10) || DEFAULT_HEIGHT;
 
     var iframe = document.createElement("iframe");
-    iframe.src = buildSrc(slug, {
+    iframe.src = buildSrc(target, {
       theme: opts.theme || el.getAttribute("data-theme") || undefined,
       primary: opts.primary || el.getAttribute("data-primary") || undefined,
       locale: opts.locale || el.getAttribute("data-locale") || undefined,
       autoHeight: autoHeight,
     });
-    iframe.setAttribute("title", "Green Panorama Event Map");
+    iframe.setAttribute("title", target.kind === "event" ? "Green Panorama Event Map" : "Green Panorama Map");
     iframe.setAttribute("loading", "lazy");
     iframe.setAttribute("referrerpolicy", "origin");
     iframe.setAttribute("allow", "clipboard-write");
@@ -58,7 +66,7 @@
     if (fixedHeight) iframe.style.height = fixedHeight + "px";
     else iframe.style.minHeight = "600px";
 
-    mountedByIframe.set(iframe, { slug: slug, el: el });
+    mountedByIframe.set(iframe, { slug: target.slug, kind: target.kind, el: el });
     el.appendChild(iframe);
     el.setAttribute(MOUNTED_ATTR, "1");
 
@@ -100,12 +108,12 @@
     if (!iframe || !meta) return;
 
     if (data.type === "gp:ready") {
-      emit("ready", { slug: meta.slug, iframe: iframe });
+      emit("ready", { slug: meta.slug, kind: meta.kind, iframe: iframe });
       return;
     }
     if (data.type === "gp:resize" && typeof data.height === "number" && data.height > 0) {
       iframe.style.height = Math.ceil(data.height) + "px";
-      emit("resize", { slug: meta.slug, iframe: iframe, height: data.height });
+      emit("resize", { slug: meta.slug, kind: meta.kind, iframe: iframe, height: data.height });
       return;
     }
   }
