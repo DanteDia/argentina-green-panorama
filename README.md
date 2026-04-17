@@ -52,11 +52,17 @@ Reusable verification infrastructure that any industry map plugs into. `Verifiab
                  ├── /embed/v1.js            pinned loader (stable)
                  └── /api/*                  REST endpoints
                               |
-         ┌────────────────────┼────────────────────┐
-         |                    |                    |
-     Supabase          Research daemons       GenLayer Studionet
-     (PostgreSQL)      (Python, Docker,       (intelligent contracts,
-                       OpenRouter, Perplexity) on-chain consensus)
+     ┌────────────────────────┼────────────────────────┐
+     |                        |                        |
+ Supabase          Hostinger VPS (Docker)         GenLayer Studionet
+ (PostgreSQL)      ├── research-daemon            (intelligent contracts,
+                   │   (spider + verify, 10m)      on-chain consensus)
+                   ├── event-daemon
+                   │   (intel + connections + verify, 15m)
+                   ├── health-monitor
+                   │   (Telegram alerts, 30m)
+                   └── outbound-api
+                       (BD contacts + messages, on-demand)
 ```
 
 ---
@@ -85,7 +91,11 @@ green-panorama/
 ├── STRATEGY.md            business, partnerships, monetization, dates
 ├── MILESTONES.md          chronological build log
 ├── contracts/             GenLayer intelligent contracts (Python)
-├── backend/               FastAPI + research daemons (Python, OpenRouter)
+├── backend/               FastAPI + research daemons + outbound API (Python)
+│   ├── agents/            research_daemon, event_daemon, health_monitor,
+│   │                      bd_contact_finder, outbound_writer, funding_researcher
+│   ├── main.py            FastAPI server (/api/outbound/bd-contacts)
+│   └── deploy/docker/     docker-compose (4 services) + Dockerfile
 └── frontend/              Next.js 16 app (marketing + maps + embed system)
     ├── app/
     │   ├── page.tsx              marketing landing
@@ -116,8 +126,8 @@ cd ../backend
 ```
 
 Environment variables:
-- `frontend/.env.local`: `NEXT_PUBLIC_GENLAYER_CONTRACT`, `NEXT_PUBLIC_GENLAYER_EXPLORER`, `NEXT_PUBLIC_EMBED_ORIGIN` (production origin the loader should point iframes at — e.g., `https://verifiableindustries.com`)
-- `backend/.env`: `OPENROUTER_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`
+- `frontend/.env.local`: `NEXT_PUBLIC_GENLAYER_CONTRACT`, `NEXT_PUBLIC_GENLAYER_EXPLORER`, `OUTBOUND_BACKEND_URL` (VPS FastAPI URL for BD contacts)
+- `backend/.env`: `OPENROUTER_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, `SERPER_API_KEY` (Google search for BD contacts)
 
 Testing the embed locally is documented in [EMBED.md § Local testing](./EMBED.md#local-testing).
 
@@ -128,10 +138,11 @@ Testing the embed locally is documented in [EMBED.md § Local testing](./EMBED.m
 | Layer       | Technology                                                              |
 |-------------|-------------------------------------------------------------------------|
 | Frontend    | Next.js 16, React 19, Tailwind 4, react-force-graph-2d                  |
-| Backend     | Python FastAPI, OpenRouter, Perplexity Sonar                            |
+| Backend     | Python FastAPI, OpenRouter, Perplexity Sonar, Serper.dev                |
 | Database    | Supabase (PostgreSQL)                                                   |
 | Blockchain  | GenLayer Studionet (intelligent contracts), genlayer-js SDK             |
-| Deploy      | Vercel (frontend), Hostinger VPS + Docker (research daemons)            |
+| Monitoring  | Health monitor daemon, Telegram Bot API alerts                          |
+| Deploy      | Vercel (frontend), Hostinger VPS + Docker (4 containers)                |
 
 ---
 

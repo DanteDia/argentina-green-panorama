@@ -127,20 +127,72 @@
 
 ---
 
+## Milestone 6: Verification Pipeline Fix + Health Monitor + Outbound System
+**Date:** April 17, 2026
+
+### Verification pipeline — 6 bugs found and fixed:
+1. **Pending limbo** — 251 nodes stuck in "pending" forever (timed-out verifications never reset status). Fixed: reset to "unverified" on timeout so `verify_unverified_batch()` retries them.
+2. **Only existence verified** — `verifyNode()` only called `verifyExistence()`, ignoring description/sector/recency. Fixed: chains all 4 verification steps (existence, then description + sector + recency in parallel).
+3. **Old failure format** — `extract_failure_reason()` checked v1 contract fields (`exists`, `argentina_related`). Updated for v7 format (`verified`, `confidence`, `evidence`).
+4. **BlockchainRio had zero verification** — event daemon only did intelligence, never submitted to GenLayer. Added verification pass (3 nodes/cycle).
+5. **Dead `detectHallucination` export** — frontend referenced a contract method that didn't exist. Removed.
+6. **Contract address mismatch** — CLAUDE.md referenced old contract, frontend used new one.
+
+### Health monitor daemon (new):
+- `backend/agents/health_monitor.py` — runs every 30 min on VPS
+- Checks: verification stats, stuck pending nodes, GenLayer API health, growth rate, event map progress
+- Auto-unsticks nodes pending >15 min
+- **Telegram alerts via Bot API** — critical/warning/healthy status every 2h
+- Reports event map edge/connection growth
+- Deployed as third Docker container
+
+### Event sponsor connection discovery (new):
+- **Phase A**: Converts intelligence signals (partnership, funding) into graph edges via LLM extraction
+- **Phase B**: Deep Perplexity discovery for 3 event participants per 15-min cycle
+- Parameterized `discover_relationships_deep()` and `search_partners_perplexity()` for any industry/region (backwards-compatible, defaults to Argentina green)
+- Added `research_company_for_event()` — classifies blockchain companies with expanded cluster types
+- **Result**: Event map grew from 74 edges / 14 connections to 105+ edges / 40+ connections in first cycle
+
+### BD contact finder + outbound messaging (new):
+- `backend/agents/bd_contact_finder.py` — finds BD/partnerships people via:
+  1. **Serper.dev** (primary) — Google search API, structured results, no CAPTCHAs
+  2. **Perplexity Sonar** (secondary) — LLM-powered people search
+  3. **DDG dorks** (fallback) — free but rate-limited on VPS IPs
+- `backend/agents/outbound_writer.py` — generates 3 message variants:
+  - X DM (≤280 chars, casual)
+  - LinkedIn connect note (≤300 chars, professional)
+  - Email (subject + 4-line body, specific ask)
+- VPS FastAPI endpoint at `/api/outbound/bd-contacts` (port 8000)
+- Frontend `OpportunityPanel` now shows BD contact cards with one-click send buttons:
+  - X DM → deep-link compose URL with prefilled text
+  - LinkedIn → copy note to clipboard + open profile
+  - Email → mailto: with subject + body prefilled
+- Wired as Phase 5 in opportunity matching pipeline
+
+### VPS deployment (4 containers):
+| Container | Purpose | Interval |
+|-----------|---------|----------|
+| `green-panorama-research` | Research daemon (spider + discovery) | 10 min |
+| `green-panorama-event-daemon` | Event intelligence + verification + connections | 15 min |
+| `green-panorama-health-monitor` | Health checks + Telegram alerts + auto-unstick | 30 min |
+| `green-panorama-outbound-api` | BD contacts + outbound messages (FastAPI) | On-demand |
+
+---
+
 ## By the Numbers
 
-| Metric | Hackathon Day (Mar 22) | Today (Apr 3) |
-|--------|----------------------|---------------|
-| Nodes | 79 (manual) | 630+ (autonomous) |
-| Edges | 47 | 970+ |
-| GenLayer contract versions | 1 | 7 |
-| Contract methods | 3 | 7 |
-| Consensus mechanism | prompt_non_comparative | run_nondet_unsafe (custom validators) |
-| Research agents | 1 (spider) | 3 (general + funding + event) |
-| Event maps | 0 | 1 (BlockchainRio) |
-| Total commits | 42 | 78 |
-| Lines of code | ~4,000 | 13,337 |
-| Features | Graph + search | Graph + chat + opportunities + events + verification |
+| Metric | Hackathon (Mar 22) | Apr 3 | Apr 17 |
+|--------|-------------------|-------|--------|
+| Nodes | 79 (manual) | 630+ | 580+ (verified growing) |
+| Edges | 47 | 970+ | 2,240+ |
+| On-chain verifications | 0 | 26 | 80+ (13.8% coverage) |
+| GenLayer contract versions | 1 | 7 | 7 (full 4-step chain) |
+| Contract methods | 3 | 7 | 7 |
+| Consensus mechanism | prompt_non_comparative | run_nondet_unsafe | run_nondet_unsafe |
+| Research agents | 1 (spider) | 3 | 3 + health monitor + outbound API |
+| Event maps | 0 | 1 (BlockchainRio) | 1 (105+ edges, 40+ connections) |
+| VPS containers | 0 | 2 | 4 (research, event, health, outbound) |
+| Features | Graph + search | + chat + opportunities + events | + BD contacts + outbound + Telegram alerts |
 
 ---
 
