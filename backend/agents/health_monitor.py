@@ -50,9 +50,10 @@ MIN_VERIFICATIONS_PER_30MIN = 0    # Alert if fewer than this (0 = just track)
 GROWTH_WINDOW_HOURS = 2            # Check growth over this window
 
 # Telegram notifications via Bot API (works from inside Docker containers)
-TELEGRAM_ENABLED = True
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8170035332:AAFV-yK6t_NNuwdE7EwIn72x7OG6EDlpiik")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "1798551099")
+# Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in backend/.env
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+TELEGRAM_ENABLED = bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
 
 # ---------------------------------------------------------------------------
 # Logging
