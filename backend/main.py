@@ -1,10 +1,13 @@
+import asyncio
 import json
 import os
+from dataclasses import asdict
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -243,6 +246,70 @@ async def run_research_agent(max_companies: int = 3):
         "companies_spidered": len(results),
         "new_nodes_discovered": total_new,
         "discovered": all_discovered,
+    }
+
+
+# =============================================================================
+# Outbound marketing — BD contact discovery + personalized message drafting
+# =============================================================================
+
+
+class OutboundRequest(BaseModel):
+    sponsor_name: str
+    sponsor_summary: str = ""
+    attendee_company: str = ""
+    attendee_summary: str = ""
+    synergy_reasoning: str = ""
+    event_name: str = "BlockchainRio 2026"
+    max_contacts: int = 5
+    generate_messages: bool = True
+
+
+@app.post("/api/outbound/bd-contacts")
+async def outbound_bd_contacts(req: OutboundRequest):
+    """Find BD humans for `sponsor_name` and, if requested, draft outbound
+    messages tailored to the attendee's company.
+
+    Intended to run on the VPS (Scrapling needs Playwright + Chromium).
+    Callers should treat this endpoint as best-effort: errors are surfaced
+    in the response body, never as 5xx, so the frontend can degrade cleanly.
+    """
+    from backend.agents.bd_contact_finder import find_bd_contacts
+    from backend.agents.outbound_writer import (
+        OutboundContext,
+        as_dict as messages_as_dict,
+        generate_messages,
+    )
+
+    if not req.sponsor_name.strip():
+        raise HTTPException(status_code=400, detail="sponsor_name is required")
+
+    search = await find_bd_contacts(req.sponsor_name, max_per_platform=req.max_contacts)
+    people = [asdict(p) for p in search.people][: req.max_contacts]
+
+    messages = None
+    if req.generate_messages and req.attendee_company and req.synergy_reasoning:
+        top = search.people[0] if search.people else None
+        ctx = OutboundContext(
+            attendee_company=req.attendee_company,
+            attendee_summary=req.attendee_summary,
+            sponsor_company=req.sponsor_name,
+            sponsor_summary=req.sponsor_summary,
+            synergy_reasoning=req.synergy_reasoning,
+            event_name=req.event_name,
+            bd_person_name=top.name if top else None,
+            bd_person_title=top.title if top else None,
+        )
+        # generate_messages is sync (OpenAI client) — offload so we don't
+        # block the event loop while the LLM thinks.
+        msgs = await asyncio.to_thread(generate_messages, ctx)
+        messages = messages_as_dict(msgs)
+
+    return {
+        "company": search.company,
+        "people": people,
+        "messages": messages,
+        "errors": search.errors,
     }
 
 

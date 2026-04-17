@@ -12,6 +12,22 @@ interface ContactInfo {
   contact_person?: string;
 }
 
+interface BDPerson {
+  name: string;
+  title?: string;
+  platform: "linkedin" | "x";
+  profile_url: string;
+  snippet?: string;
+  confidence?: number;
+}
+
+interface OutboundMessages {
+  x_dm?: string;
+  linkedin_note?: string;
+  email_subject?: string;
+  email_body?: string;
+}
+
 interface SynergyMatch {
   nodeId: string;
   name: string;
@@ -23,6 +39,8 @@ interface SynergyMatch {
   existingRelationship?: boolean;
   intelSignal?: string;
   contactInfo?: ContactInfo;
+  bdPeople?: BDPerson[];
+  outboundMessages?: OutboundMessages;
 }
 
 interface OpportunityPanelProps {
@@ -68,6 +86,124 @@ function renderSimpleMarkdown(text: string) {
     .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-white">$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/\n/g, "<br />");
+}
+
+// One-click outbound helpers.
+//
+// X supports deep-link DM compose with prefilled text via the query param
+// `text=...` on twitter.com/messages/compose (still honored by x.com). For
+// LinkedIn there is no public prefill URL, so we copy the note to clipboard
+// and open the profile in a new tab — user pastes in their own compose.
+function buildXComposeUrl(handle: string, text?: string): string {
+  const clean = handle.replace(/^@/, "");
+  const params = new URLSearchParams();
+  if (text) params.set("text", text);
+  return `https://twitter.com/messages/compose?recipient_screen_name=${encodeURIComponent(clean)}${params.toString() ? `&${params}` : ""}`;
+}
+
+function buildMailto(email: string, subject?: string, body?: string): string {
+  const params = new URLSearchParams();
+  if (subject) params.set("subject", subject);
+  if (body) params.set("body", body);
+  return `mailto:${email}${params.toString() ? `?${params}` : ""}`;
+}
+
+function xHandleFromUrl(url: string): string | null {
+  const m = url.match(/(?:x\.com|twitter\.com)\/([A-Za-z0-9_]{1,15})/);
+  return m ? m[1] : null;
+}
+
+function BDContactRow({
+  person,
+  messages,
+}: {
+  person: BDPerson;
+  messages?: OutboundMessages;
+}) {
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const copy = async (label: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(label);
+      setTimeout(() => setCopied((c) => (c === label ? null : c)), 1500);
+    } catch {
+      setCopied("failed");
+    }
+  };
+
+  const isX = person.platform === "x";
+  const handle = isX ? xHandleFromUrl(person.profile_url) : null;
+
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-white truncate">{person.name}</p>
+          {person.title && (
+            <p className="text-[10px] text-white/50 truncate">{person.title}</p>
+          )}
+        </div>
+        {typeof person.confidence === "number" && (
+          <span className="text-[9px] text-white/30 flex-shrink-0">
+            {Math.round(person.confidence * 100)}%
+          </span>
+        )}
+      </div>
+
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <a
+          href={person.profile_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+            isX
+              ? "bg-white/10 text-white/70 border-white/10 hover:bg-white/15"
+              : "bg-blue-500/15 text-blue-400 border-blue-500/20 hover:bg-blue-500/25"
+          }`}
+        >
+          {isX ? "X profile" : "LinkedIn"}
+        </a>
+
+        {isX && handle && messages?.x_dm && (
+          <a
+            href={buildXComposeUrl(handle, messages.x_dm)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[10px] px-2 py-0.5 rounded-full border bg-cyan-500/15 text-cyan-300 border-cyan-500/20 hover:bg-cyan-500/25 transition"
+          >
+            Send DM
+          </a>
+        )}
+
+        {!isX && messages?.linkedin_note && (
+          <button
+            onClick={() => {
+              copy("linkedin", messages.linkedin_note!);
+              window.open(person.profile_url, "_blank", "noopener,noreferrer");
+            }}
+            className="text-[10px] px-2 py-0.5 rounded-full border bg-cyan-500/15 text-cyan-300 border-cyan-500/20 hover:bg-cyan-500/25 transition"
+          >
+            {copied === "linkedin" ? "Copied, opening..." : "Copy note + open"}
+          </button>
+        )}
+
+        {messages?.email_subject && messages?.email_body && (
+          <a
+            href={buildMailto(
+              "", // email resolved at the company-contact level; mailto with no address just opens compose
+              messages.email_subject,
+              messages.email_body,
+            )}
+            className="text-[10px] px-2 py-0.5 rounded-full border bg-emerald-500/15 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/25 transition"
+            title="Opens your mail client with subject + body prefilled"
+          >
+            Draft email
+          </a>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const FOLLOW_UP_SUGGESTIONS = [
@@ -466,6 +602,25 @@ User's question: ${msg}`;
                       </li>
                     ))}
                   </ul>
+                )}
+
+                {/* BD humans + one-click outbound */}
+                {match.bdPeople && match.bdPeople.length > 0 && (
+                  <div
+                    className="mt-2.5 pt-2 border-t border-white/5 space-y-1.5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p className="text-[10px] uppercase tracking-wider text-white/30">
+                      BD contacts
+                    </p>
+                    {match.bdPeople.slice(0, 3).map((person, k) => (
+                      <BDContactRow
+                        key={`${person.profile_url}-${k}`}
+                        person={person}
+                        messages={match.outboundMessages}
+                      />
+                    ))}
+                  </div>
                 )}
 
                 {/* Contact info */}

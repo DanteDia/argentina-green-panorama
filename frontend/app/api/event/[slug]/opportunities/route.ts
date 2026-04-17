@@ -23,6 +23,22 @@ interface ContactInfo {
   contact_person?: string;
 }
 
+interface BDPerson {
+  name: string;
+  title?: string;
+  platform: "linkedin" | "x";
+  profile_url: string;
+  snippet?: string;
+  confidence?: number;
+}
+
+interface OutboundMessages {
+  x_dm?: string;
+  linkedin_note?: string;
+  email_subject?: string;
+  email_body?: string;
+}
+
 interface SynergyMatch {
   nodeId: string;
   name: string;
@@ -34,6 +50,8 @@ interface SynergyMatch {
   existingRelationship?: boolean;
   intelSignal?: string;
   contactInfo?: ContactInfo;
+  bdPeople?: BDPerson[];
+  outboundMessages?: OutboundMessages;
 }
 
 function extractJson(content: string, array: boolean = true): unknown {
@@ -466,6 +484,66 @@ Return JSON array:
 }
 
 // =============================================================================
+// PHASE 5: Enrich top matches with BD humans + personalized outbound messages
+// =============================================================================
+
+// VPS hostname — required because Scrapling needs Playwright + Chromium,
+// which won't run in Vercel's serverless runtime. Leave unset locally to
+// silently skip this phase.
+const OUTBOUND_BACKEND_URL = process.env.OUTBOUND_BACKEND_URL || "";
+const OUTBOUND_BACKEND_TIMEOUT_MS = 25_000;
+
+async function enrichWithBDContacts(
+  matches: SynergyMatch[],
+  attendeeCompany: string,
+  attendeeSummary: string,
+  eventName: string,
+): Promise<void> {
+  if (!OUTBOUND_BACKEND_URL || matches.length === 0) return;
+
+  const top = matches.slice(0, 3);
+
+  await Promise.all(
+    top.map(async (match) => {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), OUTBOUND_BACKEND_TIMEOUT_MS);
+
+        const res = await fetch(`${OUTBOUND_BACKEND_URL}/api/outbound/bd-contacts`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            sponsor_name: match.name,
+            sponsor_summary: match.reasoning,
+            attendee_company: attendeeCompany,
+            attendee_summary: attendeeSummary,
+            synergy_reasoning: match.reasoning,
+            event_name: eventName,
+            max_contacts: 5,
+            generate_messages: true,
+          }),
+        });
+
+        clearTimeout(timer);
+        if (!res.ok) return;
+
+        const data = (await res.json()) as {
+          people?: BDPerson[];
+          messages?: OutboundMessages | null;
+        };
+
+        if (data.people?.length) match.bdPeople = data.people;
+        if (data.messages) match.outboundMessages = data.messages;
+      } catch {
+        // Outbound enrichment is best-effort — the VPS may be down, slow,
+        // or rate-limited. Never fail the whole opportunities response.
+      }
+    }),
+  );
+}
+
+// =============================================================================
 // Event metadata
 // =============================================================================
 
@@ -501,12 +579,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
     // Phase 3: Score with specificity + intelligence + user goals
     const matches = await scoreSynergies(profile, participants, existingRelationships, eventName, goals, specificContext);
 
-    // Phase 4: Research contact info for top matches (best-effort, in parallel with response prep)
+    // Phase 4: Research company-level contact info for top matches (best-effort)
     await researchContactInfo(matches, participants);
 
+    const attendeeName = String(profile.name || companyName || companyUrl);
+    const attendeeSummary = `${profile.core_specialization}. Notable projects: ${((profile.notable_projects as string[]) || []).join(", ") || "N/A"}. Known clients: ${((profile.known_clients as string[]) || []).join(", ") || "N/A"}.`;
+
+    // Phase 5: Outbound enrichment — BD humans + personalized messages via VPS
+    // (best-effort, skipped in envs without OUTBOUND_BACKEND_URL set).
+    await enrichWithBDContacts(matches, attendeeName, attendeeSummary, eventName);
+
     return NextResponse.json({
-      companyName: profile.name || companyName || companyUrl,
-      companySummary: `${profile.core_specialization}. Notable projects: ${((profile.notable_projects as string[]) || []).join(", ") || "N/A"}. Known clients: ${((profile.known_clients as string[]) || []).join(", ") || "N/A"}.`,
+      companyName: attendeeName,
+      companySummary: attendeeSummary,
       matches,
       existingRelationships,
     });
