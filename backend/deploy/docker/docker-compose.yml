@@ -32,6 +32,24 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  outbound-api:
+    build:
+      context: ../../../
+      dockerfile: backend/deploy/docker/Dockerfile
+    container_name: green-panorama-outbound-api
+    entrypoint: ["python3", "-m", "uvicorn"]
+    command: ["main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: always
+    env_file:
+      - ../../../backend/.env
+    ports:
+      - "8000:8000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   health-monitor:
     build:
       context: ../../../
