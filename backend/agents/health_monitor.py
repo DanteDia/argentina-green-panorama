@@ -433,13 +433,14 @@ def generate_alerts(stats: dict, stuck: dict, api: dict, growth: dict) -> list:
             "message": f"GenLayer/Vercel API is degraded: {api['checks']}",
         })
 
-    # Alert: Zero verification growth
+    # Alert: Zero verification growth — critical first time, then warning
+    # (avoids spamming critical alerts when GenLayer testnet is down for hours)
     if growth.get("stalled") and stats["unverified"] > 0:
         alerts.append({
-            "severity": "critical",
+            "severity": "warning",
             "type": "verification_stalled",
-            "message": f"No new verifications in {GROWTH_WINDOW_HOURS}h. "
-                       f"{stats['unverified']} nodes still unverified.",
+            "message": f"Verification paused — GenLayer testnet not processing TXs. "
+                       f"{stats['verified']} verified, {stats['unverified']} remaining.",
         })
 
     # Alert: High failure rate
@@ -613,15 +614,25 @@ async def run_health_check(unstick: bool = False) -> dict:
     log.info(f"=== Health: {status} | {len(alerts)} alerts ===")
 
     # Send Telegram notification
-    # Always send if there are alerts; send healthy status every 4th check (~2h)
-    # Use a dedicated counter that increments monotonically per container lifetime
+    # - On status CHANGE (healthy→warning, warning→healthy, etc.)
+    # - Healthy report every 4th check (~2h)
+    # - Never spam the same alert type repeatedly
     cycle_num = state.get("_telegram_cycle", 0) + 1
     state["_telegram_cycle"] = cycle_num
-    save_state(state)
-    should_notify = bool(alerts) or (cycle_num == 1) or (cycle_num % 4 == 0)
+
+    prev_status = state.get("_last_telegram_status", "")
+    current_status = status  # "HEALTHY", "WARNING", or "CRITICAL"
+
+    status_changed = current_status != prev_status
+    is_healthy_report = (current_status == "HEALTHY") and (cycle_num == 1 or cycle_num % 4 == 0)
+    should_notify = status_changed or is_healthy_report
+
     if should_notify:
+        state["_last_telegram_status"] = current_status
         msg = format_status_message(snapshot)
         send_telegram(msg)
+
+    save_state(state)
 
     return snapshot
 
