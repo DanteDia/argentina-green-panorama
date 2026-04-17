@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
         .update({ verification_status: "pending" })
         .eq("id", node.id);
 
-      const txHash = await verifyNode(
+      const { txHash } = await verifyNode(
         DEFAULT_MAP_ID,
         node.id,
         node.nombre,
@@ -78,10 +78,11 @@ export async function GET(request: NextRequest) {
         if (status === "ACCEPTED" || status === "FINALIZED") {
           finalStatus = "verified";
 
-          const details: Record<string, unknown> = {};
+          let details: Record<string, unknown> = {};
           try {
             const contractResult = await getVerification(DEFAULT_MAP_ID, node.id);
             if (contractResult && !contractResult.error) {
+              // getVerification already adapts the response to frontend format
               details.exists = contractResult.exists === "yes" || contractResult.exists === true;
               details.sector_relevant = contractResult.sector_relevant === "yes" || contractResult.sector_relevant === true;
               details.description_accurate = contractResult.description_accurate === "yes" || contractResult.description_accurate === true;
@@ -89,6 +90,12 @@ export async function GET(request: NextRequest) {
               details.funding_accurate = contractResult.funding_accurate === "yes" || contractResult.funding_accurate === true;
               if (contractResult.verified_funders) {
                 details.verified_funders = contractResult.verified_funders;
+              }
+              if (contractResult.accuracy_score) {
+                details.accuracy_score = contractResult.accuracy_score;
+              }
+              if (contractResult.reasoning) {
+                details.reasoning = contractResult.reasoning;
               }
             }
           } catch { /* contract read failed */ }

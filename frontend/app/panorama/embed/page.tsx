@@ -1,10 +1,19 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import PrototypeSection from "@/components/landing/PrototypeSection";
 import { useEmbedBridge } from "@/hooks/useEmbedBridge";
 
 export default function PanoramaEmbedPage() {
+  return (
+    <Suspense fallback={null}>
+      <PanoramaEmbedInner />
+    </Suspense>
+  );
+}
+
+function PanoramaEmbedInner() {
   const searchParams = useSearchParams();
   const localeParam = searchParams.get("locale");
   const lang: "es" | "en" = localeParam === "es" ? "es" : "en";
