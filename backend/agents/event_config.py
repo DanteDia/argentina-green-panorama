@@ -97,15 +97,29 @@ def seed_event(event_slug: str) -> None:
             .eq("nombre", company["nombre"])
             .execute()
         )
+        # Resolve industries for this company. A node may belong to multiple
+        # industries (e.g. a crypto-native green fund -> ["blockchain","green"]).
+        # Precedence: explicit "industries" list on the company, else wrap the
+        # singular "industry" (on company, falling back to event-level).
+        node_industries = company.get("industries") or [
+            company.get("industry", config.industry)
+        ]
+        primary_industry = node_industries[0]
+
         if existing_node.data:
             node_id = existing_node.data[0]["id"]
             name_to_id[company["nombre"]] = node_id
-            # Update industry/region if not set
+            # Merge industries: union existing with this event's tags, so a
+            # company appearing in multiple events accumulates tags.
+            existing_row = sb.table("nodes").select("industries").eq("id", node_id).execute()
+            prior = (existing_row.data[0].get("industries") if existing_row.data else []) or []
+            merged = sorted(set(prior) | set(node_industries))
             sb.table("nodes").update({
-                "industry": company.get("industry", config.industry),
+                "industry": primary_industry,
+                "industries": merged,
                 "region": company.get("region", config.region),
             }).eq("id", node_id).execute()
-            print(f"  ~ {company['nombre']} (already exists, linked)")
+            print(f"  ~ {company['nombre']} (already exists, industries={merged})")
         else:
             # Insert new node
             row = {
@@ -121,7 +135,8 @@ def seed_event(event_slug: str) -> None:
                 "source": "manual",
                 "depth": 0,
                 "discovery_method": "manual",
-                "industry": company.get("industry", config.industry),
+                "industry": primary_industry,
+                "industries": node_industries,
                 "region": company.get("region", config.region),
             }
             resp = sb.table("nodes").insert(row).execute()

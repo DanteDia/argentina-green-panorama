@@ -30,6 +30,7 @@
     if (opts.theme) qs.push("theme=" + encodeURIComponent(opts.theme));
     if (opts.primary) qs.push("primary=" + encodeURIComponent(opts.primary));
     if (opts.locale) qs.push("locale=" + encodeURIComponent(opts.locale));
+    if (opts.industries) qs.push("industries=" + encodeURIComponent(opts.industries));
     if (opts.autoHeight) qs.push("height=auto");
     var query = qs.length ? "?" + qs.join("&") : "";
     return EMBED_ORIGIN + target.path + query;
@@ -54,6 +55,7 @@
       theme: opts.theme || el.getAttribute("data-theme") || undefined,
       primary: opts.primary || el.getAttribute("data-primary") || undefined,
       locale: opts.locale || el.getAttribute("data-locale") || undefined,
+      industries: opts.industries || el.getAttribute("data-green-panorama-industries") || undefined,
       autoHeight: autoHeight,
     });
     iframe.setAttribute("title", target.kind === "event" ? "Green Panorama Event Map" : "Green Panorama Map");

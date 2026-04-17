@@ -4,8 +4,11 @@ import { GraphData, GraphStats } from "./types";
 // Falls back to external backend URL if set
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
-export async function fetchGraph(): Promise<GraphData> {
-  const res = await fetch(`${API_URL}/api/graph`);
+export async function fetchGraph(industries?: string[]): Promise<GraphData> {
+  const qs = industries && industries.length > 0
+    ? `?industries=${encodeURIComponent(industries.join(","))}`
+    : "";
+  const res = await fetch(`${API_URL}/api/graph${qs}`);
   if (!res.ok) throw new Error("Failed to fetch graph");
   return res.json();
 }

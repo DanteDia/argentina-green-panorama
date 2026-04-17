@@ -1,26 +1,48 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import seedData from "@/lib/seed_data.json";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  // Try Supabase first, fall back to static JSON
+export async function GET(request: NextRequest) {
+  const industriesParam = request.nextUrl.searchParams.get("industries");
+  const industries = industriesParam
+    ? industriesParam.split(",").map((s) => s.trim()).filter(Boolean)
+    : null;
+
   if (supabase) {
     try {
-      const { data: nodes, error: nodesErr } = await supabase
+      let nodeQuery = supabase
         .from("nodes")
         .select("*")
         .order("created_at", { ascending: true })
         .limit(2000);
 
-      const { data: edges, error: edgesErr } = await supabase
-        .from("edges")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .limit(5000);
+      if (industries && industries.length > 0) {
+        nodeQuery = nodeQuery.overlaps("industries", industries);
+      }
 
-      if (!nodesErr && !edgesErr && nodes && edges) {
+      const { data: nodes, error: nodesErr } = await nodeQuery;
+
+      if (!nodesErr && nodes) {
+        const nodeIds = nodes.map((n) => n.id);
+
+        let edges: Array<Record<string, unknown>> = [];
+        if (nodeIds.length > 0) {
+          const { data: edgeRows, error: edgesErr } = await supabase
+            .from("edges")
+            .select("*")
+            .in("source_id", nodeIds)
+            .in("target_id", nodeIds)
+            .order("created_at", { ascending: true })
+            .limit(5000);
+
+          if (edgesErr) {
+            throw edgesErr;
+          }
+          edges = edgeRows || [];
+        }
+
         return NextResponse.json({
           nodes: nodes.map((n) => ({
             id: n.id,
@@ -34,6 +56,7 @@ export async function GET() {
             clientes: n.clientes || [],
             descripcion: n.descripcion,
             logo_url: n.logo_url,
+            industries: n.industries || [],
             verified: n.verified || false,
             verification_tx: n.verification_tx,
             verification_attempts: n.verification_attempts || 0,
@@ -58,10 +81,16 @@ export async function GET() {
     }
   }
 
-  // Fallback: static seed data
+  // Fallback: static seed data (no industry tagging in seed; treat all as 'green')
+  const seedIsGreen = !industries || industries.includes("green");
+  if (!seedIsGreen) {
+    return NextResponse.json({ nodes: [], edges: [] });
+  }
+
   const nodes = seedData.nodes.map((node, i) => ({
     ...node,
     id: String(i + 1),
+    industries: ["green"],
     verified: false,
     verification_tx: null,
     source: "manual" as const,

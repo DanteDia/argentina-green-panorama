@@ -9,7 +9,13 @@ import { GreenNode, GreenEdge, NodeVerificationState } from "@/lib/types";
 import { fetchGraph } from "@/lib/api";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
-export default function PrototypeSection({ lang = "en" }: { lang?: "es" | "en" }) {
+export default function PrototypeSection({
+  lang = "en",
+  industries,
+}: {
+  lang?: "es" | "en";
+  industries?: string[];
+}) {
   const [nodes, setNodes] = useState<GreenNode[]>([]);
   const [edges, setEdges] = useState<GreenEdge[]>([]);
   const [selectedNode, setSelectedNode] = useState<GreenNode | null>(null);
@@ -28,14 +34,14 @@ export default function PrototypeSection({ lang = "en" }: { lang?: "es" | "en" }
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    fetchGraph()
+    fetchGraph(industries)
       .then((data) => {
         setNodes(data.nodes);
         setEdges(data.edges);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [industries]);
 
   const clusters = [...new Set(nodes.map((n) => n.cluster))].sort();
   const verifiedCount =

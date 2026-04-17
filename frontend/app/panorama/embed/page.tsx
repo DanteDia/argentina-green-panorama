@@ -19,6 +19,10 @@ function PanoramaEmbedInner() {
   const lang: "es" | "en" = localeParam === "es" ? "es" : "en";
   const primary = searchParams.get("primary") ?? undefined;
   const autoResize = searchParams.get("height") === "auto";
+  const industriesParam = searchParams.get("industries");
+  const industries = industriesParam
+    ? industriesParam.split(",").map((s) => s.trim()).filter(Boolean)
+    : undefined;
 
   useEmbedBridge({ slug: "panorama", autoResize });
 
@@ -26,7 +30,7 @@ function PanoramaEmbedInner() {
 
   return (
     <div style={style}>
-      <PrototypeSection lang={lang} />
+      <PrototypeSection lang={lang} industries={industries} />
     </div>
   );
 }
