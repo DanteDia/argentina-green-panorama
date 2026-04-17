@@ -19,28 +19,41 @@ export async function GET(request: NextRequest) {
         .limit(2000);
 
       if (industries && industries.length > 0) {
-        nodeQuery = nodeQuery.overlaps("industries", industries);
+        // Prefer array-overlap on `industries` when the column exists;
+        // fall back to equality on the legacy singular `industry` so the
+        // filter keeps working before the backfill migration lands.
+        const probe = await supabase.from("nodes").select("industries").limit(1);
+        const hasIndustriesColumn = !probe.error;
+
+        if (hasIndustriesColumn) {
+          nodeQuery = nodeQuery.overlaps("industries", industries);
+        } else {
+          nodeQuery = nodeQuery.in("industry", industries);
+        }
       }
 
       const { data: nodes, error: nodesErr } = await nodeQuery;
 
       if (!nodesErr && nodes) {
-        const nodeIds = nodes.map((n) => n.id);
+        // Always fetch all edges once — filtering via `.in(...)` with hundreds
+        // of UUIDs blows past PostgREST's URL limit and silently 414s.
+        // Scope in JS when an industries filter was applied.
+        const { data: allEdges, error: edgesErr } = await supabase
+          .from("edges")
+          .select("*")
+          .order("created_at", { ascending: true })
+          .limit(5000);
 
-        let edges: Array<Record<string, unknown>> = [];
-        if (nodeIds.length > 0) {
-          const { data: edgeRows, error: edgesErr } = await supabase
-            .from("edges")
-            .select("*")
-            .in("source_id", nodeIds)
-            .in("target_id", nodeIds)
-            .order("created_at", { ascending: true })
-            .limit(5000);
+        if (edgesErr) {
+          throw edgesErr;
+        }
 
-          if (edgesErr) {
-            throw edgesErr;
-          }
-          edges = edgeRows || [];
+        let edges: Array<Record<string, unknown>> = allEdges || [];
+        if (industries && industries.length > 0) {
+          const nodeIdSet = new Set(nodes.map((n) => n.id));
+          edges = edges.filter(
+            (e) => nodeIdSet.has(e.source_id) && nodeIdSet.has(e.target_id)
+          );
         }
 
         return NextResponse.json({
@@ -56,7 +69,7 @@ export async function GET(request: NextRequest) {
             clientes: n.clientes || [],
             descripcion: n.descripcion,
             logo_url: n.logo_url,
-            industries: n.industries || [],
+            industries: n.industries || (n.industry ? [n.industry] : ["green"]),
             verified: n.verified || false,
             verification_tx: n.verification_tx,
             verification_attempts: n.verification_attempts || 0,
