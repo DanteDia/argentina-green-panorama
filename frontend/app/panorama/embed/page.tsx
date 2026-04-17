@@ -29,7 +29,7 @@ function PanoramaEmbedInner() {
   const style = primary ? ({ ["--gp-primary" as string]: primary } as React.CSSProperties) : undefined;
 
   return (
-    <div style={style}>
+    <div style={{ ...style, height: "100vh", overflow: "hidden" }}>
       <PrototypeSection lang={lang} industries={industries} />
     </div>
   );

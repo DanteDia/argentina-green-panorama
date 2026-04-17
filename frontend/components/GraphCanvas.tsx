@@ -70,9 +70,12 @@ export default function GraphCanvas({
 
   useEffect(() => {
     const updateSize = () => {
+      // Subtract the fixed header (~56px) + the graph wrapper's mt-14 + mb-4
+      // vertical margins (~72px total) so the canvas fits inside its section
+      // without forcing a scrollbar in the iframe embed.
       setDimensions({
-        width: isMobile ? window.innerWidth : window.innerWidth - 288, // full width on mobile, subtract sidebar on desktop
-        height: window.innerHeight,
+        width: isMobile ? window.innerWidth : window.innerWidth - 288,
+        height: Math.max(300, window.innerHeight - 72),
       });
     };
     updateSize();
