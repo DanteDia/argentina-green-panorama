@@ -2,15 +2,7 @@
 
 import { use } from "react";
 import EventMapShell from "@/components/event/EventMapShell";
-
-// Event configs — maps slug to display info
-const EVENT_CONFIGS: Record<string, { name: string; dates: string; location: string }> = {
-  "blockchainrio-2026": {
-    name: "BlockchainRio 2026",
-    dates: "Aug 5-7, 2026",
-    location: "Rio de Janeiro, Brazil",
-  },
-};
+import { EVENT_CONFIGS } from "@/lib/event-configs";
 
 export default function EventPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
