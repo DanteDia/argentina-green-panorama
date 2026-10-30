@@ -19,6 +19,15 @@ describe("ownPaths", () => {
 });
 
 describe("mergeProfile (re-running onboarding)", () => {
+  it("keeps the artist's existing values; the import only fills blanks and adds to lists", () => {
+    const existing = perfil({ name: "Dante Arola", website: "https://dantearola.com", base_city: null, themes: ["dato"] });
+    const m = mergeProfile(existing, { name: "dante.arola.ig", website: "https://linktr.ee/x", base_city: "Buenos Aires", themes: ["cuerpo", "dato"] });
+    expect(m.name).toBe("Dante Arola");
+    expect(m.website).toBe("https://dantearola.com");
+    expect(m.base_city).toBe("Buenos Aires");
+    expect(m.themes).toEqual(["dato", "cuerpo"]);
+  });
+
   it("never overwrites existing fields with empty draft values", () => {
     const existing = perfil({ base_city: "Buenos Aires", website: "https://a.com", themes: ["dato"] });
     const m = mergeProfile(existing, { name: "Dante Arola", base_city: undefined, website: "", themes: [], instagram: "dante" });

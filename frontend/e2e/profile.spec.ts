@@ -27,6 +27,7 @@ test("the artist saves their data, a work with image and a CV line, and it persi
   await page.getByLabel("Técnica").fill("Cerámica escaneada");
   await page.getByLabel("Medidas").fill("30 x 20 x 20 cm");
   await page.getByRole("button", { name: "Guardar obra" }).click();
+  await expect(page.getByText("Coof")).toBeVisible();
   await page.reload();
   await expect(page.getByText("Coof")).toBeVisible();
   await expect(page.locator('img[alt="Coof"]')).toBeVisible();
@@ -37,6 +38,7 @@ test("the artist saves their data, a work with image and a CV line, and it persi
   await page.getByLabel("Institución").fill("Acéfala Galería");
   await page.getByLabel("Año").fill("2026");
   await page.getByRole("button", { name: "Agregar" }).click();
+  await expect(page.getByText("Liminales Expandidas")).toBeVisible(); // wait for the server action before reloading
   await page.reload();
   await expect(page.getByText("Liminales Expandidas")).toBeVisible();
 });

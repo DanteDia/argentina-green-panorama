@@ -23,9 +23,14 @@ export const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 const PROFILE_FIELDS = ["name", "birth_year", "birth_place", "base_city", "website", "instagram", "email_public", "mediums", "themes", "node_id"] as const;
 const empty = (v: unknown) => v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
 
-/** Profile fields to save from an import draft: draft values win only when non-empty, so re-running onboarding never erases data. */
+/** Profile fields to save from an import draft: the artist's existing values win, the draft only fills blanks
+ *  and adds to lists, so re-running onboarding never overwrites what they curated. */
 export function mergeProfile(existing: ArteProfile | null, draft: Partial<ArteProfile>): Partial<ArteProfile> {
   const out: Record<string, unknown> = {};
-  for (const k of PROFILE_FIELDS) out[k] = empty(draft[k]) ? existing?.[k] ?? (k === "mediums" || k === "themes" ? [] : null) : draft[k];
+  for (const k of PROFILE_FIELDS) {
+    const have = existing?.[k];
+    if (k === "mediums" || k === "themes") out[k] = [...new Set([...((have as string[]) ?? []), ...((draft[k] as string[]) ?? [])])];
+    else out[k] = !empty(have) ? have : empty(draft[k]) ? null : draft[k];
+  }
   return out as Partial<ArteProfile>;
 }

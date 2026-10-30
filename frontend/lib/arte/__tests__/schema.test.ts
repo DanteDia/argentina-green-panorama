@@ -10,7 +10,7 @@ const admin = createClient(URL, SERVICE, { auth: { persistSession: false } });
 
 async function userClient(email: string): Promise<{ client: SupabaseClient; id: string }> {
   const password = "test-password-123";
-  const { data: list } = await admin.auth.admin.listUsers();
+  const { data: list } = await admin.auth.admin.listUsers({ perPage: 1000 });
   let user = list.users.find((u) => u.email === email);
   if (!user) {
     const { data, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true });
@@ -51,5 +51,21 @@ describe("arte RLS", () => {
     expect(read.error).toBeNull();
     const write = await anon.from("arte_programs").insert({ id: "x-test", name: "Falsa" });
     expect(write.error).not.toBeNull();
+  });
+});
+
+describe("arte_imports rate-limit claim", () => {
+  it("a user cannot reset their own rate limit through the API", async () => {
+    const { client, id } = await userClient(`claim-a-${Date.now()}@example.invalid`);
+    await client.rpc("claim_arte_import");
+    await client.from("arte_imports").update({ last_at: "2000-01-01T00:00:00Z" }).eq("user_id", id);
+    const { data } = await admin.from("arte_imports").select("last_at").eq("user_id", id).single();
+    expect(Date.parse(data!.last_at)).toBeGreaterThan(Date.now() - 60_000);
+  });
+
+  it("concurrent claims grant exactly one slot", async () => {
+    const { client } = await userClient(`claim-b-${Date.now()}@example.invalid`);
+    const results = await Promise.all(Array.from({ length: 8 }, () => client.rpc("claim_arte_import")));
+    expect(results.filter((r) => r.data === true)).toHaveLength(1);
   });
 });

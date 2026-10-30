@@ -12,12 +12,11 @@ export async function POST(request: NextRequest) {
   if (!auth.user) return NextResponse.json({ error: "no autenticado" }, { status: 401 });
   const body = (await request.json().catch(() => ({}))) as { website?: string; instagram?: string; name?: string };
 
-  // Each import can cost ~20 paid Instagram API calls: one per artist every 10 minutes
-  const { data: last } = await supabase.from("arte_imports").select("last_at").eq("user_id", auth.user.id).maybeSingle();
-  if (last && Date.now() - Date.parse(last.last_at) < 10 * 60_000) {
-    return NextResponse.json({ error: "Ya importamos tus datos hace unos minutos. Probá de nuevo en un rato o completá a mano." }, { status: 429 });
+  // Only Instagram costs money (~20 paid API calls per import): one per artist every 10 minutes, claimed atomically
+  if (body.instagram) {
+    const { data: granted } = await supabase.rpc("claim_arte_import");
+    if (!granted) return NextResponse.json({ error: "Ya leímos tu Instagram hace unos minutos. Probá de nuevo en un rato o completá a mano." }, { status: 429 });
   }
-  await supabase.from("arte_imports").upsert({ user_id: auth.user.id, last_at: new Date().toISOString() });
 
   const [ig, site] = await Promise.all([
     body.instagram ? fetchIgProfile(body.instagram) : Promise.resolve(undefined),
