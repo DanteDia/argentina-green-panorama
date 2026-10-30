@@ -11,6 +11,7 @@
     "dev:arte": "scripts/arte-local-env.sh next dev -p 3010"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.9.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.99.3",
     "cobe": "^2.0.1",
