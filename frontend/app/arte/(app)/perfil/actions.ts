@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/arte/supabase-server";
-import { slugify } from "@/lib/arte/data";
+import { slugify, upsertProfile } from "@/lib/arte/data";
 import type { CvKind, Lang, TextKind } from "@/lib/arte/types";
 
 const list = (v: FormDataEntryValue | null) => String(v || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -19,8 +19,7 @@ export async function saveProfile(form: FormData) {
     career_stage: String(form.get("career_stage") || "emerging"), monthly_budget: Number(form.get("monthly_budget")) || 2,
     portfolio_public: form.get("portfolio_public") === "on", updated_at: new Date().toISOString(),
   };
-  const { error } = await supabase.from("arte_profiles").upsert(row);
-  if (error) throw new Error(error.message);
+  await upsertProfile(supabase, row);
   revalidatePath("/arte", "layout");
 }
 

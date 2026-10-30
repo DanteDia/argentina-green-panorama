@@ -40,3 +40,17 @@ test("the artist saves their data, a work with image and a CV line, and it persi
   await page.reload();
   await expect(page.getByText("Liminales Expandidas")).toBeVisible();
 });
+
+test("two artists with the same name can both save their profile", async ({ browser }) => {
+  const name = `Homónimo ${Date.now()}`;
+  for (const who of ["a", "b"]) {
+    const page = await (await browser.newContext()).newPage();
+    await loginViaMagicLink(page, `homonimo-${who}-${Date.now()}@example.invalid`);
+    await page.goto("/arte/perfil");
+    await page.locator('input[name="name"]').fill(name);
+    await page.getByRole("button", { name: "Guardar datos" }).click();
+    await page.waitForLoadState("networkidle");
+    await page.reload();
+    await expect(page.locator('input[name="name"]')).toHaveValue(name);
+  }
+});

@@ -41,3 +41,12 @@ export async function signedUrls(supabase: SupabaseClient, paths: string[]): Pro
 export function slugify(s: string): string {
   return s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
+
+/** Upsert the profile; a name another artist already uses gets a stable per-user suffix on its slug. */
+export async function upsertProfile(supabase: SupabaseClient, row: { user_id: string; slug: string | null } & Record<string, unknown>) {
+  let { error } = await supabase.from("arte_profiles").upsert(row);
+  if (error?.code === "23505" && row.slug && error.message.includes("slug")) {
+    ({ error } = await supabase.from("arte_profiles").upsert({ ...row, slug: `${row.slug}-${row.user_id.slice(0, 6)}` }));
+  }
+  if (error) throw new Error(error.message);
+}
