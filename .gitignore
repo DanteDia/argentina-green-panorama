@@ -29,3 +29,5 @@ Thumbs.db
 
 # superpowers plan workspaces
 .superpowers/
+frontend/test-results/
+frontend/playwright-report/
