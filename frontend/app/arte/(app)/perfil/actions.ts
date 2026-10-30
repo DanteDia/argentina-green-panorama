@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { slugify, upsertProfile } from "@/lib/arte/data";
+import { ownPaths } from "@/lib/arte/guards";
 import type { CvKind, Lang, TextKind } from "@/lib/arte/types";
 
 const list = (v: FormDataEntryValue | null) => String(v || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -35,7 +36,7 @@ export async function saveText(kind: Exclude<TextKind, "letter">, lang: Lang, bo
 export async function upsertWork(form: FormData) {
   const { user, supabase } = await requireUser();
   const id = txt(form.get("id"));
-  const images = list(form.get("images"));
+  const images = ownPaths(list(form.get("images")), user.id);
   const row = {
     user_id: user.id, title: String(form.get("title") || "Sin título").trim(), year: txt(form.get("year")), technique: txt(form.get("technique")),
     dimensions: txt(form.get("dimensions")), series: txt(form.get("series")), description: txt(form.get("description")),

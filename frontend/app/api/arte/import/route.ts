@@ -2,42 +2,22 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerSupabase } from "@/lib/arte/supabase-server";
 import { fetchIgFollowing, fetchIgProfile } from "@/lib/arte/hiker";
 import { importSite } from "@/lib/arte/site-import";
-import { mapImport, type GraphNodeImport, type IgProfile } from "@/lib/arte/import-map";
-import type { SupabaseClient } from "@supabase/supabase-js";
-
-const norm = (s: string) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
-
-async function findGraphNode(supabase: SupabaseClient, handle: string | null, name: string | null): Promise<GraphNodeImport | null> {
-  let node = null as null | { id: string; nombre: string; descripcion: string | null; link: string | null; extra: Record<string, string>; contact_info: Record<string, string> };
-  if (handle) {
-    const { data } = await supabase.from("nodes").select("id, nombre, descripcion, link, extra, contact_info")
-      .contains("industries", ["arte"]).ilike("contact_info->>instagram", handle).limit(1);
-    node = data?.[0] ?? null;
-  }
-  if (!node && name && name.split(" ").length >= 2) {
-    const { data } = await supabase.from("nodes").select("id, nombre, descripcion, link, extra, contact_info, categoria")
-      .contains("industries", ["arte"]).eq("categoria", "artista").ilike("nombre", name.trim()).limit(3);
-    node = data?.find((n) => norm(n.nombre) === norm(name)) ?? null;
-  }
-  if (!node) return null;
-  const { data: edges } = await supabase.from("edges").select("relationship_type, fecha, target:nodes!edges_target_id_fkey(nombre, categoria)")
-    .eq("source_id", node.id).limit(300);
-  return {
-    id: node.id, nombre: node.nombre, descripcion: node.descripcion, link: node.link,
-    extra: node.extra || {}, contact_info: node.contact_info || {},
-    edges: (edges || []).map((e) => {
-      const t = e.target as unknown as { nombre: string; categoria: string } | null;
-      return { relationship_type: e.relationship_type, fecha: e.fecha, target_nombre: t?.nombre || "", target_tipo: t?.categoria || "" };
-    }).filter((e) => e.target_nombre),
-  };
-}
+import { mapImport, type IgProfile } from "@/lib/arte/import-map";
+import { findGraphNode } from "@/lib/arte/graph-match";
 
 /** Onboarding import: Instagram + website + graph match -> a draft profile. Also stores who the artist follows. */
 export async function POST(request: NextRequest) {
   const supabase = await createServerSupabase();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return NextResponse.json({ error: "no autenticado" }, { status: 401 });
-  const body = (await request.json()) as { website?: string; instagram?: string; name?: string };
+  const body = (await request.json().catch(() => ({}))) as { website?: string; instagram?: string; name?: string };
+
+  // Each import can cost ~20 paid Instagram API calls: one per artist every 10 minutes
+  const { data: last } = await supabase.from("arte_imports").select("last_at").eq("user_id", auth.user.id).maybeSingle();
+  if (last && Date.now() - Date.parse(last.last_at) < 10 * 60_000) {
+    return NextResponse.json({ error: "Ya importamos tus datos hace unos minutos. Probá de nuevo en un rato o completá a mano." }, { status: 429 });
+  }
+  await supabase.from("arte_imports").upsert({ user_id: auth.user.id, last_at: new Date().toISOString() });
 
   const [ig, site] = await Promise.all([
     body.instagram ? fetchIgProfile(body.instagram) : Promise.resolve(undefined),
@@ -47,7 +27,8 @@ export async function POST(request: NextRequest) {
   const graphNode = await findGraphNode(supabase, igOk?.username ?? body.instagram?.replace(/^@/, "") ?? null, body.name || igOk?.full_name || null);
   const draft = mapImport({ ig, site, graphNode });
 
-  if (igOk?.pk) {
+  const { count: yaSeguidos } = await supabase.from("arte_follows").select("handle", { count: "exact", head: true }).eq("user_id", auth.user.id);
+  if (igOk?.pk && !yaSeguidos) {
     const follows = await fetchIgFollowing(String(igOk.pk));
     if (follows.length) {
       const handles = follows.map((f) => f.username.toLowerCase());

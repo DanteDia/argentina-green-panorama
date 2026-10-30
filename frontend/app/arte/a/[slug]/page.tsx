@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createAdminSupabase } from "@/lib/arte/supabase-server";
 import { CV_KINDS } from "@/lib/arte/cv";
+import { ownPaths } from "@/lib/arte/guards";
 import type { ArteProfile, ArteWork, CvItem } from "@/lib/arte/types";
 
 // Public portfolio: read with the service role, but only rows the artist marked public.
@@ -16,7 +17,7 @@ async function load(slug: string) {
     db.from("arte_texts").select("kind, body").eq("user_id", profile.user_id).is("application_id", null).eq("lang", "es").in("kind", ["bio_long", "statement"]).order("version", { ascending: false }),
   ]);
   const works = (w.data || []) as ArteWork[];
-  const paths = works.map((x) => x.images[0]).filter(Boolean);
+  const paths = ownPaths(works.map((x) => x.images[0]).filter(Boolean), profile.user_id);
   const { data: signed } = paths.length ? await db.storage.from("arte-private").createSignedUrls(paths, 3600) : { data: [] };
   const url = new Map((signed || []).map((s) => [s.path, s.signedUrl]));
   const text = (k: string) => (t.data || []).find((x) => x.kind === k)?.body ?? "";

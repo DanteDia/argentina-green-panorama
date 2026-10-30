@@ -15,3 +15,21 @@ test("onboarding finds a known artist in the scene graph and imports her traject
   await page.goto("/arte/perfil/cv");
   await expect(page.getByText("de la escena").first()).toBeVisible();
 });
+
+test("the import is rate limited per artist (paid Instagram API)", async ({ page }) => {
+  await loginViaMagicLink(page, `rate-${Date.now()}@example.invalid`);
+  const first = await page.request.post("/api/arte/import", { data: { name: "Nadie Particular" } });
+  expect(first.status()).toBe(200);
+  const second = await page.request.post("/api/arte/import", { data: { name: "Nadie Particular" } });
+  expect(second.status()).toBe(429);
+});
+
+test("onboarding never imports from internal network addresses", async ({ page }) => {
+  await loginViaMagicLink(page, `ssrf-${Date.now()}@example.invalid`);
+  const r = await page.request.post("/api/arte/import", { data: { website: "http://127.0.0.1:54423/" } });
+  expect(r.status()).toBe(200);
+  const d = await r.json();
+  expect(d.warnings.join(" ")).toMatch(/No pude leer tu web/);
+  expect(d.texts.bio_long).toBeUndefined();
+  expect(d.works).toEqual([]);
+});

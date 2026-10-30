@@ -1,16 +1,12 @@
 import "server-only";
 import type { SiteImport } from "./import-map";
+import { safeFetch } from "./safe-fetch";
 
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36";
 
 async function get(url: string): Promise<string | null> {
-  try {
-    const r = await fetch(url, { headers: { "user-agent": UA, "accept-language": "es-AR,es;q=0.9" }, signal: AbortSignal.timeout(12000), redirect: "follow" });
-    if (!r.ok || !(r.headers.get("content-type") || "").includes("html")) return null;
-    return await r.text();
-  } catch {
-    return null;
-  }
+  const r = await safeFetch(url, { maxBytes: 2 * 1024 * 1024, headers: { "user-agent": UA, "accept-language": "es-AR,es;q=0.9" } });
+  return r && r.contentType.includes("html") ? r.body.toString("utf8") : null;
 }
 
 const strip = (html: string) =>
