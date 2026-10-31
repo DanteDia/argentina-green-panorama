@@ -123,16 +123,12 @@ ALTER TABLE node_intelligence ENABLE ROW LEVEL SECURITY;
 ALTER TABLE synergies ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Public read maps" ON maps FOR SELECT USING (true);
-CREATE POLICY "Service role full maps" ON maps FOR ALL USING (true);
 
 CREATE POLICY "Public read event_participants" ON event_participants FOR SELECT USING (true);
-CREATE POLICY "Service role full event_participants" ON event_participants FOR ALL USING (true);
 
 CREATE POLICY "Public read node_intelligence" ON node_intelligence FOR SELECT USING (true);
-CREATE POLICY "Service role full node_intelligence" ON node_intelligence FOR ALL USING (true);
 
 CREATE POLICY "Public read synergies" ON synergies FOR SELECT USING (true);
-CREATE POLICY "Service role full synergies" ON synergies FOR ALL USING (true);
 
 -- ============================================================
 -- 8. Insert BlockchainRio 2025 event map

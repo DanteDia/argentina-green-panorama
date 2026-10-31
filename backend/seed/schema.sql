@@ -75,11 +75,7 @@ CREATE POLICY "Public read access for nodes" ON nodes FOR SELECT USING (true);
 CREATE POLICY "Public read access for edges" ON edges FOR SELECT USING (true);
 CREATE POLICY "Public read access for agent_runs" ON agent_runs FOR SELECT USING (true);
 
--- Allow service role full access
-CREATE POLICY "Service role full access nodes" ON nodes FOR ALL USING (true);
-CREATE POLICY "Service role full access edges" ON edges FOR ALL USING (true);
-CREATE POLICY "Service role full access agent_runs" ON agent_runs FOR ALL USING (true);
+-- No write policies: the service role bypasses RLS (see migration_drop_public_write.sql)
 
 ALTER TABLE health_snapshots ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public read access for health_snapshots" ON health_snapshots FOR SELECT USING (true);
-CREATE POLICY "Service role full access health_snapshots" ON health_snapshots FOR ALL USING (true);
