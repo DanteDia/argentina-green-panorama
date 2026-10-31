@@ -1,0 +1,30 @@
+/* Arte cluster tokens: IndustriesVerified's warm paper brand, tuned calmer for artists. */
+.arte {
+  --paper: #f5f3eb;
+  --paper-2: #ece8dc;
+  --card: #fbfaf6;
+  --ink: #1a1a1a;
+  --ink-2: #4a4740;
+  --ink-3: #8a857a;
+  --line: #ddd8ca;
+  --accent: #b4532a; /* terracotta: one accent, used sparingly */
+  --accent-soft: #f3e1d6;
+  --ok: #3f6b4a;
+  --warn: #a8741a;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+.arte .display { font-family: var(--font-serif), Georgia, serif; letter-spacing: -0.01em; }
+.arte .eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.arte .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.arte .btn { display: inline-flex; align-items: center; gap: .5rem; border-radius: 999px; padding: .6rem 1.1rem; font-size: 14px; font-weight: 500; transition: background .15s, color .15s; }
+.arte .btn-primary { background: var(--ink); color: var(--paper); }
+.arte .btn-primary:hover { background: #000; }
+.arte .btn-ghost { border: 1px solid var(--line); color: var(--ink); }
+.arte .btn-ghost:hover { background: var(--paper-2); }
+.arte .input { width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .65rem .8rem; font-size: 14px; }
+.arte .input:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+.arte .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: .15rem .6rem; font-size: 12px; border: 1px solid var(--line); color: var(--ink-2); }
+.arte .pill-accent { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+.arte .muted { color: var(--ink-3); }
