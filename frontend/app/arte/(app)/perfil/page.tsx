@@ -1,3 +1,4 @@
+import { countryCode, countryOptions } from "@/lib/arte/countries";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio } from "@/lib/arte/data";
 import { completeness } from "@/lib/arte/completeness";
@@ -5,6 +6,18 @@ import { Meter, ProfileTabs } from "@/components/arte/ProfileTabs";
 import { TextEditor } from "@/components/arte/TextEditor";
 import { TagFields } from "@/components/arte/TagFields";
 import { saveProfile } from "./actions";
+
+/** Country as a name; the value saved is the ISO code that calls use for eligibility. */
+function Pais({ label, name, def }: { label: string; name: string; def?: string | null }) {
+  return (
+    <label className="block text-sm">
+      <span className="text-[var(--ink-2)]">{label}</span>
+      <select className="input mt-1" name={name} defaultValue={countryCode(def) || "AR"}>
+        {countryOptions(def).map(([code, country]) => <option key={code} value={code}>{country}</option>)}
+      </select>
+    </label>
+  );
+}
 
 function Campo({ label, name, def, placeholder, type = "text" }: { label: string; name: string; def?: string | number | null; placeholder?: string; type?: string }) {
   return (
@@ -42,8 +55,8 @@ export default async function Perfil() {
               </select>
             </label>
             <Campo label="Postulaciones por mes que querés hacer" name="monthly_budget" type="number" def={p?.monthly_budget ?? 2} />
-            <Campo label="Nacionalidad (código)" name="nationality" def={p?.nationality ?? "AR"} />
-            <Campo label="Residencia (código)" name="residence" def={p?.residence ?? "AR"} />
+            <Pais label="Nacionalidad" name="nationality" def={p?.nationality} />
+            <Pais label="País donde vivís" name="residence" def={p?.residence} />
           </div>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="portfolio_public" defaultChecked={p?.portfolio_public} /> Publicar mi portfolio en un link público</label>
           <button className="btn btn-primary">Guardar datos</button>
