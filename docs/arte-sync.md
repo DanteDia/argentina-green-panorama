@@ -5,8 +5,10 @@ SQLite) and loaded into Supabase with one idempotent script. Supabase is the dat
 runs on the VPS, and its `arte.db` there is the only live working copy ("Scheduled run" below).
 
 ```bash
-# on the VPS (ssh personal-vps), normally through semanal.sh, which loads the secrets file:
-cd /root/projects/escena-arte && .venv/bin/python3 sync_supabase.py [--solo grafo|programas|eventos]   # needs ARTE_DATABASE_URL
+# on the VPS. semanal.sh loads the secrets file itself; a script run by hand needs it loaded first, or the sync
+# goes to a local database and the Instagram scripts have no key:
+ssh personal-vps 'cd /root/projects/escena-arte && set -a && . /root/secrets/escena-arte.env && set +a \
+  && .venv/bin/python3 sync_supabase.py --solo eventos'      # or grafo, programas; no --solo syncs all three
 # on a dev machine, against local Supabase (frontend/supabase, ports 544xx):
 python3 sync_supabase.py
 ```
@@ -92,40 +94,54 @@ at 12:17 UTC (09:17 in Buenos Aires).
 | --- | --- | --- |
 | Listing sites + Arte al Día, sync programs | Yes, Mon and Thu | `semanal.sh` from cron |
 | Instagram open calls (`convocatorias_ig.py`) | Yes, Mon | `semanal.sh ig`: the 300 most-followed spaces with a handle, one paid request each for their latest posts |
-| Recent shows and the artists each space shows (`enrich.py ig1`, then `calidad.py`), sync graph and events | Yes, Mon | Same run, from the same posts (latest page only). A show announcement that names someone as `Name (@handle)` adds that artist and an `expuso_en` link; a tag only links people already in the map (`etiquetado_en`), it never adds anyone. Events are read from those links |
-| Curated list (`programas_curados.py`) | No: hand-verified | Edit it, then `./deploy_vps.sh curados` |
+| Recent shows and the artists each space shows (`enrich.py ig1`, then `calidad.py`), sync graph and events | Yes, Mon | Same run, from the same posts (latest page only). A show announcement that names someone as `Name (@handle)` adds that artist and an `expuso_en` link (`curo` when the caption says they curated it); a tag only links people already in the map (`etiquetado_en`), it never adds anyone. Events are read from those links |
+| Curated list (`programas_curados.py`) | No: hand-verified | Edit it on the Mac (a deploy overwrites the VPS's copy of the code), then `./deploy_vps.sh curados` |
 | City "Oportunidades" PDFs (`programas.py`) | No: the monthly PDF is found by hand | Copy the PDF to `raw/` on the VPS, run `.venv/bin/python3 programas.py` from the project folder (it needs `pdftotext`, installed there); the rows reach production on the next run |
-| The crawlers that built the map (arteBA, Cancillería, Meridiano, Wikidata, venue websites, press, bios, artist profiles) | No: one-off passes, some of them paid | By hand on the VPS when the map needs widening, then `calidad.py`; the next Monday run syncs the result |
+| The crawlers that built the map (arteBA, Cancillería, Meridiano, Wikidata, venue websites, press, bios, artist profiles) | No: one-off passes, some of them paid | By hand on the VPS when the map needs widening, with the secrets loaded and no run in progress, then `calidad.py`; the next Monday run syncs the result |
 
 `semanal.sh` prints nothing: the result is in `logs/semanal-YYYY-MM-DD.log` (date in Buenos Aires time; same-day runs
 append; logs are deleted after 120 days). `curados` and `ig` are not single steps: each does a full run with those
 steps added, and syncs production (programs only, or programs, graph and events on an `ig` run). `--sin-sync` skips
 the sync but still rewrites `arte.db`.
 
-When a run fails: if any script exits with an error, the calls with a deadline ahead drop by more than half, or the
-map loses more than 5% of its nodes, the run restores `arte.db` from the copy taken at its start, syncs nothing and
-sends a warning through the server's alert script (`/root/scripts/pango-alert.sh`, Telegram). The Instagram reader
-exits with an error when it could read fewer than half of its accounts (a dead key or an empty HikerAPI balance), so
-that case alerts too. Each run also keeps a dated copy of the database, `logs/arte-YYYY-MM-DD.db`, for 35 days, and a
-run that passes deletes cache files older than 75 days.
+When a run does not finish, it sends a warning through the server's alert script (`/root/scripts/pango-alert.sh`,
+Telegram) that says which of these happened:
+
+- **A reading failed**: a script exited with an error, a count could not be read, the calls with a deadline ahead
+  dropped by more than half, or the map lost more than 5% of its nodes. `arte.db` is restored from the copy taken at
+  the start of the run (`logs/arte-antes.db`) and nothing is synced. The Instagram reader exits with an error when
+  fewer than half of its accounts returned their posts, which is what a dead key or an empty HikerAPI balance looks
+  like once the 3-day cache of posts has expired.
+- **The run was interrupted** (a signal, a script error) before the sync: same restore, same alert. A hard kill or a
+  power loss cannot be caught: the next run starts from whatever `arte.db` held, which every step rebuilds anyway.
+- **The sync failed**: `arte.db` is kept, and production may be half-updated, because programs, graph and events are
+  committed one after the other. Run it again; the sync is idempotent.
+- **Another run was still going**: the new one does not start. If nobody launched one by hand, it is hung.
+
+The first run of each day also keeps a dated copy of the database, `logs/arte-YYYY-MM-DD.db`, deleted after 35 days by
+a later passing run, which also deletes cache files older than 75 days. To go back to one, with no run in progress:
+`cp logs/arte-YYYY-MM-DD.db arte.db`, then a run. A deliberate cleanup that removes more than 5% of the map has to be
+done by hand (`calidad.py`, with the secrets loaded) before a run, because inside a run it trips the guard.
 
 Known limits:
 
-- The sync upserts nodes and edges and never deletes them: something `calidad.py` or `dedupe.py` removes from
-  `arte.db` stays in Supabase.
+- The sync upserts nodes, edges and events and never deletes them: something `calidad.py` or `dedupe.py` removes
+  from `arte.db` stays in Supabase until someone deletes it there.
 - Spaces beyond the 300 most-followed get their posts re-read only when the 60-day cache expires, and only the latest
   page of posts is read each week, so a space that posts more than a page a week loses the older ones.
 - New artists come from a name pattern in captions, so a few are not people ("Los Vencedores"); `calidad.py` drops
   names that do not look like a person, nothing else reviews them. The by-hand pass (`enrich.py ig`) also adds tagged
   accounts as artists, which on 2026-11-11 was about one non-artist in four: review its result before a synced run.
 - A venue's Instagram handle is whatever a crawler found. `calidad.py` removes a directory's or the city's account
-  from the venues it was pinned on (`web.NO_IG`, `IG_MAL`), with every link learned from that account's posts; a
-  wrong handle that is not in those lists is read as the venue's own.
+  from the venues it was pinned on (`web.NO_IG`; the directory's own node keeps it, `DUENOS`) and the handles read by
+  hand as someone else's (`IG_MAL`), with the artist links learned from that account's posts. Venue-to-venue links
+  (`colabora_con`) from those posts are not removed, and a wrong handle in neither list is read as the venue's own.
 - Events are only the announcements that link at least one artist already in the map or named in the caption.
-- If cron itself stops running, nothing alerts: the alert comes from the script.
+- If cron itself stops running, or the server is down, nothing alerts: the alerts come from the script.
 - The dated copies live on the same disk as the database.
-- Any other machine holding the code (the owner's Mac has it, with an old `arte.db`) carries a marker file,
-  `BASE_VIVA_EN_VPS`, that makes `sync_supabase.py` refuse to write to anything but a local database.
+- Only the VPS folder can write to a remote database: `sync_supabase.py` refuses unless the file
+  `ESTA_ES_LA_BASE_VIVA` sits next to it, and `deploy_vps.sh` never copies that file. Do not copy it by hand: any
+  other folder (the owner's Mac has the code and an old `arte.db`) would then overwrite production with stale data.
 - Code goes up with `./deploy_vps.sh` (rsync without `--delete`; it never copies the database or `raw/`, and installs
   no packages: the venv was built by hand with scrapling[fetchers], curl_cffi, psycopg2-binary, pypdf, requests).
 
@@ -171,7 +187,7 @@ from this repo.
 
 ## Syncing production
 
-Only the VPS syncs production, at the end of each scheduled run or by hand with the commands above. Before the first
+Only the VPS syncs production, at the end of each scheduled run or by hand with the command at the top of this page. Before the first
 sync after a schema change, apply the migration to production (see CLAUDE.md, "Production database access").
 `sync_supabase.py` falls back to the **local** database when `ARTE_DATABASE_URL` is not set and prints the same
 success line, which is why `semanal.sh` stops with an alert when the variable is missing. With no `--solo` it syncs
