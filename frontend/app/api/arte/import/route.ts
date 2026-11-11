@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   if (!auth.user) return NextResponse.json({ error: "no autenticado" }, { status: 401 });
   const body = (await request.json().catch(() => ({}))) as { website?: string; instagram?: string; name?: string };
 
-  // Only Instagram costs money (~20 paid API calls per import): one per artist every 10 minutes, claimed atomically
+  // Instagram costs money (2 paid API calls per import; reading follows is metered apart): one per artist every 10 minutes, claimed atomically
   if (body.instagram) {
     const { data: granted } = await supabase.rpc("claim_arte_import");
     if (!granted) return NextResponse.json({ error: "Ya leímos tu Instagram hace unos minutos. Probá de nuevo en un rato o completá a mano." }, { status: 429 });

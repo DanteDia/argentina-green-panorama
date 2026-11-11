@@ -54,6 +54,14 @@ describe("mapImport", () => {
     expect(d.works[1].title).toBe("Obra sin título");
     expect(d.igPk).toBe("1");
   });
+
+  it("titles a post by its first line with words, and never cuts an emoji in half", () => {
+    const long = "Serie de retratos ".repeat(5) + "🎨🎨🎨🎨🎨🎨";
+    const d = mapImport({ posts: [{ code: "a", caption: "#arte #ba\nUmbral", image: "i", year: null }, { code: "b", caption: long, image: "i", year: null }, { code: "c", caption: "x".repeat(1499) + "🎨", image: "i", year: null }] });
+    expect(d.works[0].title).toBe("Umbral");
+    for (const w of d.works) for (const t of [w.title, w.description ?? ""]) expect(() => encodeURIComponent(t)).not.toThrow();   // a lone surrogate throws
+    expect([...d.works[1].title].length).toBeLessThanOrEqual(80);
+  });
 });
 
 describe("igPosts", () => {

@@ -29,7 +29,8 @@ export async function fetchIgProfile(handle: string): Promise<IgProfile | { erro
 export async function fetchIgFollowing(userId: string, max = 600): Promise<{ username: string; full_name?: string }[]> {
   const out: { username: string; full_name?: string }[] = [];
   let cursor = "";
-  for (let i = 0; i < 20 && out.length < max; i++) {
+  const deadline = Date.now() + 90_000;   // the route has 120 s: stop paging in time to store what was read
+  for (let i = 0; i < 20 && out.length < max && Date.now() < deadline; i++) {
     const params: Record<string, string> = { user_id: userId, force: "on" };
     if (cursor) params.end_cursor = cursor;
     const d = await hiker<[{ username: string; full_name?: string }[], string | null]>("/gql/user/following/chunk", params);

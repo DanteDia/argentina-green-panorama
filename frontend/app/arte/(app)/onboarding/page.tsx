@@ -5,6 +5,8 @@ import type { DraftProfile } from "@/lib/arte/import-map";
 import { CV_KINDS } from "@/lib/arte/cv";
 import { applyDraft } from "./actions";
 
+const FOLLOWS_LATER = "No pudimos leer a quién seguís ahora. Podés reintentarlo después desde Descubrir.";
+const MAX_WORKS = 12;   // what applyDraft imports
 const PASOS = ["Leyendo tu Instagram y tus últimas publicaciones", "Leyendo tu web", "Buscándote en el mapa de la escena", "Armando tu borrador"];
 
 export default function Onboarding() {
@@ -34,9 +36,9 @@ export default function Onboarding() {
       if (d.igPk) {
         setFollows("Leyendo a quién seguís en Instagram para armar tu escena…");
         fetch("/api/arte/import/follows", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pk: d.igPk }), keepalive: true })
-          .then((x) => x.json()).then((f: { total?: number; inMap?: number; skipped?: boolean }) =>
-            setFollows(f.total && !f.skipped ? `Seguís ${f.total} cuentas: ${f.inMap ?? 0} están en el mapa de la escena.` : ""))
-          .catch(() => setFollows(""));
+          .then((x) => x.json()).then((f: { total?: number; inMap?: number; skipped?: boolean; error?: string }) =>
+            setFollows(f.error ? FOLLOWS_LATER : f.total && !f.skipped ? `Leímos ${f.total} cuentas que seguís: ${f.inMap ?? 0} están en el mapa de la escena.` : ""))
+          .catch(() => setFollows(FOLLOWS_LATER));
       }
     } catch (err) { setError(String(err instanceof Error ? err.message : err)); }
     finally { clearInterval(tick); setPaso(-1); }
@@ -102,10 +104,10 @@ export default function Onboarding() {
       {draft.works.length > 0 && (
         <section className="card mt-4 p-5">
           <h2 className="display text-xl">Tus imágenes</h2>
-          <p className="text-sm muted">De tu Instagram y tu web. Elegí cuáles son obras: las importamos con el texto de la publicación y después ajustás la ficha.</p>
+          <p className="text-sm muted">De tu Instagram y tu web. Elegí cuáles son obras (hasta 12): las importamos con el texto de la publicación y después ajustás la ficha.</p>
           <div className="mt-3 grid grid-cols-3 gap-2 md:grid-cols-6">
             {draft.works.map((w, i) => (
-              <button key={i} type="button" onClick={() => setWorksOn(worksOn.map((v, j) => (j === i ? !v : v)))} className={`relative aspect-square overflow-hidden rounded-lg border-2 ${worksOn[i] ? "border-[var(--ink)]" : "border-transparent opacity-50"}`}>
+              <button key={i} type="button" disabled={!worksOn[i] && worksOn.filter(Boolean).length >= MAX_WORKS} onClick={() => setWorksOn(worksOn.map((v, j) => (j === i ? !v : v)))} className={`relative aspect-square overflow-hidden rounded-lg border-2 ${worksOn[i] ? "border-[var(--ink)]" : "border-transparent opacity-50"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={w.image_url} alt={w.title} title={w.title} referrerPolicy="no-referrer" className="h-full w-full object-cover" />
               </button>

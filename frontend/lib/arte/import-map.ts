@@ -70,10 +70,13 @@ export function followRows(userId: string, follows: { username: string; full_nam
   return [...seen.values()];
 }
 
-/** A caption's first line as a work title: no leading emoji, no hashtags, not a paragraph. */
+/** Truncate by characters, not UTF-16 units: half an emoji is an invalid string that Postgres rejects. */
+export const cut = (t: string, n: number) => (t.length <= n ? t : [...t].slice(0, n).join(""));
+
+/** A caption's first line with words as a work title: no hashtags, no leading emoji, not a paragraph. */
 function titleFromCaption(caption: string): string {
-  const line = (caption.split("\n").find((l) => /\p{L}/u.test(l)) ?? "").replace(/#\S+/g, "").replace(/^[^\p{L}\p{N}"“¿¡]+/u, "").trim();
-  return line && line.length <= 80 ? line : line ? `${line.slice(0, 77).trimEnd()}…` : "Obra sin título";
+  const line = caption.split("\n").map((l) => l.replace(/#\S+/g, "").replace(/^[^\p{L}\p{N}"“¿¡]+/u, "").trim()).find((l) => /\p{L}/u.test(l)) ?? "";
+  return !line ? "Obra sin título" : [...line].length <= 80 ? line : `${cut(line, 77).trimEnd()}…`;
 }
 
 /** Merge what we could read (graph > site > Instagram) into a draft the artist confirms item by item. */
@@ -105,7 +108,7 @@ export function mapImport(input: { ig?: IgProfile | { error: string }; site?: Si
     }
   }
   // Instagram posts first: that is where an emerging artist's work actually lives, already captioned
-  d.works.push(...(input.posts ?? []).map((p) => ({ title: titleFromCaption(p.caption), description: p.caption.slice(0, 1500) || undefined, year: p.year, image_url: p.image, source: `instagram.com/p/${p.code}` })));
+  d.works.push(...(input.posts ?? []).map((p) => ({ title: titleFromCaption(p.caption), description: cut(p.caption, 1500) || undefined, year: p.year, image_url: p.image, source: `instagram.com/p/${p.code}` })));
   if (site) {
     d.sources.push(site.url);
     d.profile.website = d.profile.website || site.url;

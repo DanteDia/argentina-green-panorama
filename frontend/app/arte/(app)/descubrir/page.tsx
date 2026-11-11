@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FollowsButton } from "@/components/arte/FollowsButton";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio } from "@/lib/arte/data";
@@ -40,7 +41,12 @@ export default async function Descubrir() {
       <p className="eyebrow">Descubrir</p>
       <h1 className="display mt-2 text-4xl">Tu escena</h1>
       <p className="mt-2 muted">Artistas y espacios cercanos a tu práctica, a partir de a quién seguís, dónde expusiste y de qué trata tu obra.</p>
-      {vacio && <p className="card mt-6 p-5 text-sm">Conectá tu Instagram en el <Link href="/arte/onboarding" className="underline">onboarding</Link> o agregá temas en tu <Link href="/arte/perfil" className="underline">perfil</Link> para ver recomendaciones.</p>}
+      {vacio && <p className="card mt-6 p-5 text-sm">Cargá tu Instagram y los temas de tu obra en tu <Link href="/arte/perfil" className="underline">perfil</Link> para ver recomendaciones.</p>}
+      {!ctx.follows.length && studio.profile.instagram && (
+        <div className="card mt-6 flex flex-wrap items-center justify-between gap-3 p-5 text-sm">
+          <span>Todavía no sabemos a quién seguís. Con eso encontramos los espacios y artistas más cercanos a vos.</span><FollowsButton />
+        </div>
+      )}
       {venues.length > 0 && <section className="mt-8"><h2 className="display text-2xl">Espacios para acercarte</h2><Lista items={venues} rows={ctx.rows} /></section>}
       {artists.length > 0 && <section className="mt-10"><h2 className="display text-2xl">Artistas afines</h2><Lista items={artists} rows={ctx.rows} /></section>}
       <p className="mt-10 text-sm muted">¿Querés verlo como red? <Link href="/arte/mapa" className="underline">Abrí el mapa</Link>.</p>
