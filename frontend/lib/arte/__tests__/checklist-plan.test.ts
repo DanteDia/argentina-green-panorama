@@ -51,6 +51,13 @@ describe("seasonPlan", () => {
     expect(item.deadline.startsWith("2027-03")).toBe(true);
   });
 
+  it("a call inside its usual window is planned for that window, not for a later month named in the text", () => {
+    const plan = seasonPlan([r("utdt", null, 85, "convocatoria oct–dic; inicio marzo")], 2, NOW);
+    const item = plan.flatMap((m) => m.items).find((i) => i.programId === "utdt")!;
+    expect(item.projected).toBe(true);
+    expect(item.deadline).toBe("2026-12-28");
+  });
+
   it("prep start is before the deadline", () => {
     const item = seasonPlan([r("a", "2026-11-25", 90)], 2, NOW)[0].items[0];
     expect(item.prepStart < item.deadline).toBe(true);
