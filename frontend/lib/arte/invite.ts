@@ -41,12 +41,12 @@ export function inviteKey(x: { nodeId?: string | null; email?: string | null; in
 export function inviteText(show: Show, guestName: string, artistName: string, artistLink: string | null, isPerson = true): { subject: string; body: string } {
   const name = guestName.trim();
   const greeting = !name ? "Hola," : isPerson ? `Hola ${name.split(/\s+/)[0]},` : `Hola, equipo de ${name}:`;
-  const subject = `Te invito a ${show.title}${show.when_text ? `, ${show.when_text}` : ""}`;
+  const subject = `${isPerson ? "Te invito a" : "Invitación a"} ${show.title}${show.when_text ? `, ${show.when_text}` : ""}`;
   const where = [show.when_text, show.address].filter(Boolean).join(" · ");
   const lines = [
     greeting,
     "",
-    `Te quiero invitar a ${show.title}${show.venue ? `, en ${show.venue}` : ""}.`,
+    `${isPerson ? "Te quiero invitar" : "Quiero invitarlos"} a ${show.title}${show.venue ? `, en ${show.venue}` : ""}.`,
     where,
     show.note ?? "",
     show.link ?? "",

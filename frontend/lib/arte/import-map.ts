@@ -91,25 +91,29 @@ function titleFromCaption(caption: string): string {
 const NUM = String.raw`\d{1,4}(?:[.,]\d+)?`;
 const DIMS = new RegExp(`(${NUM})\\s*[x×]\\s*(${NUM})(?:\\s*[x×]\\s*(${NUM}))?\\s*(cm|mm|mts?|m)\\b`, "i");   // a unit is required: "1920x1080" is pixels
 const VARIABLE = /(medidas|dimensiones) variables|variable dimensions/i;
-const TITLE_YEAR = /^["“«]?(.+?)["”»]?,\s*((?:19|20)\d{2})\b/;
-const TECHNIQUE = /[oó]leo|acr[ií]lico|acuarela|tinta|grafito|carbonilla|pastel|collage|fotograf[ií]a|impresi[oó]n|gicl[eé]e|serigraf[ií]a|grabado|xilograf[ií]a|litograf[ií]a|cer[aá]mica|bronce|resina|textil|bordado|video|instalaci[oó]n|escultura|t[eé]cnica mixta|mixed media|oil on|acrylic on|sobre (?:tela|papel|madera|lienzo|cart[oó]n)/i;
+// a short title, then the year closing its clause: "Umbral, 2025." yes; "Feliz año nuevo, 2025 viene con todo" no
+const TITLE_YEAR = /^["“«]?([^,."“”«»\n]{1,80})["”»]?,\s*((?:19|20)\d{2})(?=\s*(?:[.,;)]|$))/;
+const TECHNIQUE = /^(?:[oó]leo|acr[ií]lico|acuarela|tinta|grafito|carbonilla|pastel|collage|fotograf[ií]a|impresi[oó]n|gicl[eé]e|serigraf[ií]a|grabado|xilograf[ií]a|litograf[ií]a|cer[aá]mica|bronce|resina|textil|bordado|video|instalaci[oó]n|escultura|t[eé]cnica mixta|mixed media|oil on|acrylic on)/i;
 
 /** The technical sheet many artists already write in the caption ("Umbral, 2025. Óleo sobre tela, 100 x 80 cm").
- *  Only read when the caption looks like a sheet (a size or a "Title, year" line): "mirá el video" is not a technique. */
+ *  Conservative on purpose (a wrong sheet is worse than an empty one): the caption must state a size AND have a
+ *  clause that starts with a technique. "Mirá el video", "impresión de remeras 30 x 40 cm" or a year in a sentence give nothing. */
 export function fichaFromCaption(caption: string): { title?: string; year?: string; technique?: string; dimensions?: string } {
   const text = caption.replace(/#\S+/g, " ");
   const dims = text.match(DIMS);
-  const variable = VARIABLE.test(text);
-  const head = (text.split("\n").find((l) => /\p{L}/u.test(l)) ?? "").replace(/^[^\p{L}\p{N}"“«]+/u, "").match(TITLE_YEAR);
-  if (!dims && !variable && !head) return {};
-  const out: { title?: string; year?: string; technique?: string; dimensions?: string } = {};
-  if (head) { out.title = cut(head[1].trim(), 120); out.year = head[2]; }
-  if (dims) out.dimensions = `${[dims[1], dims[2], dims[3]].filter(Boolean).join(" x ")} ${dims[4].toLowerCase().replace(/^mts?$/, "m")}`;
-  else if (variable) out.dimensions = "Medidas variables";
+  if (!dims && !VARIABLE.test(text)) return {};
+  let technique: string | undefined;
   for (const seg of text.split(/\n|\s[·|]\s|\.(?:\s|$)/)) {
-    const clean = seg.replace(DIMS, " ").replace(VARIABLE, " ").replace(/\b(?:19|20)\d{2}\b/g, " ").replace(/\s+/g, " ").replace(/^[\s,;:·-]+|[\s,;:·-]+$/g, "");
-    if (clean && clean.length <= 90 && TECHNIQUE.test(clean) && !/[@]/.test(clean) && clean !== out.title) { out.technique = clean[0].toUpperCase() + clean.slice(1); break; }
+    const clean = seg.replace(DIMS, " ").replace(VARIABLE, " ").replace(/\b(?:19|20)\d{2}\b/g, " ").replace(/^\s*t[eé]cnica\s*:\s*/i, "")
+      .replace(/\s+/g, " ").replace(/(?:\s*,)+\s*$/, "").replace(/^[\s,;:·-]+|[\s,;:·-]+$/g, "");
+    if (clean.length <= 90 && TECHNIQUE.test(clean) && !clean.includes("@")) { technique = clean[0].toUpperCase() + clean.slice(1); break; }
   }
+  if (!technique) return {};
+  const out: { title?: string; year?: string; technique?: string; dimensions?: string } = {
+    technique, dimensions: dims ? `${[dims[1], dims[2], dims[3]].filter(Boolean).join(" x ")} ${dims[4].toLowerCase().replace(/^mts?$/, "m")}` : "Medidas variables",
+  };
+  const head = (text.split("\n").find((l) => /\p{L}/u.test(l)) ?? "").replace(/^[^\p{L}\p{N}"“«]+/u, "").match(TITLE_YEAR);
+  if (head && !TECHNIQUE.test(head[1].trim())) return { title: head[1].trim(), year: head[2], ...out };
   return out;
 }
 

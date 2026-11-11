@@ -50,7 +50,7 @@ describe("mapImport", () => {
 
   it("offers the artist's Instagram posts as works, with the caption as title and text", () => {
     const d = mapImport({ ig: { username: "x", pk: 1 }, posts: [{ code: "abc", caption: "🔥 Umbral, 2025.\nInstalación con tickets #arte", image: "https://cdn/1.jpg", year: "2025" }, { code: "d", caption: "", image: "https://cdn/2.jpg", year: null }] });
-    expect(d.works[0]).toEqual({ title: "Umbral", description: "🔥 Umbral, 2025.\nInstalación con tickets #arte", year: "2025", technique: "Instalación con tickets", image_url: "https://cdn/1.jpg", source: "instagram.com/p/abc" });
+    expect(d.works[0]).toEqual({ title: "Umbral, 2025.", description: "🔥 Umbral, 2025.\nInstalación con tickets #arte", year: "2025", image_url: "https://cdn/1.jpg", source: "instagram.com/p/abc" });
     expect(d.works[1].title).toBe("Obra sin título");
     expect(d.igPk).toBe("1");
   });
@@ -93,10 +93,15 @@ describe("fichaFromCaption", () => {
     expect(fichaFromCaption("Sin título, 2023\nInstalación. Medidas variables")).toEqual({ title: "Sin título", year: "2023", technique: "Instalación", dimensions: "Medidas variables" });
     expect(fichaFromCaption("Cerámica esmaltada 30 × 20 × 15 cm")).toMatchObject({ technique: "Cerámica esmaltada", dimensions: "30 x 20 x 15 cm" });
   });
-  it("finds nothing in an ordinary post, and never takes pixels or a date for a size", () => {
-    expect(fichaFromCaption("Nos vemos el jueves en @acefalagaleria 🔥 18 a 21 hs")).toEqual({});
-    expect(fichaFromCaption("Wallpaper 1920x1080 para descargar")).toEqual({});
-    expect(fichaFromCaption("Life session by @aldihofman 💕")).toEqual({});
+  it("finds nothing in an ordinary post: no size and technique together, no sheet", () => {
+    for (const c of ["Nos vemos el jueves en @acefalagaleria 🔥 18 a 21 hs", "Wallpaper 1920x1080 para descargar", "Life session by @aldihofman 💕",
+      "Gracias a todos los que vinieron, 2024 fue increíble. Mirá el video en stories", "Feliz año nuevo, 2025 viene con todo",
+      "Hace calor, 2026 arrancó fuerte\nNuevo video en el canal", "Sale la impresión de las remeras! 30 x 40 cm el estampado",
+      "🔥 Umbral, 2025.\nInstalación con tickets", "Vendo bastidor 100 x 80 cm"]) expect(fichaFromCaption(c), c).toEqual({});
+  });
+  it("does not mistake the technique line for a title, and drops a 'Técnica:' label", () => {
+    expect(fichaFromCaption("Tinta china sobre papel, 21 x 29,7 cm, 2024")).toEqual({ technique: "Tinta china sobre papel", dimensions: "21 x 29,7 cm" });
+    expect(fichaFromCaption("Umbral, 2025\nTécnica: óleo sobre tela\n100 x 80 cm")).toEqual({ title: "Umbral", year: "2025", technique: "Óleo sobre tela", dimensions: "100 x 80 cm" });
   });
   it("fills the draft work with it", () => {
     const d = mapImport({ posts: [{ code: "a", caption: "Umbral, 2025. Acrílico sobre papel, 50 x 70 cm", image: "i", year: "2026" }] });

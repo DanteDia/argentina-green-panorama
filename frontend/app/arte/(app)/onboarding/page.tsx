@@ -114,6 +114,8 @@ export default function Onboarding() {
               <button key={i} type="button" disabled={!worksOn[i] && worksOn.filter(Boolean).length >= MAX_WORKS} onClick={() => setWorksOn(worksOn.map((v, j) => (j === i ? !v : v)))} className={`relative aspect-square overflow-hidden rounded-lg border-2 ${worksOn[i] ? "border-[var(--ink)]" : "border-transparent opacity-50"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={w.image_url} alt={w.title} title={w.title} referrerPolicy="no-referrer" className="h-full w-full object-cover" />
+                {/* a sheet read from the caption is shown before it is saved, so a wrong one can be left out or fixed later */}
+                {w.technique && <span className="absolute inset-x-0 bottom-0 truncate bg-black/65 px-1.5 py-0.5 text-left text-[10px] text-white">{[w.technique, w.dimensions].filter(Boolean).join(" · ")}</span>}
               </button>
             ))}
           </div>
