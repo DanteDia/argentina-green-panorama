@@ -1,6 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { aiDraft, aiTranslate, saveText } from "@/app/arte/(app)/perfil/actions";
+import { AI_ERROR } from "@/lib/arte/ai-answer";
 import type { Lang } from "@/lib/arte/types";
 
 type Kind = "bio_short" | "bio_long" | "statement";
@@ -23,8 +24,9 @@ export function TextEditor({ kind, initial }: { kind: Kind; initial: Partial<Rec
   const ai = () => startAI(async () => {
     setNote("");
     const before = val[lang];
-    const text = await (lang === "es" ? aiDraft(kind, before) : aiTranslate(val.es)).catch(() => null);
-    if (!text) { setNote("No pudimos generarlo ahora. Probá de nuevo en un momento."); return; }
+    const r = await (lang === "es" ? aiDraft(kind, before) : aiTranslate(val.es)).catch(() => ({ error: "unavailable" as const }));
+    if ("error" in r) { setNote(AI_ERROR[r.error]); return; }
+    const text = r.value;
     setVal((v) => ({ ...v, [lang]: text }));
     setUndo({ lang, text: before });
     setNote(lang === "es" ? "Borrador listo: leelo, hacelo tuyo y tocá Guardar." : "Translation ready: read it and press Guardar.");

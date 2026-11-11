@@ -1,6 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { aiTags } from "@/app/arte/(app)/perfil/actions";
+import { AI_ERROR } from "@/lib/arte/ai-answer";
 
 /** Disciplines and themes of the profile form, with a button that reads them from the artist's works and texts. */
 export function TagFields({ mediums, themes }: { mediums: string; themes: string }) {
@@ -9,10 +10,10 @@ export function TagFields({ mediums, themes }: { mediums: string; themes: string
   const [note, setNote] = useState("");
   const [pending, start] = useTransition();
   const suggest = () => start(async () => {
-    const r = await aiTags().catch(() => null);
-    if (!r) { setNote("No pudimos leerlas ahora. Probá de nuevo en un momento."); return; }
-    if (r.mediums.length) setM(r.mediums.join(", "));
-    if (r.themes.length) setT(r.themes.join(", "));
+    const r = await aiTags().catch(() => ({ error: "unavailable" as const }));
+    if ("error" in r) { setNote(r.error === "limit" ? AI_ERROR.limit : "No pudimos leerlas ahora. Probá de nuevo en un momento."); return; }
+    if (r.value.mediums.length) setM(r.value.mediums.join(", "));
+    if (r.value.themes.length) setT(r.value.themes.join(", "));
     setNote("Revisalas y tocá Guardar datos.");
   });
   return (
