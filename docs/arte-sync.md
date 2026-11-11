@@ -43,8 +43,13 @@ Production's database URL is in the Vercel project (see CLAUDE.md, "Production d
 ```bash
 cd /tmp && rm -rf ivprod && mkdir ivprod && cd ivprod \
   && vercel link --yes --scope darolas-projects --project green-panorama-ar \
-  && vercel env pull .env.prod --environment=production --yes \
-  && export ARTE_DATABASE_URL="$(grep '^POSTGRES_URL_NON_POOLING=' .env.prod | cut -d= -f2- | tr -d '"')"; \
-  cd /tmp && rm -rf ivprod; cd /Users/Macbook/artme/escena-arte && python3 sync_supabase.py --solo programas
+  && vercel env pull .env.prod --environment=production --yes; \
+  U="$(grep '^POSTGRES_URL_NON_POOLING=' .env.prod 2>/dev/null | cut -d= -f2- | tr -d '"')"; cd /tmp && rm -rf ivprod; \
+  if [ -n "$U" ]; then (cd /Users/Macbook/artme/escena-arte && ARTE_DATABASE_URL="$U" python3 sync_supabase.py --solo programas); \
+  else echo "no production URL: nothing was synced"; fi; unset U
 ```
+
+Two things this command is careful about: it only syncs when the production URL was actually read (without it,
+`sync_supabase.py` falls back to the **local** database and prints the same success line), and the URL is passed to
+that one run instead of being exported, so a later plain `python3 sync_supabase.py` still goes to local.
 
