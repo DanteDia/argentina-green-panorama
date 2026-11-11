@@ -3,6 +3,7 @@ import { useState, useTransition } from "react";
 import { markInvited, unmarkInvited } from "@/app/arte/(app)/invitar/actions";
 import { contactOf, gmailComposeUrl, inviteText, instagramDmUrl, type Contact, type Show } from "@/lib/arte/invite";
 
+const INSTITUTIONS = new Set(["galeria", "museo", "institucion", "fundacion", "programa", "coleccion"]);
 const KIND: Record<string, string> = { galeria: "Galería", museo: "Museo", institucion: "Institución", fundacion: "Fundación", programa: "Programa", artista: "Artista", persona: "Persona", curador: "Curaduría", coleccionista: "Coleccionista", gestor: "Gestión cultural" };
 
 export interface Guest { nodeId: string | null; name: string; kind: string; reasons: string[]; contact: Contact }
@@ -12,7 +13,7 @@ function Send({ show, guest, from }: { show: Show; guest: Guest; from: { name: s
   const [pending, start] = useTransition();
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(false);
-  const { subject, body } = inviteText(show, guest.name, from.name, from.link);
+  const { subject, body } = inviteText(show, guest.name, from.name, from.link, !INSTITUTIONS.has(guest.kind));
   const done = () => start(async () => {
     try { setError(false); await markInvited(show.id, { nodeId: guest.nodeId, name: guest.name, email: guest.contact.email, instagram: guest.contact.instagram }); }
     catch { setError(true); }
