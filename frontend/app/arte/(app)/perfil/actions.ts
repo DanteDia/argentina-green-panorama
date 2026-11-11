@@ -6,6 +6,7 @@ import { complete } from "@/lib/arte/llm";
 import { newCvItems, parseCv, readCvItems, type CvDraftItem } from "@/lib/arte/cv-parse";
 import { draftText, suggestTags, translateText, type WriterKind } from "@/lib/arte/writer";
 import { ownPaths } from "@/lib/arte/guards";
+import { cleanWorkItems } from "@/lib/arte/works";
 import type { CvKind, Lang, TextKind } from "@/lib/arte/types";
 
 const list = (v: FormDataEntryValue | null) => String(v || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -126,14 +127,10 @@ export async function addCvItems(items: CvDraftItem[]): Promise<number> {
   return rows.length;
 }
 
-/** Bulk upload: one work per image already uploaded to the artist's own folder. Titles come from the browser, so they are capped. */
+/** Bulk upload: one work per image already uploaded to the artist's own folder. The list comes from the browser: cleanWorkItems decides what is kept. */
 export async function addWorks(items: { path: string; title: string; year: string | null }[]): Promise<number> {
   const { user, supabase } = await requireUser();
-  const mine = new Set(ownPaths(items.map((i) => String(i.path)), user.id));
-  const rows = items.filter((i) => mine.has(i.path)).slice(0, 30).map((i, k) => ({
-    user_id: user.id, title: String(i.title || "Obra sin título").slice(0, 200), year: /^(19|20)\d{2}$/.test(i.year ?? "") ? i.year : null,
-    images: [i.path], sort: (Date.now() + k) % 1e9,
-  }));
+  const rows = cleanWorkItems(items, user.id).map((i, k) => ({ user_id: user.id, title: i.title, year: i.year, images: [i.path], sort: (Date.now() + k) % 1e9 }));
   if (rows.length) {
     const { error } = await supabase.from("arte_works").insert(rows);
     if (error) throw new Error(error.message);

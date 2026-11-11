@@ -14,7 +14,7 @@ export function WorkGrid({ userId, works, previews }: { userId: string; works: A
       {editando === "nueva" && <WorkForm userId={userId} onDone={() => setEditando(null)} />}
       <div className="flex flex-wrap items-center gap-3">
         {editando !== "nueva" && <button className="btn btn-primary" onClick={() => setEditando("nueva")}>+ Nueva obra</button>}
-        <BulkWorks userId={userId} />
+        <BulkWorks userId={userId} onDone={() => setEditando((e) => (e === "nueva" ? null : e))} />
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {works.map((w) =>

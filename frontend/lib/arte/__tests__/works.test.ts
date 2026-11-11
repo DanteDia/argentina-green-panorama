@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { workFromFilename } from "../works";
+import { cleanWorkItems, workFromFilename } from "../works";
 
 describe("workFromFilename", () => {
   it("turns a named file into a title, and picks up the year", () => {
@@ -16,7 +16,37 @@ describe("workFromFilename", () => {
     }
   });
 
+  it("handles what phones and chat apps really produce, in Spanish too, including copies", () => {
+    for (const f of ["IMG-20240101-WA0001.jpg", "Imagen de WhatsApp 2026-01-01 a las 10.00.00.jpeg", "Captura de pantalla 2026-03-04 a las 11.22.33.png",
+      "WhatsApp Image 2026-01-01 at 10.00.00 (1).jpeg", "Screenshot 2026-03-04 at 11.22.33 AM.png", "IMG_1234 (1).jpg", "_MG_1234.jpg", "IMG_1234 copy.jpg", "Foto 12.jpg"]) {
+      expect(workFromFilename(f), f).toEqual({ title: "Obra sin título", year: null });
+    }
+  });
+
+  it("keeps real words next to numbers, and never reads a date or a pixel size as the work's year", () => {
+    expect(workFromFilename("Retrato de mi clon 2.jpg")).toEqual({ title: "Retrato de mi clon 2", year: null });
+    expect(workFromFilename("Umbral 1920x1080.png")).toEqual({ title: "Umbral", year: null });
+    expect(workFromFilename("Umbral 2026-01-01.png")).toEqual({ title: "Umbral", year: null });
+    expect(workFromFilename("Umbral_2025 (1).png")).toEqual({ title: "Umbral", year: "2025" });
+  });
+
   it("caps the title length", () => {
     expect(workFromFilename(`${"palabra ".repeat(60)}.jpg`).title.length).toBeLessThanOrEqual(120);
   });
 });
+
+describe("cleanWorkItems", () => {
+  it("keeps only images in the artist's own folder and tolerates junk from the browser", () => {
+    const out = cleanWorkItems([
+      { path: "u1/works/a.jpg", title: "  Umbral  ", year: "2025" },
+      { path: "u2/works/b.jpg", title: "Ajena", year: null },
+      { path: "u1/../u2/c.jpg", title: "Truco", year: null },
+      null, { path: "u1/works/d.jpg", title: "   ", year: 2025 }, { path: 7, title: "x", year: null },
+    ] as never, "u1");
+    expect(out).toEqual([{ path: "u1/works/a.jpg", title: "Umbral", year: "2025" }, { path: "u1/works/d.jpg", title: "Obra sin título", year: null }]);
+  });
+  it("caps how many go in at once", () => {
+    expect(cleanWorkItems(Array.from({ length: 50 }, (_, i) => ({ path: `u1/works/${i}.jpg`, title: "t", year: null })), "u1")).toHaveLength(30);
+  });
+});
+
