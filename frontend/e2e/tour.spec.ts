@@ -18,6 +18,8 @@ test("tour: every page renders without errors and fits a 390px phone", async ({ 
 
   // an application, so the detail, the dossier and the calendar have something to show
   await page.goto("/arte/oportunidades?estado=abierta");
+  // needs the synced opportunities (docs/arte-sync.md): without an open call there is nothing to apply to
+  await expect(page.locator('a[href^="/arte/oportunidades/"]').first(), "no open opportunity in the local data: run the sync").toBeVisible();
   await page.locator('a[href^="/arte/oportunidades/"]').first().click();
   await expect(page.getByRole("heading", { name: "Por qué te la recomendamos" })).toBeVisible();
   const opportunity = new URL(page.url()).pathname;
@@ -30,6 +32,7 @@ test("tour: every page renders without errors and fits a 390px phone", async ({ 
   for (const path of [...PAGES, opportunity, application, `${application}/dossier`]) {
     const res = await page.goto(path);
     expect(res?.status(), path).toBe(200);
+    expect(new URL(page.url()).pathname, `${path} redirected: lost session or missing profile`).toBe(path);
     await page.waitForLoadState("networkidle").catch(() => {});
     expect(await page.evaluate(() => document.documentElement.scrollWidth), `${path} overflows a phone`).toBeLessThanOrEqual(390);
   }
