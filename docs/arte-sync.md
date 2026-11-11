@@ -1,28 +1,29 @@
 # Arte data sync
 
-The Arte cluster's public data (graph, programs, recent shows) is produced offline by the escena-arte pipeline
-(`/Users/Macbook/artme/escena-arte`, Python + SQLite) and loaded into Supabase with one idempotent script.
+The Arte cluster's public data (graph, programs, recent shows) is produced by the escena-arte pipeline (Python +
+SQLite) and loaded into Supabase with one idempotent script. Supabase is the database the app reads. The pipeline
+runs on the VPS, and its `arte.db` there is the only live working copy ("Scheduled run" below).
 
 ```bash
-cd /Users/Macbook/artme/escena-arte
-# local Supabase (frontend/supabase, ports 544xx):
+# on the VPS (ssh personal-vps), normally through semanal.sh, which loads the secrets file:
+cd /root/projects/escena-arte && .venv/bin/python3 sync_supabase.py [--solo grafo|programas|eventos]   # needs ARTE_DATABASE_URL
+# on a dev machine, against local Supabase (frontend/supabase, ports 544xx):
 python3 sync_supabase.py
-# a remote project (from the Mac only the graph and events: programs sync from the VPS, see "Scheduled run"):
-ARTE_DATABASE_URL='postgresql://…' python3 sync_supabase.py --solo grafo|eventos
 ```
 
 - Nodes/edges upsert by `external_id` → deterministic uuid5, so re-runs update instead of duplicating; `industries`
   gains `arte` without losing other clusters' tags.
 - Programs get structured `eligibility` / `requirements` from `requisitos.extraer` (regex, ES/EN) with the quoted
   sentence for every field in `evidence`; fields it can't read stay absent ("a confirmar" in the UI).
-- Events are venue Instagram posts announcing openings/exhibitions in the last 75 days (date = post date).
-- Refresh: graph and events, re-run the escena-arte steps on the Mac (enrich, prensa…) then this sync. Programs refresh
-  on the VPS ("Scheduled run" below).
+- Events are venue Instagram posts announcing openings/exhibitions in the last 75 days (date = post date). They are
+  the posts that link an artist to a venue (`edges` rows written by `enrich.py`), read back from the Instagram cache
+  in `raw/cache`, so an event needs both the link and the cached post.
+- Refresh: everything refreshes on the VPS on a schedule ("Scheduled run" below).
 
 ## Where calls come from
 
 The steps, in the order they must run (each is idempotent). The VPS runs them through `semanal.sh` ("Scheduled run"
-below); on the Mac they only feed the local database, since its sync refuses to write programs to a remote one:
+below); on any other machine they only feed that machine's local database:
 
 ```bash
 cd /root/projects/escena-arte      # on the VPS; use .venv/bin/python3 there
@@ -80,46 +81,53 @@ described in German or French read as a fee; virtual programmes are skipped by t
 
 ### Scheduled run (on the VPS)
 
-The programs pipeline runs on the owner's VPS, not on a laptop: ssh alias `personal-vps` (the same Hostinger machine
-that runs the backend containers, see CLAUDE.md), folder `/root/projects/escena-arte`, with its own copy of `arte.db`
-(the live one for programs), a Python venv in `.venv/`, and the production database URL in
-`/root/secrets/escena-arte.env` (root-only; never print it). Root's crontab runs `semanal.sh` on Mondays and Thursdays
-at 12:17 UTC (09:17 in Buenos Aires). The LaunchAgent that ran it on the Mac (`com.arte.convocatorias-semanal`) was
-removed on 2026-11-11.
-
-`semanal.sh` reads Arte al Día and the listing sites (`fuentes.py`), then syncs programs to production. It prints
-nothing: the result is in `logs/semanal-YYYY-MM-DD.log` (date in Buenos Aires time; same-day runs append; logs are
-deleted after 120 days). If any script it runs exits with an error, or the calls with a deadline ahead drop by more
-than half, it restores `arte.db` from the copy taken at the start of the run (`logs/arte-antes.db`) and does not sync.
-A run that passes also deletes page-cache files older than 75 days.
+The whole pipeline runs on the owner's VPS, not on a laptop: ssh alias `personal-vps` (the same Hostinger machine
+that runs the backend containers, see CLAUDE.md), folder `/root/projects/escena-arte`, with the only live `arte.db`
+(scene graph, programs), the page and Instagram cache in `raw/cache`, a Python venv in `.venv/`, and two secrets in
+`/root/secrets/escena-arte.env` (root-only; never print them): the production database URL (`ARTE_DATABASE_URL`) and
+the HikerAPI key (`HIKERAPI_KEY`). Root's crontab runs `semanal.sh ig` on Mondays and `semanal.sh` on Thursdays, both
+at 12:17 UTC (09:17 in Buenos Aires).
 
 | Task | Scheduled? | How it runs |
 | --- | --- | --- |
-| Listing sites + Arte al Día + sync | Yes, Mon and Thu | `semanal.sh` from cron |
-| Curated list (`programas_curados.py`) | No: hand-verified | Edit on the Mac, then `./deploy_vps.sh curados` |
-| Instagram open calls (`convocatorias_ig.py`) | No: paid requests, and the VPS has no `HIKERAPI_KEY` | `semanal.sh ig` once the key is in the secrets file |
+| Listing sites + Arte al Día, sync programs | Yes, Mon and Thu | `semanal.sh` from cron |
+| Instagram open calls (`convocatorias_ig.py`) | Yes, Mon | `semanal.sh ig`: the 300 most-followed spaces with a handle, one paid request each for their latest posts |
+| Recent shows and the artists each space shows (`enrich.py ig1`, then `calidad.py`), sync graph and events | Yes, Mon | Same run, from the same posts: mentions and tags in show announcements become artist nodes and artist→venue links, and the events are read from those links |
+| Curated list (`programas_curados.py`) | No: hand-verified | Edit it, then `./deploy_vps.sh curados` |
 | City "Oportunidades" PDFs (`programas.py`) | No: the monthly PDF is found by hand | Copy the PDF to `raw/` on the VPS, run `.venv/bin/python3 programas.py` from the project folder (it needs `pdftotext`, installed there); the rows reach production on the next run |
-| Scene graph and events (`--solo grafo`, `--solo eventos`) | No | Crawlers are run by hand on the Mac, whose `arte.db` holds the graph |
+| The crawlers that built the map (arteBA, Cancillería, Meridiano, Wikidata, venue websites, press, bios, artist profiles) | No: one-off passes, some of them paid | By hand on the VPS when the map needs widening, then `calidad.py`; the next Monday run syncs the result |
 
-`curados` and `ig` are not single steps: each does a full run with that step added, and syncs production.
-`--sin-sync` skips the sync but still rewrites the VPS's `arte.db` and its start-of-run copy.
+`semanal.sh` prints nothing: the result is in `logs/semanal-YYYY-MM-DD.log` (date in Buenos Aires time; same-day runs
+append; logs are deleted after 120 days). `curados` and `ig` are not single steps: each does a full run with those
+steps added, and syncs production (programs only, or programs, graph and events on an `ig` run). `--sin-sync` skips
+the sync but still rewrites `arte.db`.
+
+When a run fails: if any script exits with an error, the calls with a deadline ahead drop by more than half, or the
+map loses more than 5% of its nodes, the run restores `arte.db` from the copy taken at its start, syncs nothing and
+sends a warning through the server's alert script (`/root/scripts/pango-alert.sh`, Telegram). The Instagram reader
+exits with an error when it could read fewer than half of its accounts (a dead key or an empty HikerAPI balance), so
+that case alerts too. Each run also keeps a dated copy of the database, `logs/arte-YYYY-MM-DD.db`, for 35 days, and a
+run that passes deletes cache files older than 75 days.
 
 Known limits:
 
-- The VPS's `arte.db` also holds a copy of the scene graph taken on 2026-11-11, and the programs run reads it (alumni
-  links in the sync, the accounts the Instagram reader visits). Nothing refreshes that copy: spaces mapped later on
-  the Mac do not reach it until `arte.db` is copied over by hand, which would also replace the VPS's programs table.
-- The live programs table exists only on the VPS; its only backup is the start-of-run copy from the previous run.
-- The Mac keeps the code and an older `arte.db`. A marker file there (`PROGRAMAS_EN_VPS`) makes `sync_supabase.py`
-  skip programs when `ARTE_DATABASE_URL` points anywhere but `127.0.0.1`: it prints a line saying so and exits 0, and
-  with no `--solo` it still syncs graph and events. A stale copy would otherwise delete the VPS's rows in production.
+- The sync upserts nodes and edges and never deletes them: something `calidad.py` or `dedupe.py` removes from
+  `arte.db` stays in Supabase.
+- Spaces beyond the 300 most-followed get their posts re-read only when the 60-day cache expires, and only the latest
+  page of posts is read each week, so a space that posts more than a page a week loses the older ones.
+- Artist nodes created from tags are a heuristic (`etiquetado_en`, low confidence); `calidad.py` drops names that do
+  not look like a person, nothing else reviews them.
+- If cron itself stops running, nothing alerts: the alert comes from the script.
+- The dated copies live on the same disk as the database.
+- Any other machine holding the code (the owner's Mac has it, with an old `arte.db`) carries a marker file,
+  `BASE_VIVA_EN_VPS`, that makes `sync_supabase.py` refuse to write to anything but a local database.
 - Code goes up with `./deploy_vps.sh` (rsync without `--delete`; it never copies the database or `raw/`, and installs
   no packages: the venv was built by hand with scrapling[fetchers], curl_cffi, psycopg2-binary, pypdf, requests).
-- Nothing notifies anyone when a run fails: the log and the cards' "verificado" date are the only signals.
 
 ```bash
 ssh personal-vps 'cd /root/projects/escena-arte/logs && tail -20 "$(ls -t semanal-*.log | head -1)"'   # last run
-ssh personal-vps '/root/projects/escena-arte/semanal.sh'              # full run now (sources + production sync)
+ssh personal-vps '/root/projects/escena-arte/semanal.sh'              # Thursday's run now (listing sites, sync programs)
+ssh personal-vps '/root/projects/escena-arte/semanal.sh ig'           # Monday's run now (adds Instagram; paid requests)
 ssh personal-vps '/root/projects/escena-arte/semanal.sh --sin-sync'   # read sources only
 ssh personal-vps 'crontab -l | grep semanal.sh'                       # the schedule
 ```
@@ -152,25 +160,14 @@ the script trusts that:
 
 `programas.py` pins `HOY` to the day the curated list was verified; the news script uses the real date.
 
-**The escena-arte pipeline is not under version control** (the code is edited in `/Users/Macbook/artme/escena-arte`
-and deployed to the VPS by rsync; the live programs database exists only on the VPS).
-Changes to it are not reviewable or recoverable from this repo.
+**The escena-arte pipeline is not under version control** (the code is edited on the owner's Mac in
+`/Users/Macbook/artme/escena-arte` and deployed to the VPS by rsync). Changes to it are not reviewable or recoverable
+from this repo.
 
 ## Syncing production
 
-Programs are synced by the VPS ("Scheduled run" above). From the Mac only the graph and events are, with production's
-database URL read from the Vercel project (see CLAUDE.md, "Production database access"):
-
-```bash
-cd /tmp && rm -rf ivprod && mkdir ivprod && cd ivprod \
-  && vercel link --yes --scope darolas-projects --project green-panorama-ar \
-  && vercel env pull .env.prod --environment=production --yes; \
-  U="$(grep '^POSTGRES_URL_NON_POOLING=' .env.prod 2>/dev/null | cut -d= -f2- | tr -d '"')"; cd /tmp && rm -rf ivprod; \
-  if [ -n "$U" ]; then (cd /Users/Macbook/artme/escena-arte && ARTE_DATABASE_URL="$U" python3 sync_supabase.py --solo grafo); \
-  else echo "no production URL: nothing was synced"; fi; unset U
-```
-
-Two things this command is careful about: it only syncs when the production URL was actually read (without it,
-`sync_supabase.py` falls back to the **local** database and prints the same success line), and the URL is passed to
-that one run instead of being exported, so a later plain `python3 sync_supabase.py` still goes to local.
+Only the VPS syncs production, at the end of each scheduled run or by hand with the commands above. Before the first
+sync after a schema change, apply the migration to production (see CLAUDE.md, "Production database access").
+`sync_supabase.py` falls back to the **local** database when `ARTE_DATABASE_URL` is not set and prints the same
+success line, which is why `semanal.sh` stops with an alert when the variable is missing.
 
