@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextWindow, programState, todayAR } from "../dates";
+import { dueDate, nextWindow, programState, todayAR } from "../dates";
 import { programa } from "./fixtures";
 
 // 2026-11-15 10:00 in Buenos Aires (UTC-3) = 13:00 UTC
@@ -83,20 +83,72 @@ describe("recurring calls whose usual window is near", () => {
     expect(s.projected).toBeUndefined();
   });
 
-  it("reads months only: 'abre' is not April and a window without months stays recurring", () => {
-    expect(programState(programa({ closes_at: null, window_text: "abre por invitación" }), NOW).label).toBe("recurrente");
-    expect(programState(programa({ closes_at: null, window_text: "anual, durante la feria" }), NOW).label).toBe("recurrente");
+  it("the horizon is 90 days before the window opens", () => {
+    const p = programa({ closes_at: null, window_text: "anual; convocatoria ~ene–mar" });
+    expect(programState(p, new Date("2026-10-03T13:00:00Z")).label).toBe("próxima");   // 90 days to 1 Jan
+    expect(programState(p, new Date("2026-10-02T13:00:00Z")).label).toBe("recurrente"); // 91
+  });
+
+  it("a single month is not worded as an opening: 'cierre ~sep' may mean it closes then", () => {
+    const s = programState(programa({ closes_at: null, window_text: "anual; cierre ~sep" }), new Date("2026-07-01T13:00:00Z"));
+    expect(s.label).toBe("próxima");
+    expect(s.text).toContain("Su convocatoria suele ser en septiembre (anual; cierre ~sep)");
+    expect(s.text).not.toMatch(/abrir/);
+  });
+
+  it("an edition that closed shortly before the usual window is that edition: it is not announced again", () => {
+    const now = new Date("2026-03-05T13:00:00Z");
+    expect(programState(programa({ closes_at: "2026-02-27", window_text: "anual; ~mar–abr" }), now).label).toBe("recurrente");
+  });
+
+  it("says the year of a last closing that is not from this year", () => {
+    const s = programState(programa({ closes_at: "2025-03-09", window_text: "anual; convocatoria ~ene–mar" }), NOW);
+    expect(s.text).toContain("9 mar de 2025");
+  });
+
+  it("an announced opening with no closing date wins over the usual window", () => {
+    const s = programState(programa({ opens_at: "2026-12-10", closes_at: null, window_text: "anual; ~nov–dic" }), NOW);
+    expect(s.label).toBe("próxima");
+    expect(s.projected).toBeUndefined();
+    expect(s.text).toContain("Abre el 10 dic");
   });
 });
 
 describe("nextWindow", () => {
-  it("takes the first range of months named, not a later month about something else", () => {
-    expect(nextWindow("convocatoria oct–dic; inicio marzo", "2026-11-15")).toEqual({ opens: "2026-10-01", closes: "2026-12-28" });
+  const T = "2026-11-15";
+  it("takes the months of the part about applying, not a later month about something else", () => {
+    expect(nextWindow("convocatoria oct–dic; inicio marzo", T)).toEqual({ opens: "2026-10-01", closes: "2026-12-28", single: false });
+    expect(nextWindow("residencia ene–mar; convocatoria ago–sep", T)).toMatchObject({ opens: "2027-08-01" });
   });
-  it("a single month is a one-month window; a passed one moves to next year", () => {
-    expect(nextWindow("anual; cierre en septiembre", "2026-11-15")).toEqual({ opens: "2027-09-01", closes: "2027-09-28" });
+  it("a single month is a one-month window, flagged; a passed one moves to next year", () => {
+    expect(nextWindow("anual; cierre en septiembre", T)).toEqual({ opens: "2027-09-01", closes: "2027-09-28", single: true });
+  });
+  it("months that are not about applying give no window", () => {
+    for (const t of ["anual; finalistas anunciados en mayo", "anual; inicio marzo", "anual; selección feb–mar"]) expect(nextWindow(t, T)).toBeNull();
+  });
+  it("only whole month words count", () => {
+    for (const t of ["abre por invitación", "anual; residencia en Mar del Plata", "abrí tu taller", "convocatoria de arte marítimo", "anual, durante la feria"]) expect(nextWindow(t, T)).toBeNull();
+  });
+  it("a call that is not yearly is never projected", () => {
+    expect(nextWindow("bienal; convocatoria ~ene–mar", T)).toBeNull();
+  });
+  it("reads ranges however they are written", () => {
+    for (const t of ["enero a marzo", "ene—mar", "ene. – mar.", "ene/mar", "entre ene y mar", "de enero hasta marzo"]) expect(nextWindow(t, T)).toMatchObject({ opens: "2027-01-01", closes: "2027-03-28" });
+    expect(nextWindow("sept–nov", T)).toMatchObject({ opens: "2026-09-01", closes: "2026-11-28" });
+    expect(nextWindow("setiembre", T)).toMatchObject({ opens: "2027-09-01" });
+  });
+  it("in January, a window that started in December is the current one", () => {
+    expect(nextWindow("anual; ~dic–feb", "2027-01-10")).toMatchObject({ opens: "2026-12-01", closes: "2027-02-28" });
   });
   it("skips the window an already-held edition closed in", () => {
-    expect(nextWindow("anual; ~ene–mar", "2027-02-10", "2027-02-01")).toEqual({ opens: "2028-01-01", closes: "2028-03-28" });
+    expect(nextWindow("anual; ~ene–mar", "2027-02-10", "2027-02-01")).toMatchObject({ opens: "2028-01-01", closes: "2028-03-28" });
+  });
+});
+
+describe("dueDate", () => {
+  it("is the announced closing date while it is ahead; a past edition's date is not a due date", () => {
+    expect(dueDate({ closes_at: "2026-12-06" }, "2026-11-15")).toBe("2026-12-06");
+    expect(dueDate({ closes_at: "2026-03-09" }, "2026-11-15")).toBeNull();
+    expect(dueDate({ closes_at: null }, "2026-11-15")).toBeNull();
   });
 });

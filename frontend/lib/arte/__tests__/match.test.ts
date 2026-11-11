@@ -69,7 +69,7 @@ describe("ranking", () => {
     const lejos = programa({ id: "lejos", closes_at: "2026-08-09", window_text: "anual; convocatoria ~jun–ago" });
     const r = rankPrograms(ctx(), [lejos, cerca]);
     expect(r.map((x) => x.program.id)).toEqual(["cerca", "lejos"]);
-    expect(r[0].reasons.join(" ")).toMatch(/ventana habitual/);
+    expect(r[0].reasons.join(" ")).toMatch(/calendario habitual/);
   });
 
   it("artists similar to you who went through the program raise its score", () => {

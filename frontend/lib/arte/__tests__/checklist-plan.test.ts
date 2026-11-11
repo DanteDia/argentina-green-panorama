@@ -58,6 +58,11 @@ describe("seasonPlan", () => {
     expect(item.deadline).toBe("2026-12-28");
   });
 
+  it("a recurring call whose edition already closed this season is not planned again for the same window", () => {
+    const plan = seasonPlan([r("x", "2026-10-20", 85, "anual; convocatoria oct–dic")], 2, NOW);
+    expect(plan.flatMap((m) => m.items)).toEqual([]);
+  });
+
   it("prep start is before the deadline", () => {
     const item = seasonPlan([r("a", "2026-11-25", 90)], 2, NOW)[0].items[0];
     expect(item.prepStart < item.deadline).toBe(true);
