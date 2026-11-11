@@ -25,8 +25,8 @@ export function buildChecklist(req: Requirements, profileGaps: string[]): Checkl
 
 /** Where a checklist step gets done: the profile for gaps, the official rules, the dossier for what goes in the PDF. Null = outside the app. */
 export function checklistHref(key: string, applicationId: string, programUrl: string | null): string | null {
-  if (key.startsWith("gap:")) return /obras|fichas|im[aá]genes/.test(key) ? "/arte/perfil/obras" : /cv/i.test(key) ? "/arte/perfil/cv" : "/arte/perfil#textos";
-  if (key === "bases") return programUrl || null;
+  if (key.startsWith("gap:")) return /obras|fichas|im[aá]genes/.test(key) ? "/arte/perfil/obras" : "/arte/perfil#textos";
+  if (key === "bases") return programUrl && /^https?:\/\//i.test(programUrl) ? programUrl : null;   // synced data: only real web links become an href
   if (key === "cv") return "/arte/perfil/cv";
   if (["letter", "works", "portfolio", "export", "statement", "bio"].includes(key)) return `/arte/postulaciones/${applicationId}/dossier`;
   return null;

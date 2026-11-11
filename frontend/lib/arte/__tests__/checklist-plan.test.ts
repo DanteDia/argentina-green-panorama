@@ -72,6 +72,8 @@ describe("checklistHref", () => {
     expect(checklistHref("send", "app1", "https://x")).toBeNull();
     expect(checklistHref("fee", "app1", "https://x")).toBeNull();
     expect(checklistHref("bases", "app1", null)).toBeNull();
+    for (const bad of ["javascript:alert(1)", "www.x.org", "mailto:a@b.c"]) expect(checklistHref("bases", "app1", bad)).toBeNull();
+    expect(checklistHref("bases", "app1", "HTTPS://Bases.Example/")).toBe("HTTPS://Bases.Example/");
   });
 });
 

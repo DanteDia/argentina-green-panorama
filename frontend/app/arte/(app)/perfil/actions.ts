@@ -58,7 +58,8 @@ export async function reorderWorks(ids: string[]) {
 
 export async function deleteWork(id: string) {
   const { supabase } = await requireUser();
-  await supabase.from("arte_works").delete().eq("id", id);
+  const { error } = await supabase.from("arte_works").delete().eq("id", id);
+  if (error) throw new Error(error.message);
   revalidatePath("/arte/perfil/obras");
 }
 

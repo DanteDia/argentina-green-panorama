@@ -18,7 +18,7 @@ export function Checklist({ items }: { items: { id: string; label: string; done:
             <span className={estado[i.id] ? "line-through muted" : ""}>{i.label}</span>
           </label>
           <span className="flex shrink-0 items-center gap-3">
-          {i.href && !estado[i.id] && (i.href.startsWith("http")
+          {i.href && !estado[i.id] && (/^https?:\/\//i.test(i.href)
             ? <a href={i.href} target="_blank" rel="noreferrer" className="text-xs underline">Abrir ↗</a>
             : <Link href={i.href} className="text-xs underline">Hacerlo →</Link>)}
           {i.due_at && <span className="text-xs muted tabular-nums">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(i.due_at + "T00:00:00Z"))}</span>}

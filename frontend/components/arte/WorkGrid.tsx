@@ -34,9 +34,9 @@ export function WorkGrid({ userId, works, previews }: { userId: string; works: A
               <div className="flex items-center justify-between gap-2 px-4 pb-4 pt-2 text-xs">
                 {!w.technique || !w.dimensions ? <span className="pill pill-accent">Falta ficha</span> : <span />}
                 {quitar === w.id ? (
-                  <span className="flex items-center gap-2">¿Quitarla? <button className="underline" disabled={pending} onClick={() => start(async () => { await deleteWork(w.id); setQuitar(null); })}>{pending ? "Quitando…" : "Sí"}</button>
+                  <span className="flex items-center gap-2">¿Quitarla? <button className="underline" disabled={pending} onClick={() => start(async () => { try { await deleteWork(w.id); setQuitar(null); } catch { setQuitar(`error:${w.id}`); } })}>{pending ? "Quitando…" : "Sí"}</button>
                     <button className="underline muted" onClick={() => setQuitar(null)}>No</button></span>
-                ) : <button className="underline muted" onClick={() => setQuitar(w.id)}>No es una obra</button>}
+                ) : <button className="underline muted" onClick={() => setQuitar(w.id)}>{quitar === `error:${w.id}` ? "No se pudo quitar: reintentar" : "No es una obra"}</button>}
               </div>
             </div>
           ),
