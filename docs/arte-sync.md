@@ -92,7 +92,7 @@ at 12:17 UTC (09:17 in Buenos Aires).
 | --- | --- | --- |
 | Listing sites + Arte al Día, sync programs | Yes, Mon and Thu | `semanal.sh` from cron |
 | Instagram open calls (`convocatorias_ig.py`) | Yes, Mon | `semanal.sh ig`: the 300 most-followed spaces with a handle, one paid request each for their latest posts |
-| Recent shows and the artists each space shows (`enrich.py ig1`, then `calidad.py`), sync graph and events | Yes, Mon | Same run, from the same posts: mentions and tags in show announcements become artist nodes and artist→venue links, and the events are read from those links |
+| Recent shows and the artists each space shows (`enrich.py ig1`, then `calidad.py`), sync graph and events | Yes, Mon | Same run, from the same posts (latest page only). A show announcement that names someone as `Name (@handle)` adds that artist and an `expuso_en` link; a tag only links people already in the map (`etiquetado_en`), it never adds anyone. Events are read from those links |
 | Curated list (`programas_curados.py`) | No: hand-verified | Edit it, then `./deploy_vps.sh curados` |
 | City "Oportunidades" PDFs (`programas.py`) | No: the monthly PDF is found by hand | Copy the PDF to `raw/` on the VPS, run `.venv/bin/python3 programas.py` from the project folder (it needs `pdftotext`, installed there); the rows reach production on the next run |
 | The crawlers that built the map (arteBA, Cancillería, Meridiano, Wikidata, venue websites, press, bios, artist profiles) | No: one-off passes, some of them paid | By hand on the VPS when the map needs widening, then `calidad.py`; the next Monday run syncs the result |
@@ -115,8 +115,13 @@ Known limits:
   `arte.db` stays in Supabase.
 - Spaces beyond the 300 most-followed get their posts re-read only when the 60-day cache expires, and only the latest
   page of posts is read each week, so a space that posts more than a page a week loses the older ones.
-- Artist nodes created from tags are a heuristic (`etiquetado_en`, low confidence); `calidad.py` drops names that do
-  not look like a person, nothing else reviews them.
+- New artists come from a name pattern in captions, so a few are not people ("Los Vencedores"); `calidad.py` drops
+  names that do not look like a person, nothing else reviews them. The by-hand pass (`enrich.py ig`) also adds tagged
+  accounts as artists, which on 2026-11-11 was about one non-artist in four: review its result before a synced run.
+- A venue's Instagram handle is whatever a crawler found. `calidad.py` removes a directory's or the city's account
+  from the venues it was pinned on (`web.NO_IG`, `IG_MAL`), with every link learned from that account's posts; a
+  wrong handle that is not in those lists is read as the venue's own.
+- Events are only the announcements that link at least one artist already in the map or named in the caption.
 - If cron itself stops running, nothing alerts: the alert comes from the script.
 - The dated copies live on the same disk as the database.
 - Any other machine holding the code (the owner's Mac has it, with an old `arte.db`) carries a marker file,
@@ -169,5 +174,6 @@ from this repo.
 Only the VPS syncs production, at the end of each scheduled run or by hand with the commands above. Before the first
 sync after a schema change, apply the migration to production (see CLAUDE.md, "Production database access").
 `sync_supabase.py` falls back to the **local** database when `ARTE_DATABASE_URL` is not set and prints the same
-success line, which is why `semanal.sh` stops with an alert when the variable is missing.
+success line, which is why `semanal.sh` stops with an alert when the variable is missing. With no `--solo` it syncs
+everything; any other argument (`--help`, a misspelt section) prints the usage and exits without syncing.
 
