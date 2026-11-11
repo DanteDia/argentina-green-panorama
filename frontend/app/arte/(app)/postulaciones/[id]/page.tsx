@@ -1,3 +1,4 @@
+import { checklistHref } from "@/lib/arte/checklist";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/arte/supabase-server";
@@ -11,7 +12,7 @@ export default async function Postulacion({ params }: { params: Promise<{ id: st
   const { supabase } = await requireUser();
   const { data: app } = await supabase.from("arte_applications").select("*, arte_programs(*)").eq("id", id).maybeSingle();
   if (!app) notFound();
-  const { data: items } = await supabase.from("arte_application_items").select("id, label, done, due_at").eq("application_id", id).order("sort");
+  const { data: items } = await supabase.from("arte_application_items").select("id, key, label, done, due_at").eq("application_id", id).order("sort");
   const p = app.arte_programs as Program;
   const st = programState(p, new Date());
   const hechos = (items || []).filter((i) => i.done).length;
@@ -26,7 +27,7 @@ export default async function Postulacion({ params }: { params: Promise<{ id: st
       <div className="mt-6 grid gap-6 md:grid-cols-[1fr_300px]">
         <section className="card p-5">
           <div className="flex items-baseline justify-between"><h2 className="display text-xl">Qué falta</h2><span className="text-sm muted">{hechos}/{items?.length || 0}</span></div>
-          <div className="mt-2"><Checklist items={items || []} /></div>
+          <div className="mt-2"><Checklist items={(items || []).map((i) => ({ ...i, href: checklistHref(i.key, id, p.url ?? null) }))} /></div>
         </section>
         <aside className="space-y-4">
           <Link href={`/arte/postulaciones/${id}/dossier`} className="card block p-5 hover:shadow-sm">

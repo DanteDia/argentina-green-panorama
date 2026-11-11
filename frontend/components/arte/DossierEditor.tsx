@@ -55,7 +55,7 @@ export function DossierEditor({ applicationId, initial, works, maxWorks }: { app
         {!works.length && <p className="mt-2 text-sm muted">Todavía no cargaste obras con imagen.</p>}
       </section>
 
-      <div className="sticky bottom-4 flex flex-wrap items-center gap-3 rounded-full border border-[var(--line)] bg-[var(--paper)] p-2 pl-4 shadow-sm">
+      <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-full border border-[var(--line)] bg-[var(--paper)] p-2 pl-4 shadow-sm">
         <span className="text-sm muted">Plantilla</span>
         {(["editorial", "minimal"] as const).map((t) => (
           <button key={t} type="button" onClick={() => setD({ ...d, template: t })} className={`pill ${d.template === t ? "bg-[var(--ink)] text-[var(--paper)] border-transparent" : ""}`}>{t === "editorial" ? "Editorial" : "Minimal"}</button>

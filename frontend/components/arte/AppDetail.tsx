@@ -1,11 +1,12 @@
 "use client";
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { saveNotes, setStatus, toggleItem } from "@/app/arte/(app)/postulaciones/actions";
 import type { AppStatus } from "@/lib/arte/types";
 
 const ESTADOS: [AppStatus, string][] = [["preparing", "Preparando"], ["sent", "Enviada"], ["selected", "Seleccionado"], ["rejected", "No quedé"], ["withdrawn", "La dejé"]];
 
-export function Checklist({ items }: { items: { id: string; label: string; done: boolean; due_at: string | null }[] }) {
+export function Checklist({ items }: { items: { id: string; label: string; done: boolean; due_at: string | null; href?: string | null }[] }) {
   const [estado, setEstado] = useState(Object.fromEntries(items.map((i) => [i.id, i.done])));
   const [, start] = useTransition();
   return (
@@ -16,7 +17,12 @@ export function Checklist({ items }: { items: { id: string; label: string; done:
             <input type="checkbox" checked={estado[i.id]} onChange={(e) => { const v = e.target.checked; setEstado({ ...estado, [i.id]: v }); start(() => toggleItem(i.id, v)); }} />
             <span className={estado[i.id] ? "line-through muted" : ""}>{i.label}</span>
           </label>
+          <span className="flex shrink-0 items-center gap-3">
+          {i.href && !estado[i.id] && (i.href.startsWith("http")
+            ? <a href={i.href} target="_blank" rel="noreferrer" className="text-xs underline">Abrir ↗</a>
+            : <Link href={i.href} className="text-xs underline">Hacerlo →</Link>)}
           {i.due_at && <span className="text-xs muted tabular-nums">{new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(i.due_at + "T00:00:00Z"))}</span>}
+          </span>
         </li>
       ))}
     </ul>

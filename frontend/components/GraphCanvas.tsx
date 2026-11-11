@@ -22,6 +22,8 @@ interface GraphCanvasProps {
   darkMode?: boolean;
   hideVerificationBadges?: boolean;
   isMobile?: boolean;
+  /** Zoom to show every node once the layout settles (small graphs otherwise sit off-centre). */
+  fitOnSettle?: boolean;
 }
 
 interface ForceNode {
@@ -62,6 +64,7 @@ export default function GraphCanvas({
   edgeColors,
   darkMode = false,
   hideVerificationBadges = false,
+  fitOnSettle = false,
   isMobile = false,
 }: GraphCanvasProps) {
   const fgRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -306,6 +309,7 @@ export default function GraphCanvas({
       d3VelocityDecay={0.3}
       warmupTicks={100}
       cooldownTicks={200}
+      onEngineStop={fitOnSettle ? () => fgRef.current?.zoomToFit(400, 48) : undefined}
       linkDirectionalArrowLength={3}
       linkDirectionalArrowRelPos={0.8}
     />

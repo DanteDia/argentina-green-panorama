@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildChecklist } from "../checklist";
+import { buildChecklist, checklistHref } from "../checklist";
 import { seasonPlan } from "../plan";
 import type { Ranked } from "../match";
 import { programa } from "./fixtures";
@@ -56,3 +56,22 @@ describe("seasonPlan", () => {
     expect(item.prepStart < item.deadline).toBe(true);
   });
 });
+
+describe("checklistHref", () => {
+  it("sends each step to the place where it gets done", () => {
+    const go = (key: string) => checklistHref(key, "app1", "https://bases.example/call");
+    expect(go("gap:obras (subí al menos 6 con imagen)")).toBe("/arte/perfil/obras");
+    expect(go("gap:fichas técnicas (2 obras sin técnica o medidas)")).toBe("/arte/perfil/obras");
+    expect(go("gap:statement")).toBe("/arte/perfil#textos");
+    expect(go("gap:bio corta")).toBe("/arte/perfil#textos");
+    expect(go("bases")).toBe("https://bases.example/call");
+    expect(go("cv")).toBe("/arte/perfil/cv");
+    for (const k of ["letter", "works", "portfolio", "export", "statement", "bio"]) expect(go(k)).toBe("/arte/postulaciones/app1/dossier");
+  });
+  it("has no link for steps done outside the app, or bases without a url", () => {
+    expect(checklistHref("send", "app1", "https://x")).toBeNull();
+    expect(checklistHref("fee", "app1", "https://x")).toBeNull();
+    expect(checklistHref("bases", "app1", null)).toBeNull();
+  });
+});
+
