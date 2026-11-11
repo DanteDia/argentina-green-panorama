@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio, slugify, upsertProfile } from "@/lib/arte/data";
 import { complete } from "@/lib/arte/llm";
+import { cvKey, parseCv, readCvItems, type CvDraftItem } from "@/lib/arte/cv-parse";
 import { draftText, suggestTags, translateText, type WriterKind } from "@/lib/arte/writer";
 import { ownPaths } from "@/lib/arte/guards";
 import type { CvKind, Lang, TextKind } from "@/lib/arte/types";
@@ -101,4 +102,25 @@ export async function aiTranslate(text: string): Promise<string | null> {
 
 export async function aiTags(): Promise<{ mediums: string[]; themes: string[] } | null> {
   return suggestTags(await writerStudio(), complete);
+}
+
+/** Reads a pasted CV into items for the artist to review. Null when the AI is unavailable. Saves nothing. */
+export async function aiCvFromText(text: string): Promise<CvDraftItem[] | null> {
+  await requireUser();
+  return parseCv(text, complete);
+}
+
+/** Adds the reviewed items, skipping the ones the CV already has. The list comes from the client, so it is validated again. */
+export async function addCvItems(items: CvDraftItem[]): Promise<number> {
+  const { user, supabase } = await requireUser();
+  const clean = readCvItems(JSON.stringify(items));
+  const { data: have } = await supabase.from("arte_cv_items").select("kind, title").eq("user_id", user.id);
+  const seen = new Set((have || []).map(cvKey));
+  const rows = clean.filter((c) => !seen.has(cvKey(c)) && seen.add(cvKey(c))).map((c) => ({ ...c, user_id: user.id, source: "import", confirmed: true }));
+  if (rows.length) {
+    const { error } = await supabase.from("arte_cv_items").insert(rows);
+    if (error) throw new Error(error.message);
+  }
+  revalidatePath("/arte/perfil/cv");
+  return rows.length;
 }
