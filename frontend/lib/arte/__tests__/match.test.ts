@@ -72,6 +72,82 @@ describe("ranking", () => {
     expect(r[0].reasons.join(" ")).toMatch(/calendario habitual/);
   });
 
+  // Acéfala opened its Manglar programme while the artist was showing at Acéfala, and the tool ranked it like any other call
+  describe("calls run by a space the artist already knows", () => {
+    const manglar = programa({ id: "manglar", name: "Programa Manglar", organizer: "Acéfala Galería", type: "Formación", closes_at: "2026-12-06" });
+    const base = scoreProgram(ctx(), manglar).score;
+
+    it("a space from their CV raises the score and is named as the reason", () => {
+      const r = scoreProgram(ctx({ cv: [{ id: "1", user_id: "u", kind: "group", year: "2026", title: "Frecuencias Híbridas", org: "Acéfala Galería", city: null, country: null, link: null, source: "manual", confirmed: true }] }), manglar);
+      expect(r.score).toBe(base + 10);
+      expect(r.reasons.join(" ")).toMatch(/Acéfala Galería.*tu escena/);
+    });
+
+    it("names only the organiser the artist knows, not the whole line", () => {
+      const braque = programa({ id: "b", organizer: "UNTREF / MUNTREF + Instituto Francés de Argentina" });
+      expect(scoreProgram(ctx({ sceneNames: new Set(["MUNTREF"]) }), braque).reasons.join(" ")).toContain("La organiza MUNTREF, que ya");
+    });
+
+    it("an unconfirmed CV line does not count", () => {
+      const cv = [{ id: "1", user_id: "u", kind: "group" as const, year: "2026", title: "x", org: "Acéfala Galería", city: null, country: null, link: null, source: "import" as const, confirmed: false }];
+      expect(scoreProgram(ctx({ cv }), manglar).score).toBe(base);
+    });
+
+    it("a space whose own name has a comma or is very short still matches itself", () => {
+      for (const name of ["Nilo, galpón de arte", "NN Galería", "Jorge Mara - La Ruche"]) {
+        const p = programa({ id: "x", organizer: name });
+        expect(scoreProgram(ctx({ sceneNames: new Set([name]) }), p).score, name).toBe(scoreProgram(ctx(), p).score + 10);
+      }
+    });
+
+    it("one shared word is not enough when the kinds of space differ", () => {
+      const cases: [string, string][] = [
+        ["Universidad del Cine", "Ayuntamiento de El Sauzal, Fundación Cine+Cómics"],
+        ["Universidad Nacional de las Artes", "Museo Nacional de Arte"],
+        ["Museo de Arte Contemporáneo", "Centro de Arte Contemporáneo"],
+      ];
+      for (const [known, organizer] of cases) {
+        const p = programa({ id: "x", organizer });
+        expect(scoreProgram(ctx({ sceneNames: new Set([known]) }), p).score, `${known} / ${organizer}`).toBe(scoreProgram(ctx(), p).score);
+      }
+      const proa = programa({ id: "p", organizer: "Fundación Proa" });
+      expect(scoreProgram(ctx({ sceneNames: new Set(["Proa"]) }), proa).score).toBe(scoreProgram(ctx(), proa).score + 10);
+    });
+
+    it("a name contained in a longer organiser is someone else", () => {
+      const cases: [string, string][] = [
+        ["La Nación", "Palais de Glace — Secretaría de Cultura de la Nación"],
+        ["Centro Cultural", "Centro Cultural Recoleta"],
+        ["Museo de Arte Moderno", "Museo de Arte Moderno de Bogotá"],
+        ["Buenos Aires", "Azcuy + Museo de Arte Moderno de Buenos Aires"],
+        ["Guggenheim", "John Simon Guggenheim Memorial Foundation"],
+      ];
+      for (const [known, organizer] of cases) {
+        const p = programa({ id: "x", organizer });
+        expect(scoreProgram(ctx({ sceneNames: new Set([known]) }), p).score, `${known} / ${organizer}`).toBe(scoreProgram(ctx(), p).score);
+      }
+    });
+
+    it("a space they follow or are linked to in the scene map counts too, however the organiser line is written", () => {
+      const braque = programa({ id: "b", organizer: "UNTREF / MUNTREF + Instituto Francés de Argentina" });
+      expect(scoreProgram(ctx({ sceneNames: new Set(["MUNTREF"]) }), braque).score).toBe(scoreProgram(ctx(), braque).score + 10);
+      expect(scoreProgram(ctx({ sceneNames: new Set(["acefala"]) }), manglar).score).toBe(base + 10);
+    });
+
+    it("needs a whole, distinctive name: 'Arte' does not match 'Fundación arteba' nor 'Arte al Día'", () => {
+      const p = programa({ id: "a", organizer: "Fundación arteba" });
+      const q = programa({ id: "q", organizer: "Arte al Día" });
+      expect(scoreProgram(ctx({ sceneNames: new Set(["Arte", "Fundación"]) }), p).score).toBe(scoreProgram(ctx(), p).score);
+      expect(scoreProgram(ctx({ sceneNames: new Set(["Arte"]) }), q).score).toBe(scoreProgram(ctx(), q).score);
+    });
+
+    it("shares its 10 points with 'artists like you went through it': knowing the scene is counted once", () => {
+      const p = programa({ id: "m2", organizer: "Acéfala Galería", closes_at: "2026-12-06", type: "Formación", alumni_node_ids: ["n1"] });
+      const both = scoreProgram(ctx({ sceneNames: new Set(["Acéfala Galería"]), similarArtistNodeIds: new Set(["n1"]) }), p).score;
+      expect(both).toBe(scoreProgram(ctx(), { ...p, alumni_node_ids: [] }).score + 10);
+    });
+  });
+
   it("artists similar to you who went through the program raise its score", () => {
     const p = programa({ alumni_node_ids: ["n1"] });
     const sin = scoreProgram(ctx(), p).score;

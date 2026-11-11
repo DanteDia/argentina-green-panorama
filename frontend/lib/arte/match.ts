@@ -11,6 +11,8 @@ export interface MatchContext {
   appliedProgramIds: Set<string>;
   similarArtistNodeIds: Set<string>;
   now: Date;
+  /** Names of spaces the artist follows or is linked to in the scene map (the CV's are read from `cv`). */
+  sceneNames?: Set<string>;
   /** Share of calls that contain each word (see wordShare); rankPrograms fills it in. */
   share?: Map<string, number>;
 }
@@ -34,6 +36,36 @@ const artistWords = (ctx: MatchContext) => palabras([ctx.profile.mediums.join(" 
 
 /** True while the artist hasn't said enough about their work for theme matching: recommendations are generic until then. */
 export const needsStatement = (ctx: MatchContext) => artistWords(ctx).size < 4;
+
+// Words that say what kind of space it is, and connectors: on their own they name nothing
+const KIND = new Set("galeria fundacion museo centro espacio instituto universidad residencia premio programa asociacion".split(" "));
+const FILLER = new Set([...KIND, ..."arte artes cultural de del la el los las y e en the of for and".split(" ")]);
+const tokens = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter(Boolean);
+
+/** Whether two names are the same space: equal as written, or equal once the words every space shares are gone
+ *  ("Acéfala Galería" = "Acéfala"). A single leftover word is weak, so the kinds must not contradict each other:
+ *  "Universidad del Cine" is not "Fundación Cine". */
+function sameSpace(a: string, b: string): boolean {
+  const ta = tokens(a), tb = tokens(b);
+  if (ta.length && ta.join(" ") === tb.join(" ")) return true;
+  const ka = ta.filter((w) => !FILLER.has(w)), kb = tb.filter((w) => !FILLER.has(w));
+  if (ka.join(" ") !== kb.join(" ") || ka.join(" ").length < 4) return false;
+  if (ka.length > 1) return true;
+  const kindA = ta.filter((w) => KIND.has(w)), kindB = tb.filter((w) => KIND.has(w));
+  return !kindA.length || !kindB.length || kindA.some((w) => kindB.includes(w));
+}
+
+/**
+ * The organiser that is a space from the artist's confirmed CV, follows or scene map, or null. Either the whole line
+ * is that space ("Nilo, galpón de arte") or one of the organisers in it is ("UNTREF / MUNTREF + Instituto Francés"):
+ * a name merely contained in a longer one is someone else ("La Nación" is not "Secretaría de Cultura de la Nación").
+ */
+function knownOrganizer(ctx: MatchContext, organizer: string | null): string | null {
+  if (!organizer) return null;
+  const mine = [...ctx.cv.filter((c) => c.confirmed).map((c) => c.org), ...(ctx.sceneNames ?? [])].filter((n): n is string => !!n);
+  const parts = [organizer, ...organizer.split(/[/+,;()—–]|\s-\s/)].map((p) => p.trim()).filter(Boolean);
+  return parts.find((p) => mine.some((n) => sameSpace(n, p))) ?? null;
+}
 
 export function effortDays(prog: Program): number {
   const r = prog.requirements || {};
@@ -87,8 +119,11 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
   if (tr === "A") reasons.push("Programa de referencia internacional");
   else if (tr === "B") reasons.push("Referencia en la escena argentina");
 
-  // strategic · alumni similarity
-  if (prog.alumni_node_ids?.some((id) => ctx.similarArtistNodeIds.has(id))) {
+  // strategic · your scene (10, counted once): a space you already know runs it, or artists close to you went through it
+  const known = knownOrganizer(ctx, prog.organizer);
+  if (known) {
+    score += 10; reasons.push(`La organiza ${known}, que ya es parte de tu escena`);
+  } else if (prog.alumni_node_ids?.some((id) => ctx.similarArtistNodeIds.has(id))) {
     score += 10; reasons.push("Artistas afines a vos pasaron por acá");
   }
 
