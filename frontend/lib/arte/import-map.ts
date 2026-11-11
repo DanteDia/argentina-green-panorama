@@ -70,6 +70,13 @@ export function followRows(userId: string, follows: { username: string; full_nam
   return [...seen.values()];
 }
 
+/** Where an imported work came from, stored on the work so importing again never duplicates it. An Instagram post is
+ *  identified by its code (its image urls are signed and change); a website image by its address. */
+export const workOrigin = (w: DraftWork) => (w.source.startsWith("instagram.com/p/") ? `ig:${w.source.slice("instagram.com/p/".length)}` : `url:${w.image_url}`.slice(0, 400));
+
+/** Draft works that this artist has not imported yet. */
+export const newDraftWorks = (works: DraftWork[], imported: (string | null)[]) => { const have = new Set(imported); return works.filter((w) => !have.has(workOrigin(w))); };
+
 /** Truncate by characters, not UTF-16 units: half an emoji is an invalid string that Postgres rejects. */
 export const cut = (t: string, n: number) => (t.length <= n ? t : [...t].slice(0, n).join(""));
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio, signedUrls } from "@/lib/arte/data";
 import { ProfileTabs } from "@/components/arte/ProfileTabs";
@@ -11,7 +12,7 @@ export default async function Obras() {
     <div className="max-w-5xl">
       <p className="eyebrow">Perfil</p>
       <h1 className="display mt-2 text-4xl">Obras</h1>
-      <p className="mt-2 muted">{works.length} obras · con ficha técnica completa podemos armar cualquier dossier.</p>
+      <p className="mt-2 muted">{works.length} obras · con ficha técnica completa podemos armar cualquier dossier. ¿Tu obra está en Instagram o en tu web? <Link href="/arte/onboarding" className="underline">Traela de ahí</Link>.</p>
       <ProfileTabs />
       <WorkGrid userId={user.id} works={works} previews={previews} />
     </div>
