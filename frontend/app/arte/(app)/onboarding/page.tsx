@@ -31,7 +31,7 @@ export default function Onboarding() {
       const d = (await r.json()) as DraftProfile;
       if (!r.ok) throw new Error((d as unknown as { error: string }).error);
       if (nombre && !d.profile.name) d.profile.name = nombre;
-      setDraft(d); setCvOn(d.cv.map(() => true)); setWorksOn(d.works.map((_, i) => i < 8));
+      setDraft(d); setCvOn(d.cv.map(() => true)); setWorksOn(d.works.map((_, i) => !d.returning && i < 8));
       // Slow part, in the background while the artist reviews the draft: who they follow seeds Descubrir and Invitar
       if (d.igPk) {
         setFollows("Leyendo a quién seguís en Instagram para armar tu escena…");
@@ -48,7 +48,7 @@ export default function Onboarding() {
     if (!draft) return;
     const elegido: DraftProfile = { ...draft, cv: draft.cv.filter((_, i) => cvOn[i]), works: draft.works.filter((_, i) => worksOn[i]) };
     start(async () => {
-      try { setError(""); await applyDraft(elegido); router.push("/arte/hoy"); }
+      try { setError(""); await applyDraft(elegido); router.push(draft.returning ? "/arte/perfil/obras" : "/arte/hoy"); }
       catch { setError("No pudimos guardar tu perfil. Tu borrador sigue acá: probá de nuevo."); }   // keep the draft on screen
     });
   }
@@ -104,10 +104,11 @@ export default function Onboarding() {
         </section>
       )}
 
+      {draft.returning && draft.works.length === 0 && <p className="card mt-4 p-5 text-sm">No encontramos imágenes nuevas: lo que hay en tu Instagram y tu web ya está en tus obras.</p>}
       {draft.works.length > 0 && (
         <section className="card mt-4 p-5">
           <h2 className="display text-xl">Tus imágenes</h2>
-          <p className="text-sm muted">De tu Instagram y tu web. Elegí cuáles son obras (hasta 12): las importamos con el texto de la publicación y después ajustás la ficha.</p>
+          <p className="text-sm muted">De tu Instagram y tu web. {draft.returning ? "Tocá las que quieras sumar" : "Elegí cuáles son obras"} (hasta 12): las importamos con el texto de la publicación y después ajustás la ficha.</p>
           <div className="mt-3 grid grid-cols-3 gap-2 md:grid-cols-6">
             {draft.works.map((w, i) => (
               <button key={i} type="button" disabled={!worksOn[i] && worksOn.filter(Boolean).length >= MAX_WORKS} onClick={() => setWorksOn(worksOn.map((v, j) => (j === i ? !v : v)))} className={`relative aspect-square overflow-hidden rounded-lg border-2 ${worksOn[i] ? "border-[var(--ink)]" : "border-transparent opacity-50"}`}>

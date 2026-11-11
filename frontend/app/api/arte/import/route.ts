@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerSupabase } from "@/lib/arte/supabase-server";
 import { fetchIgPosts, fetchIgProfile } from "@/lib/arte/hiker";
 import { importSite } from "@/lib/arte/site-import";
-import { mapImport, type IgProfile } from "@/lib/arte/import-map";
+import { mapImport, newDraftWorks, type IgProfile } from "@/lib/arte/import-map";
 import { findGraphNode } from "@/lib/arte/graph-match";
 
 /** Onboarding import: Instagram (profile + recent posts) + website + graph match -> a draft profile. */
@@ -27,5 +27,10 @@ export async function POST(request: NextRequest) {
   const igOk = ig && !("error" in ig) ? (ig as IgProfile) : null;
   const graphNode = await findGraphNode(supabase, igOk?.username ?? body.instagram?.replace(/^@/, "") ?? null, body.name || igOk?.full_name || null);
   // Who the artist follows takes ~40 s to read: the page asks for it in the background (import/follows) while they review the draft
-  return NextResponse.json(mapImport({ ig, site, graphNode, posts }));
+  const draft = mapImport({ ig, site, graphNode, posts });
+  // an artist who comes back (from Obras: "Traela de ahí") is only offered what they have not imported yet
+  const { data: mine } = await supabase.from("arte_works").select("source").eq("user_id", auth.user.id);
+  draft.works = newDraftWorks(draft.works, (mine || []).map((w) => w.source));
+  draft.returning = (mine || []).length > 0;
+  return NextResponse.json(draft);
 }
