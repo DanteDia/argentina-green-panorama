@@ -50,7 +50,7 @@ export default async function Invitar({ searchParams }: { searchParams: Promise<
 
   const h = await headers();
   const origin = process.env.NEXT_PUBLIC_SITE_URL ?? `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
-  const link = profile.website ?? (profile.portfolio_public && profile.slug ? `${origin}/arte/a/${profile.slug}` : null);
+  const link = profile.website || (profile.portfolio_public && profile.slug ? `${origin}/arte/a/${profile.slug}` : null);
 
   return (
     <div className="max-w-5xl">
@@ -60,8 +60,8 @@ export default async function Invitar({ searchParams }: { searchParams: Promise<
           <p className="display text-xl">{show.title}</p>
           <p className="text-sm muted">{[show.venue, show.when_text, show.address].filter(Boolean).join(" · ")}</p>
         </div>
-        <div className="flex gap-3 text-sm">
-          {(shows?.length ?? 0) > 1 && (shows as Show[]).filter((s) => s.id !== show.id).slice(0, 3).map((s) => <Link key={s.id} href={`/arte/invitar?muestra=${s.id}`} className="underline muted">{s.title}</Link>)}
+        <div className="flex flex-wrap gap-3 text-sm">
+          {(shows?.length ?? 0) > 1 && (shows as Show[]).filter((s) => s.id !== show.id).map((s) => <Link key={s.id} href={`/arte/invitar?muestra=${s.id}`} className="underline muted">{s.title}</Link>)}
           <Link href={`/arte/invitar?muestra=${show.id}&editar`} className="underline">Editar</Link>
           <Link href="/arte/invitar?nueva" className="underline">Nueva muestra</Link>
         </div>

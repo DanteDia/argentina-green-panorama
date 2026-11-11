@@ -1,9 +1,9 @@
 "use client";
 import { useState, useTransition } from "react";
 import { markInvited, unmarkInvited } from "@/app/arte/(app)/invitar/actions";
+import { VENUES } from "@/lib/arte/discover";
 import { contactOf, gmailComposeUrl, inviteText, instagramDmUrl, type Contact, type Show } from "@/lib/arte/invite";
 
-const INSTITUTIONS = new Set(["galeria", "museo", "institucion", "fundacion", "programa", "coleccion"]);
 const KIND: Record<string, string> = { galeria: "Galería", museo: "Museo", institucion: "Institución", fundacion: "Fundación", programa: "Programa", artista: "Artista", persona: "Persona", curador: "Curaduría", coleccionista: "Coleccionista", gestor: "Gestión cultural" };
 
 export interface Guest { nodeId: string | null; name: string; kind: string; reasons: string[]; contact: Contact }
@@ -11,9 +11,9 @@ export interface Sent { id: string; name: string; email: string | null; instagra
 
 function Send({ show, guest, from }: { show: Show; guest: Guest; from: { name: string; link: string | null } }) {
   const [pending, start] = useTransition();
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"" | "ok" | "fail">("");
   const [error, setError] = useState(false);
-  const { subject, body } = inviteText(show, guest.name, from.name, from.link, !INSTITUTIONS.has(guest.kind));
+  const { subject, body } = inviteText(show, guest.name, from.name, from.link, !VENUES.has(guest.kind));
   const done = () => start(async () => {
     try { setError(false); await markInvited(show.id, { nodeId: guest.nodeId, name: guest.name, email: guest.contact.email, instagram: guest.contact.instagram }); }
     catch { setError(true); }
@@ -23,14 +23,14 @@ function Send({ show, guest, from }: { show: Show; guest: Guest; from: { name: s
       {guest.contact.channel === "email" ? (
         <a className="btn btn-primary !py-1.5" target="_blank" rel="noreferrer" href={gmailComposeUrl({ to: guest.contact.email!, subject, body })}>Abrir en Gmail</a>
       ) : (
-        <button type="button" className="btn btn-primary !py-1.5" onClick={async () => {
-          await navigator.clipboard.writeText(body).catch(() => {});
-          setCopied(true);
-          window.open(instagramDmUrl(guest.contact.instagram!), "_blank", "noreferrer");
-        }}>{copied ? "Copiado: pegalo en el DM" : "Copiar y abrir DM"}</button>
+        // a real link, not window.open after an await: Safari / Instagram's browser block late popups
+        <a className="btn btn-primary !py-1.5" target="_blank" rel="noreferrer" href={instagramDmUrl(guest.contact.instagram!)}
+          onClick={() => { navigator.clipboard.writeText(body).then(() => setCopied("ok"), () => setCopied("fail")); }}>
+          {copied === "ok" ? "Copiado: pegalo en el DM" : "Copiar y abrir DM"}</a>
       )}
       <button type="button" className="btn btn-ghost !py-1.5" disabled={pending} onClick={done}>{pending ? "Guardando…" : "Ya la mandé"}</button>
       {error && <span className="text-sm text-[var(--accent)]">No se pudo guardar, probá de nuevo.</span>}
+      {copied === "fail" && <pre className="w-full whitespace-pre-wrap font-[inherit] text-sm text-[var(--ink-2)]">No se pudo copiar; copiá este texto:{"\n\n"}{body}</pre>}
     </div>
   );
 }
@@ -54,7 +54,7 @@ function Manual({ show, from }: { show: Show; from: { name: string; link: string
   const [to, setTo] = useState("");
   const c = to.includes("@") && !to.startsWith("@") ? contactOf({ email: to }) : contactOf({ instagram: to });
   return (
-    <div className="card p-4">
+    <div className="card p-4" data-testid="invitado-manual">
       <p className="text-sm font-medium">Invitar a alguien más</p>
       <p className="text-sm muted">Coleccionistas, amigos o quien no esté en el mapa.</p>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -66,8 +66,19 @@ function Manual({ show, from }: { show: Show; from: { name: string; link: string
   );
 }
 
+function Undo({ id }: { id: string }) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState(false);
+  return (
+    <span className="flex items-center gap-2">
+      {error && <span className="text-xs text-[var(--accent)]">No se pudo</span>}
+      <button type="button" className="text-xs underline muted" disabled={pending}
+        onClick={() => start(async () => { try { setError(false); await unmarkInvited(id); } catch { setError(true); } })}>{pending ? "…" : "Deshacer"}</button>
+    </span>
+  );
+}
+
 export function InviteList({ show, guests, sent, from }: { show: Show; guests: Guest[]; sent: Sent[]; from: { name: string; link: string | null } }) {
-  const [, start] = useTransition();
   const preview = inviteText(show, "Nombre", from.name, from.link);
   return (
     <div className="space-y-8">
@@ -92,7 +103,7 @@ export function InviteList({ show, guests, sent, from }: { show: Show; guests: G
             {sent.map((s) => (
               <li key={s.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <span>{s.name || s.email || `@${s.instagram}`}<span className="muted">{s.email ? ` · ${s.email}` : s.instagram ? ` · @${s.instagram}` : ""}</span></span>
-                <button type="button" className="text-xs underline muted" onClick={() => start(async () => { await unmarkInvited(s.id).catch(() => {}); })}>Deshacer</button>
+                <Undo id={s.id} />
               </li>
             ))}
           </ul>
