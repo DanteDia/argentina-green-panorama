@@ -93,6 +93,27 @@ describe("ranking", () => {
       expect(scoreProgram(ctx({ cv }), manglar).score).toBe(base);
     });
 
+    it("a space whose own name has a comma or is very short still matches itself", () => {
+      for (const name of ["Nilo, galpón de arte", "NN Galería", "Jorge Mara - La Ruche"]) {
+        const p = programa({ id: "x", organizer: name });
+        expect(scoreProgram(ctx({ sceneNames: new Set([name]) }), p).score, name).toBe(scoreProgram(ctx(), p).score + 10);
+      }
+    });
+
+    it("one shared word is not enough when the kinds of space differ", () => {
+      const cases: [string, string][] = [
+        ["Universidad del Cine", "Ayuntamiento de El Sauzal, Fundación Cine+Cómics"],
+        ["Universidad Nacional de las Artes", "Museo Nacional de Arte"],
+        ["Museo de Arte Contemporáneo", "Centro de Arte Contemporáneo"],
+      ];
+      for (const [known, organizer] of cases) {
+        const p = programa({ id: "x", organizer });
+        expect(scoreProgram(ctx({ sceneNames: new Set([known]) }), p).score, `${known} / ${organizer}`).toBe(scoreProgram(ctx(), p).score);
+      }
+      const proa = programa({ id: "p", organizer: "Fundación Proa" });
+      expect(scoreProgram(ctx({ sceneNames: new Set(["Proa"]) }), proa).score).toBe(scoreProgram(ctx(), proa).score + 10);
+    });
+
     it("a name contained in a longer organiser is someone else", () => {
       const cases: [string, string][] = [
         ["La Nación", "Palais de Glace — Secretaría de Cultura de la Nación"],
