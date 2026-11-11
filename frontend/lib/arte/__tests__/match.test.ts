@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkEligibility } from "../eligibility";
-import { rankPrograms, scoreProgram, type MatchContext } from "../match";
+import { needsStatement, rankPrograms, scoreProgram, type MatchContext } from "../match";
 import { perfil, programa } from "./fixtures";
 
 const NOW = new Date("2026-11-01T13:00:00Z");
@@ -42,11 +42,13 @@ describe("ranking", () => {
     expect(r[0].reasons.join(" ")).toMatch(/tecnolog/i);
   });
 
-  it("an empty profile still gets ranked results and a nudge to complete the statement", () => {
+  it("an empty profile still gets ranked results, and is told once (not on every card) that a statement sharpens them", () => {
     const empty = ctx({ profile: perfil({ mediums: [], themes: [] }), statement: "" });
-    const r = rankPrograms(empty, [tecnosis, novela]);
-    expect(r.length).toBeGreaterThan(0);
-    expect(r[0].reasons.join(" ")).toMatch(/completá tu statement/i);
+    const r = rankPrograms(empty, [programa()]);
+    expect(r.length).toBe(1);
+    expect(r[0].reasons.join(" ")).not.toMatch(/statement/i);
+    expect(needsStatement(empty)).toBe(true);
+    expect(needsStatement(ctx())).toBe(false);
   });
 
   it("already-applied programs are not recommended again", () => {
