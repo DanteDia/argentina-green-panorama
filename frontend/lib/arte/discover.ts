@@ -5,7 +5,7 @@ export interface GEdge { source: string; target: string }
 export interface DiscoverCtx { profile: ArteProfile; myNodeId: string | null; follows: string[]; nodes: GNode[]; edges: GEdge[] }
 export interface Affine { nodeId: string; name: string; kind: string; reasons: string[]; score: number }
 
-const VENUES = new Set(["galeria", "museo", "institucion", "fundacion", "programa"]);
+export const VENUES = new Set(["galeria", "museo", "institucion", "fundacion", "programa"]);
 const KIND_LABEL: Record<string, string> = { galeria: "galería", museo: "museo", institucion: "institución", fundacion: "fundación", programa: "programa" };
 const norm = (s: string) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
