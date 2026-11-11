@@ -59,7 +59,7 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
 
   // fit · themes
   const aw = artistWords(ctx);
-  if (aw.size < 4) {
+  if (needsStatement(ctx)) {
     score += 5;   // too little to match on: the pages say so once (needsStatement), not on every card
   } else {
     // Measured on the real calls: words in 10%+ of them are call vocabulary (premio, residency, international); real themes

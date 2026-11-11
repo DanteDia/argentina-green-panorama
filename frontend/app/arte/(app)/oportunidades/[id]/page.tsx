@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio } from "@/lib/arte/data";
 import { buildMatchContext, loadPrograms } from "@/lib/arte/context";
-import { scoreProgram, wordShare } from "@/lib/arte/match";
+import { needsStatement, scoreProgram, wordShare } from "@/lib/arte/match";
+import { StatementNotice } from "@/components/arte/StatementNotice";
 import { checkEligibility } from "@/lib/arte/eligibility";
 import { programState } from "@/lib/arte/dates";
 import { createApplication } from "../../postulaciones/actions";
@@ -23,6 +24,7 @@ export default async function Oportunidad({ params }: { params: Promise<{ id: st
   const p = data as Program;
   const studio = await loadStudio(supabase, user.id);
   const [ctx, programs] = await Promise.all([buildMatchContext(supabase, user.id, studio), loadPrograms(supabase)]);
+  const thin = needsStatement(ctx);
   const s = scoreProgram({ ...ctx, share: wordShare(programs) }, p);   // same score and reasons as the list
   const el = checkEligibility(ctx.profile, p, ctx.now);
   const st = programState(p, ctx.now);
@@ -42,7 +44,8 @@ export default async function Oportunidad({ params }: { params: Promise<{ id: st
 
       <section className="card mt-4 p-5">
         <h2 className="display text-xl">Por qué te la recomendamos</h2>
-        <ul className="mt-2 space-y-1 text-sm">{s.reasons.map((r) => <li key={r}>→ {r}</li>)}</ul>
+        {s.reasons.length > 0 && <ul className="mt-2 space-y-1 text-sm">{s.reasons.map((r) => <li key={r}>→ {r}</li>)}</ul>}
+        {thin ? <StatementNotice className="mt-2 text-[var(--ink-2)]" /> : s.reasons.length === 0 && <p className="mt-2 text-sm muted">Podés aplicar, pero no encontramos una conexión particular con tu obra.</p>}
         {!el.ok && <p className="mt-3 text-sm text-[var(--accent)]">No sos elegible: {el.reasons.join(" · ")}</p>}
         {el.ok && el.reasons.length > 0 && <p className="mt-3 text-sm text-[var(--warn)]">{el.reasons.join(" · ")}</p>}
       </section>

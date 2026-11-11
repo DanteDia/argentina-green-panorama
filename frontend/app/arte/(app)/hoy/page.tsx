@@ -1,3 +1,4 @@
+import { StatementNotice } from "@/components/arte/StatementNotice";
 import Link from "next/link";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio } from "@/lib/arte/data";
@@ -34,9 +35,7 @@ export default async function Hoy() {
       <h1 className="display mt-2 text-4xl md:text-5xl">Hola{nombre ? `, ${nombre}` : ""}.</h1>
       <p className="mt-2 text-[var(--ink-2)]">{enSemana.length ? `Tenés ${enSemana.length} cierre${enSemana.length > 1 ? "s" : ""} esta semana.` : "Esta semana no se te vence nada."} {top.length > 0 && "Estas son tus mejores oportunidades ahora."}</p>
 
-      {needsStatement(ctx) && (
-        <p className="card mt-6 p-4 text-sm">Todavía no sabemos de qué va tu obra, así que estas recomendaciones son generales. <Link href="/arte/perfil#textos" className="underline">Escribí tu statement</Link> (dos líneas alcanzan: las ordenamos por vos) y se afinan.</p>
-      )}
+      {needsStatement(ctx) && <StatementNotice className="card mt-6 p-4" />}
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section className="min-w-0">
           <div className="flex items-baseline justify-between"><h2 className="display text-2xl">Para vos, ahora</h2><Link href="/arte/oportunidades" className="text-sm muted hover:text-[var(--ink)]">Ver todas →</Link></div>
