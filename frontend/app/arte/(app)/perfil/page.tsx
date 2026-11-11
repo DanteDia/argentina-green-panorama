@@ -26,7 +26,7 @@ export default async function Perfil() {
       <p className="mt-2 muted">Lo cargás una vez. Lo usamos en cada postulación.</p>
       <ProfileTabs />
       <div className="mt-6 grid gap-6 md:grid-cols-[1fr_280px]">
-        <form action={saveProfile} className="card space-y-4 p-5">
+        <form id="datos" action={saveProfile} className="card scroll-mt-6 space-y-4 p-5">
           <div className="grid gap-4 md:grid-cols-2">
             <Campo label="Nombre artístico" name="name" def={p?.name} />
             <Campo label="Año de nacimiento" name="birth_year" type="number" def={p?.birth_year} />
@@ -49,11 +49,11 @@ export default async function Perfil() {
           <button className="btn btn-primary">Guardar datos</button>
         </form>
         <div className="space-y-4">
-          <Meter score={c.score} missing={c.missing} />
+          <Meter score={c.score} todo={c.todo} />
           {p?.slug && p.portfolio_public && <a className="btn btn-ghost w-full justify-center" href={`/arte/a/${p.slug}`} target="_blank">Ver mi portfolio público ↗</a>}
         </div>
       </div>
-      <div className="mt-6 grid gap-4">
+      <div id="textos" className="mt-6 grid scroll-mt-6 gap-4">
         <TextEditor kind="statement" initial={s.texts.statement || {}} />
         <div className="grid gap-4 md:grid-cols-2">
           <TextEditor kind="bio_short" initial={s.texts.bio_short || {}} />
