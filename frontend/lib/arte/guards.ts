@@ -1,3 +1,4 @@
+import { MAX_BULK, UNTITLED, YEAR } from "./works";
 import { BlockList, isIP } from "node:net";
 import type { ArteProfile } from "./types";
 
@@ -33,4 +34,17 @@ export function mergeProfile(existing: ArteProfile | null, draft: Partial<ArtePr
     else out[k] = !empty(have) ? have : empty(draft[k]) ? null : draft[k];
   }
   return out as Partial<ArteProfile>;
+}
+
+/** What the server accepts from the browser for a bulk upload: images in the artist's own folder, with a sane title and year. */
+export function cleanWorkItems(items: unknown[], userId: string): { path: string; title: string; year: string | null }[] {
+  const out: { path: string; title: string; year: string | null }[] = [];
+  for (const raw of Array.isArray(items) ? items : []) {
+    const i = (raw ?? {}) as { path?: unknown; title?: unknown; year?: unknown };
+    if (typeof i.path !== "string" || !ownPaths([i.path], userId).length) continue;
+    const title = typeof i.title === "string" ? i.title.trim().slice(0, 200) : "";
+    out.push({ path: i.path, title: title || UNTITLED.title, year: typeof i.year === "string" && YEAR.test(i.year) ? i.year : null });
+    if (out.length === MAX_BULK) break;
+  }
+  return out;
 }

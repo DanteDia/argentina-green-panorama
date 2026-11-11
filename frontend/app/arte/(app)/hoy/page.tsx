@@ -1,8 +1,9 @@
+import { StatementNotice } from "@/components/arte/StatementNotice";
 import Link from "next/link";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio } from "@/lib/arte/data";
 import { buildMatchContext, loadPrograms } from "@/lib/arte/context";
-import { rankPrograms } from "@/lib/arte/match";
+import { rankPrograms, needsStatement } from "@/lib/arte/match";
 import { completeness } from "@/lib/arte/completeness";
 import { formatDay, todayAR } from "@/lib/arte/dates";
 import { ProgramCard } from "@/components/arte/ProgramCard";
@@ -34,6 +35,7 @@ export default async function Hoy() {
       <h1 className="display mt-2 text-4xl md:text-5xl">Hola{nombre ? `, ${nombre}` : ""}.</h1>
       <p className="mt-2 text-[var(--ink-2)]">{enSemana.length ? `Tenés ${enSemana.length} cierre${enSemana.length > 1 ? "s" : ""} esta semana.` : "Esta semana no se te vence nada."} {top.length > 0 && "Estas son tus mejores oportunidades ahora."}</p>
 
+      {needsStatement(ctx) && <StatementNotice className="card mt-6 p-4" />}
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <section className="min-w-0">
           <div className="flex items-baseline justify-between"><h2 className="display text-2xl">Para vos, ahora</h2><Link href="/arte/oportunidades" className="text-sm muted hover:text-[var(--ink)]">Ver todas →</Link></div>
