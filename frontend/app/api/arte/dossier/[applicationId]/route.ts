@@ -1,3 +1,4 @@
+import { contactOf } from "@/lib/arte/invite";
 import { NextResponse, type NextRequest } from "next/server";
 import sharp from "sharp";
 import { renderToBuffer } from "@react-pdf/renderer";
@@ -43,11 +44,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     try { const r = await fetch(urls[w.images[0]]); if (r.ok) src = await fit(await r.arrayBuffer(), perImage); } catch { /* image left out, caption stays */ }
     return { title: w.title, year: w.year, technique: w.technique, dimensions: w.dimensions, src };
   }));
-  // 3 text pages + works; pack two per page when a page limit would be exceeded
-  const worksPerPage = d.limits.pages_max && 3 + works.length > d.limits.pages_max ? 2 : 1;
+  // text pages as DossierDocument lays them out: first page (letter, or the texts when there is no letter), texts after a letter, CV
+  const hasTexts = Boolean(d.sections.statement.trim() || d.sections.bio.trim());
+  const textPages = 1 + (d.sections.letter.trim() && hasTexts ? 1 : 0) + (d.sections.cv.length ? 1 : 0);
+  // pack two works per page when a page limit would be exceeded
+  const worksPerPage = d.limits.pages_max && textPages + works.length > d.limits.pages_max ? 2 : 1;
 
+  const handle = contactOf({ instagram: studio.profile.instagram }).instagram;   // stored as typed: may carry an @ or a full profile url
   const pdf = await renderToBuffer(DossierDocument({
-    name: studio.profile.name, city: studio.profile.base_city, contact: [studio.profile.email_public, studio.profile.website, studio.profile.instagram && `@${studio.profile.instagram}`].filter(Boolean).join(" · "),
+    name: studio.profile.name, city: studio.profile.base_city, contact: [studio.profile.email_public, studio.profile.website, handle && `@${handle}`].filter(Boolean).join(" · "),
     program, letter: d.sections.letter, bio: d.sections.bio, statement: d.sections.statement, cv: d.sections.cv, works, template, worksPerPage,
   }));
   return new NextResponse(new Uint8Array(pdf), {
