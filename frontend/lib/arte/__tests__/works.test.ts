@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { cleanWorkItems, workFromFilename } from "../works";
+import { cleanWorkItems } from "../guards";
+import { workFromFilename } from "../works";
 
 describe("workFromFilename", () => {
   it("turns a named file into a title, and picks up the year", () => {

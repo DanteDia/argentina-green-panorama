@@ -5,8 +5,7 @@ import { loadStudio, slugify, upsertProfile } from "@/lib/arte/data";
 import { complete } from "@/lib/arte/llm";
 import { newCvItems, parseCv, readCvItems, type CvDraftItem } from "@/lib/arte/cv-parse";
 import { draftText, suggestTags, translateText, type WriterKind } from "@/lib/arte/writer";
-import { ownPaths } from "@/lib/arte/guards";
-import { cleanWorkItems } from "@/lib/arte/works";
+import { cleanWorkItems, ownPaths } from "@/lib/arte/guards";
 import type { CvKind, Lang, TextKind } from "@/lib/arte/types";
 
 const list = (v: FormDataEntryValue | null) => String(v || "").split(",").map((s) => s.trim()).filter(Boolean);
