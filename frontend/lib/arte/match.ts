@@ -30,6 +30,11 @@ const STOP = new Set(("para como sobre entre desde hasta donde cuando porque est
 
 const palabras = (s: string) => new Set((s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-zñ]{5,}/g) || []).filter((w) => !STOP.has(w)));
 
+const artistWords = (ctx: MatchContext) => palabras([ctx.profile.mediums.join(" "), ctx.profile.themes.join(" "), ctx.statement].join(" "));
+
+/** True while the artist hasn't said enough about their work for theme matching: recommendations are generic until then. */
+export const needsStatement = (ctx: MatchContext) => artistWords(ctx).size < 4;
+
 export function effortDays(prog: Program): number {
   const r = prog.requirements || {};
   return 2 + (r.letter ? 2 : 0) + (r.images_n || r.portfolio ? 1 : 0) + (r.project ? 3 : 0) + (r.budget ? 2 : 0) + (r.video ? 3 : 0) + (r.statement ? 1 : 0);
@@ -38,7 +43,6 @@ export function effortDays(prog: Program): number {
 export function scoreProgram(ctx: MatchContext, prog: Program): { score: number; reasons: string[]; effortDays: number } {
   const reasons: string[] = [];
   const p = ctx.profile;
-  const artistText = [p.mediums.join(" "), p.themes.join(" "), ctx.statement].join(" ");
   const progText = [prog.name, prog.discipline, prog.description, prog.type].join(" ");
   let score = 0;
 
@@ -54,9 +58,9 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
   } else if (!artistDigital) score += 5;
 
   // fit · themes
-  const aw = palabras(artistText);
-  if (aw.size < 4) {
-    score += 5; reasons.push("Completá tu statement para afinar las recomendaciones");
+  const aw = artistWords(ctx);
+  if (needsStatement(ctx)) {
+    score += 5;   // too little to match on: the pages say so once (needsStatement), not on every card
   } else {
     // Measured on the real calls: words in 10%+ of them are call vocabulary (premio, residency, international); real themes
     // and mediums sit lower (fotografía ~5%, tecnología ~4%). What the artist declared always counts; a word is only

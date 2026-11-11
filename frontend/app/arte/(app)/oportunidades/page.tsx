@@ -1,8 +1,9 @@
+import { StatementNotice } from "@/components/arte/StatementNotice";
 import Link from "next/link";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio } from "@/lib/arte/data";
 import { buildMatchContext, loadPrograms } from "@/lib/arte/context";
-import { rankPrograms } from "@/lib/arte/match";
+import { needsStatement, rankPrograms } from "@/lib/arte/match";
 import { ProgramCard } from "@/components/arte/ProgramCard";
 
 const ESTADOS = [["", "Todas"], ["abierta", "Abiertas"], ["próxima", "Próximas"], ["recurrente", "Para agendar"]] as const;
@@ -14,6 +15,11 @@ export default async function Oportunidades({ searchParams }: { searchParams: Pr
   const studio = await loadStudio(supabase, user.id);
   const [programs, ctx] = await Promise.all([loadPrograms(supabase), buildMatchContext(supabase, user.id, studio)]);
   let ranked = rankPrograms(ctx, programs);
+  // what is actually open, said first: "208 oportunidades" hides that most are to plan ahead
+  const n = (labels: string[]) => ranked.filter((r) => labels.includes(r.state.label)).length;
+  const part = (c: number, one: string, many: string) => (c ? `${c} ${c === 1 ? one : many}` : "");
+  const resumen = [part(n(["abierta", "cierra hoy"]), "abierta ahora", "abiertas ahora"), part(n(["próxima"]), "por abrir", "por abrir"), part(n(["recurrente"]), "para agendar", "para agendar")].filter(Boolean).join(" · ");
+  const total = ranked.length;
   if (sp.estado) ranked = ranked.filter((r) => (sp.estado === "abierta" ? ["abierta", "cierra hoy"].includes(r.state.label) : r.state.label === sp.estado));
   if (sp.tipo) ranked = ranked.filter((r) => (r.program.type || "").toLowerCase().startsWith(sp.tipo!.toLowerCase().slice(0, 5)));
   if (sp.digital) ranked = ranked.filter((r) => r.program.digital_focus);
@@ -24,7 +30,8 @@ export default async function Oportunidades({ searchParams }: { searchParams: Pr
     <div className="max-w-5xl">
       <p className="eyebrow">Oportunidades</p>
       <h1 className="display mt-2 text-4xl">A qué te conviene postularte</h1>
-      <p className="mt-2 muted">{ranked.length} oportunidades para tu perfil, ordenadas por afinidad. Solo ves aquellas a las que podés aplicar.</p>
+      <p className="mt-2 muted">{resumen ? `${resumen}. Ordenadas por afinidad con tu perfil; solo ves aquellas a las que podés aplicar.` : "Todavía no hay oportunidades para tu perfil."}{ranked.length !== total && ` Con estos filtros: ${ranked.length}.`}</p>
+      {needsStatement(ctx) && <StatementNotice className="card mt-6 p-4" />}
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         {ESTADOS.map(([v, l]) => <Link key={v} href={href("estado", v)} className={`pill ${(sp.estado || "") === v ? "bg-[var(--ink)] text-[var(--paper)] border-transparent" : ""}`}>{l}</Link>)}
