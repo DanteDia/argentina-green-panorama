@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkEligibility } from "../eligibility";
-import { needsStatement, rankPrograms, scoreProgram, type MatchContext } from "../match";
+import { matchesSearch, needsStatement, rankPrograms, scoreProgram, type MatchContext } from "../match";
 import { tier } from "../tiers";
 import { perfil, programa } from "./fixtures";
 
@@ -217,13 +217,14 @@ describe("what a residency costs", () => {
 
 describe("reference programmes stay on top of bulk listings", () => {
   const stipend = programa({ id: "aca-x", name: "Lakeside Artist Residency", organizer: "Lakeside Arts", type: "Residencia", closes_at: "2026-12-20", cost: "funded" });
+  const stipendAfin = { ...stipend, id: "aca-y", description: "A residency about identidad." };
 
-  it("an international reference prize that opens soon outranks an unknown residency that is open and pays a stipend", () => {
+  it("an international reference prize that opens soon outranks an unknown residency that is open, pays a stipend and even shares a theme with the artist", () => {
     const ars = programa({ id: "ars", name: "Prix Ars Electronica", organizer: "Ars Electronica", type: "Premio", closes_at: "2026-03-09", window_text: "anual; convocatoria ~ene–mar" });
-    expect(scoreProgram(ctx(), ars).score).toBeGreaterThan(scoreProgram(ctx(), stipend).score);
+    expect(scoreProgram(ctx(), ars).score).toBeGreaterThan(scoreProgram(ctx(), stipendAfin).score);
   });
 
-  it("so does an open programme of an Argentine reference space", () => {
+  it("an open programme of an Argentine reference space outranks it when the fit is the same (affinity can still tip it)", () => {
     const klemm = programa({ id: "klemm", name: "Premio Klemm", organizer: "Fundación Federico Jorge Klemm", type: "Premio", closes_at: "2026-12-06" });
     expect(scoreProgram(ctx(), klemm).score).toBeGreaterThan(scoreProgram(ctx(), stipend).score);
   });
@@ -232,5 +233,34 @@ describe("reference programmes stay on top of bulk listings", () => {
     const todo = programa({ id: "mac", name: "MacDowell Fellowship", organizer: "MacDowell", type: "Residencia", closes_at: "2026-12-20", cost: "funded", digital_focus: true,
       discipline: "Artes Visuales · Arte y tecnología", description: "identidad verificación facial cuerpo máquina dato materia umbral", alumni_node_ids: ["n1"] });
     expect(scoreProgram(ctx({ similarArtistNodeIds: new Set(["n1"]) }), todo).score).toBeLessThanOrEqual(100);
+  });
+});
+
+describe("tier names do not catch look-alikes", () => {
+  it.each([["Residencia de fotografía documental", "Casa Rural"], ["Kemiönsaari Artist Residency", "Saarinen Studio"], ["Studio in Venice for rent", "Venezia Contemporanea"],
+    ["Pivot Art Residency", "Pivot"], ["Call for Artistic Director", "Centro Cultural de Belém"], ["Salón de Otoño", "Museo de Arte Moderno de Bogotá"]])("%s is not a reference", (name, org) => {
+    expect(tier(name, org)).toBe("C");
+  });
+
+  it.each([["Saari Residence", "Kone Foundation", "A"], ["documenta 16 open call", null, "A"], ["Pivô Pesquisa", "Pivô", "A"], ["Premio", "Museo de Arte Moderno de Buenos Aires", "B"],
+    ["Convocatoria", "Centro Cultural Recoleta", "B"]])("%s by %s is tier %s", (name, org, t) => {
+    expect(tier(name, org)).toBe(t);
+  });
+});
+
+describe("searching opportunities", () => {
+  const p = programa({ name: "Hangar — Residencias", organizer: null, country: "España", benefit: "Estipendio mensual", description: null });
+
+  it("finds a country however it is typed", () => {
+    expect(matchesSearch(p, "espana")).toBe(true);
+    expect(matchesSearch(p, "ESPAÑA")).toBe(true);
+    expect(matchesSearch(programa({ country: "EE.UU. (abierto internacional)" }), "eeuu")).toBe(true);
+    expect(matchesSearch(programa({ country: "EE.UU." }), "estados unidos")).toBe(true);
+  });
+
+  it("matches what the programme offers, and not the word null for empty fields", () => {
+    expect(matchesSearch(p, "estipendio")).toBe(true);
+    expect(matchesSearch(p, "null")).toBe(false);
+    expect(matchesSearch(p, "japon")).toBe(false);
   });
 });

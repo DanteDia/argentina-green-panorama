@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio } from "@/lib/arte/data";
 import { buildMatchContext, loadPrograms } from "@/lib/arte/context";
-import { needsStatement, rankPrograms } from "@/lib/arte/match";
+import { matchesSearch, needsStatement, rankPrograms } from "@/lib/arte/match";
 import { ProgramCard } from "@/components/arte/ProgramCard";
 
 const ESTADOS = [["", "Todas"], ["abierta", "Abiertas"], ["próxima", "Próximas"], ["recurrente", "Para agendar"]] as const;
@@ -24,7 +24,7 @@ export default async function Oportunidades({ searchParams }: { searchParams: Pr
   if (sp.tipo) ranked = ranked.filter((r) => (r.program.type || "").toLowerCase().startsWith(sp.tipo!.toLowerCase().slice(0, 5)));
   if (sp.digital) ranked = ranked.filter((r) => r.program.digital_focus);
   if (sp.costo) ranked = ranked.filter((r) => r.program.cost === "funded" || r.program.cost === "free");
-  if (sp.q) { const q = sp.q.toLowerCase(); ranked = ranked.filter((r) => `${r.program.name} ${r.program.organizer} ${r.program.country} ${r.program.description} ${r.program.benefit}`.toLowerCase().includes(q)); }
+  if (sp.q) ranked = ranked.filter((r) => matchesSearch(r.program, sp.q!));
   const href = (k: string, v: string) => { const n = new URLSearchParams(sp as Record<string, string>); if (v) n.set(k, v); else n.delete(k); return `?${n}`; };
 
   return (

@@ -115,7 +115,8 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
 
   // strategic · tier
   const tr = tier(prog.name, prog.organizer);
-  // a reference programme has to outrank the hundreds of calls read from listing sites, whose standing nobody checked
+  // a reference programme has to outrank the hundreds of calls read from listing sites, whose standing nobody checked.
+  // Weights, not a hard rule: a much closer fit to the artist's work can still put an unknown call above a tier-B one.
   score += tr === "A" ? 25 : tr === "B" ? 18 : 6;
   if (tr === "A") reasons.push("Programa de referencia internacional");
   else if (tr === "B") reasons.push("Referencia en la escena argentina");
@@ -142,6 +143,15 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
   else if (st.label === "recurrente") { score += 10; reasons.push("Para agendar: vuelve a abrir"); }
 
   return { score: Math.min(100, Math.round(score)), reasons, effortDays: eff };
+}
+
+const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f.]/g, "");
+
+/** Free-text search over what an artist would type: name, organiser, country, what it offers. Accents, case and dots
+ *  do not matter ("espana", "eeuu"), and a country written as an abbreviation is also found by its name. */
+export function matchesSearch(p: Program, q: string): boolean {
+  const hay = fold([p.name, p.organizer, p.country, p.description, p.benefit].filter(Boolean).join(" "));
+  return (hay + (/\beeuu\b/.test(hay) ? " estados unidos usa" : "")).includes(fold(q).trim());
 }
 
 /** Share of calls containing each word. Under 30 calls the numbers mean nothing, so nothing is discounted. */

@@ -70,15 +70,19 @@ is not an opportunity for an emerging artist. Curated residencies get their labe
 `programas_curados.py`, quoted from the program's page. In the app: a pill on the card, the "Sin costo o con apoyo"
 filter (funded or free), and up to +5 in the score.
 
+`sync_supabase.py` always writes `cost`, so the migration `20261111000002_arte_program_cost.sql` must be applied to a
+database before the next programs sync against it (production: applied 2026-11-11).
+
 The reading is a heuristic over listing text. Known misses: a waived fee for one group read as free for all; a grant
 described in German or French read as a fee; virtual programmes are skipped by title only.
 
 ### Weekly run
 
 `escena-arte/semanal.sh` runs `fuentes.py` and `artealdia_calls.py` and then syncs programs to production; it is
-installed as the LaunchAgent `com.arte.convocatorias-semanal` on the owner's Mac (Mondays 09:17, or at the next wake).
-It writes `escena-arte/logs/semanal-YYYY-MM-DD.log`. If a source fails or the calls with a deadline ahead drop by more
-than half, it restores `arte.db` and does not sync. It does not run `programas_curados.py` (hand-verified: run it
+installed as the LaunchAgent `com.arte.convocatorias-semanal` on the owner's Mac (Mondays 09:17, or at the next wake;
+the plist is kept in `escena-arte/` and copied to `~/Library/LaunchAgents/`).
+It writes `escena-arte/logs/semanal-YYYY-MM-DD.log`. If `fuentes.py` exits with an error, or the calls with a deadline
+ahead drop by more than half, it restores `arte.db` and does not sync. It does not run `programas_curados.py` (hand-verified: run it
 after editing the list) nor `convocatorias_ig.py` (paid requests).
 
 ```bash
