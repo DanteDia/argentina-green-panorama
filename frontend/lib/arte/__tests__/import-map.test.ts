@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapImport, type GraphNodeImport } from "../import-map";
+import { igPosts, mapImport, type GraphNodeImport } from "../import-map";
 
 const nodo: GraphNodeImport = {
   id: "n1", nombre: "Dante Arola", descripcion: "Dante Arola (Buenos Aires, 1993) vive y trabaja en Buenos Aires. Investiga el umbral entre materia y dato.",
@@ -46,5 +46,24 @@ describe("mapImport", () => {
     expect(d.texts.bio_long).toMatch(/paisaje y la memoria/);
     expect(d.works.length).toBe(2);
     expect(d.works[0].image_url).toBe("https://x.art/a.jpg");
+  });
+
+  it("offers the artist's Instagram posts as works, with the caption as title and text", () => {
+    const d = mapImport({ ig: { username: "x", pk: 1 }, posts: [{ code: "abc", caption: "🔥 Umbral, 2025.\nInstalación con tickets #arte", image: "https://cdn/1.jpg", year: "2025" }, { code: "d", caption: "", image: "https://cdn/2.jpg", year: null }] });
+    expect(d.works[0]).toEqual({ title: "Umbral, 2025.", description: "🔥 Umbral, 2025.\nInstalación con tickets #arte", year: "2025", image_url: "https://cdn/1.jpg", source: "instagram.com/p/abc" });
+    expect(d.works[1].title).toBe("Obra sin título");
+    expect(d.igPk).toBe("1");
+  });
+});
+
+describe("igPosts", () => {
+  it("reads image, caption and year from the API's media items, first slide of a carousel", () => {
+    const img = (u: string, w: number) => ({ url: u, width: w });
+    const posts = igPosts([
+      { media: { code: "a", taken_at: 1767312000, caption: { text: "Hola" }, image_versions2: { candidates: [img("big", 1440), img("mid", 1080), img("small", 320)] } } },
+      { code: "b", caption: null, carousel_media: [{ image_versions2: { candidates: [img("c1", 640)] } }, { image_versions2: { candidates: [img("c2", 640)] } }] },
+      { code: "c", image_versions2: { candidates: [] } },
+    ]);
+    expect(posts).toEqual([{ code: "a", caption: "Hola", image: "mid", year: "2026" }, { code: "b", caption: "", image: "c1", year: null }]);
   });
 });

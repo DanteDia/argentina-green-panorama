@@ -9,13 +9,16 @@ export interface GraphNodeImport {
   contact_info: { instagram?: string; email?: string };
   edges: GraphEdgeImport[];
 }
-export interface DraftWork { title: string; image_url: string; source: string }
+export interface IgPost { code: string; caption: string; image: string; year: string | null }
+export interface DraftWork { title: string; image_url: string; source: string; description?: string; year?: string | null }
 export interface DraftProfile {
   profile: Partial<ArteProfile>;
   texts: { bio_short?: string; bio_long?: string; statement?: string };
   cv: (Pick<CvItem, "kind" | "title" | "org" | "year" | "source"> & { evidence?: string })[];
   works: DraftWork[];
   graphNodeId: string | null;
+  /** Instagram numeric id, so the page can ask for the artist's follows in the background after the draft is shown. */
+  igPk?: string;
   warnings: string[];
   sources: string[];
 }
@@ -41,8 +44,30 @@ function bioFromSite(text: string): string | undefined {
   return best?.slice(0, 1600);
 }
 
+/** The artist's recent posts from the media API: first slide of a carousel, the largest image up to ~1100px, caption and year. */
+export function igPosts(items: unknown[]): IgPost[] {
+  type Cand = { url?: string; width?: number };
+  type Media = { code?: string; taken_at?: number; caption?: { text?: string } | string | null; image_versions2?: { candidates?: Cand[] }; carousel_media?: Media[]; media?: Media };
+  const out: IgPost[] = [];
+  for (const it of items as Media[]) {
+    const m = it?.media ?? it;
+    const cands = [...((m?.carousel_media?.[0] ?? m)?.image_versions2?.candidates ?? [])].filter((c) => c.url).sort((a, b) => (a.width ?? 0) - (b.width ?? 0));
+    const best = (cands.filter((c) => (c.width ?? 0) <= 1100).pop() ?? cands.pop())?.url;
+    if (!m?.code || !best) continue;
+    const caption = typeof m.caption === "string" ? m.caption : m.caption?.text ?? "";
+    out.push({ code: m.code, caption, image: best, year: m.taken_at ? String(new Date(m.taken_at * 1000).getUTCFullYear()) : null });
+  }
+  return out;
+}
+
+/** A caption's first line as a work title: no leading emoji, no hashtags, not a paragraph. */
+function titleFromCaption(caption: string): string {
+  const line = (caption.split("\n").find((l) => /\p{L}/u.test(l)) ?? "").replace(/#\S+/g, "").replace(/^[^\p{L}\p{N}"“¿¡]+/u, "").trim();
+  return line && line.length <= 80 ? line : line ? `${line.slice(0, 77).trimEnd()}…` : "Obra sin título";
+}
+
 /** Merge what we could read (graph > site > Instagram) into a draft the artist confirms item by item. */
-export function mapImport(input: { ig?: IgProfile | { error: string }; site?: SiteImport | { error: string }; graphNode?: GraphNodeImport | null }): DraftProfile {
+export function mapImport(input: { ig?: IgProfile | { error: string }; site?: SiteImport | { error: string }; graphNode?: GraphNodeImport | null; posts?: IgPost[] }): DraftProfile {
   const d: DraftProfile = { profile: {}, texts: {}, cv: [], works: [], graphNodeId: null, warnings: [], sources: [] };
   const ig = input.ig && !("error" in input.ig) ? input.ig : null;
   const site = input.site && !("error" in input.site) ? input.site : null;
@@ -69,6 +94,8 @@ export function mapImport(input: { ig?: IgProfile | { error: string }; site?: Si
       d.cv.push({ kind, title: e.target_nombre, org: e.target_nombre, year: e.fecha ? e.fecha.slice(0, 4) : null, source: "graph" });
     }
   }
+  // Instagram posts first: that is where an emerging artist's work actually lives, already captioned
+  d.works.push(...(input.posts ?? []).map((p) => ({ title: titleFromCaption(p.caption), description: p.caption.slice(0, 1500) || undefined, year: p.year, image_url: p.image, source: `instagram.com/p/${p.code}` })));
   if (site) {
     d.sources.push(site.url);
     d.profile.website = d.profile.website || site.url;
@@ -79,6 +106,7 @@ export function mapImport(input: { ig?: IgProfile | { error: string }; site?: Si
   if (ig) {
     d.sources.push(`instagram.com/${ig.username}`);
     d.profile.instagram = ig.username;
+    if (ig.pk) d.igPk = String(ig.pk);
     if (ig.full_name && !d.profile.name) d.profile.name = ig.full_name;
     if (ig.external_url && !d.profile.website) d.profile.website = ig.external_url;
     const email = ig.public_email || ig.biography?.match(EMAIL)?.[0];
