@@ -10,7 +10,7 @@ export interface GraphNodeImport {
   edges: GraphEdgeImport[];
 }
 export interface IgPost { code: string; caption: string; image: string; year: string | null }
-export interface DraftWork { title: string; image_url: string; source: string; description?: string; year?: string | null }
+export interface DraftWork { title: string; image_url: string; source: string; description?: string; year?: string | null; technique?: string; dimensions?: string }
 export interface DraftProfile {
   profile: Partial<ArteProfile>;
   texts: { bio_short?: string; bio_long?: string; statement?: string };
@@ -79,6 +79,31 @@ function titleFromCaption(caption: string): string {
   return !line ? "Obra sin título" : [...line].length <= 80 ? line : `${cut(line, 77).trimEnd()}…`;
 }
 
+const NUM = String.raw`\d{1,4}(?:[.,]\d+)?`;
+const DIMS = new RegExp(`(${NUM})\\s*[x×]\\s*(${NUM})(?:\\s*[x×]\\s*(${NUM}))?\\s*(cm|mm|mts?|m)\\b`, "i");   // a unit is required: "1920x1080" is pixels
+const VARIABLE = /(medidas|dimensiones) variables|variable dimensions/i;
+const TITLE_YEAR = /^["“«]?(.+?)["”»]?,\s*((?:19|20)\d{2})\b/;
+const TECHNIQUE = /[oó]leo|acr[ií]lico|acuarela|tinta|grafito|carbonilla|pastel|collage|fotograf[ií]a|impresi[oó]n|gicl[eé]e|serigraf[ií]a|grabado|xilograf[ií]a|litograf[ií]a|cer[aá]mica|bronce|resina|textil|bordado|video|instalaci[oó]n|escultura|t[eé]cnica mixta|mixed media|oil on|acrylic on|sobre (?:tela|papel|madera|lienzo|cart[oó]n)/i;
+
+/** The technical sheet many artists already write in the caption ("Umbral, 2025. Óleo sobre tela, 100 x 80 cm").
+ *  Only read when the caption looks like a sheet (a size or a "Title, year" line): "mirá el video" is not a technique. */
+export function fichaFromCaption(caption: string): { title?: string; year?: string; technique?: string; dimensions?: string } {
+  const text = caption.replace(/#\S+/g, " ");
+  const dims = text.match(DIMS);
+  const variable = VARIABLE.test(text);
+  const head = (text.split("\n").find((l) => /\p{L}/u.test(l)) ?? "").replace(/^[^\p{L}\p{N}"“«]+/u, "").match(TITLE_YEAR);
+  if (!dims && !variable && !head) return {};
+  const out: { title?: string; year?: string; technique?: string; dimensions?: string } = {};
+  if (head) { out.title = cut(head[1].trim(), 120); out.year = head[2]; }
+  if (dims) out.dimensions = `${[dims[1], dims[2], dims[3]].filter(Boolean).join(" x ")} ${dims[4].toLowerCase().replace(/^mts?$/, "m")}`;
+  else if (variable) out.dimensions = "Medidas variables";
+  for (const seg of text.split(/\n|\s[·|]\s|\.(?:\s|$)/)) {
+    const clean = seg.replace(DIMS, " ").replace(VARIABLE, " ").replace(/\b(?:19|20)\d{2}\b/g, " ").replace(/\s+/g, " ").replace(/^[\s,;:·-]+|[\s,;:·-]+$/g, "");
+    if (clean && clean.length <= 90 && TECHNIQUE.test(clean) && !/[@]/.test(clean) && clean !== out.title) { out.technique = clean[0].toUpperCase() + clean.slice(1); break; }
+  }
+  return out;
+}
+
 /** Merge what we could read (graph > site > Instagram) into a draft the artist confirms item by item. */
 export function mapImport(input: { ig?: IgProfile | { error: string }; site?: SiteImport | { error: string }; graphNode?: GraphNodeImport | null; posts?: IgPost[] }): DraftProfile {
   const d: DraftProfile = { profile: {}, texts: {}, cv: [], works: [], graphNodeId: null, warnings: [], sources: [] };
@@ -108,7 +133,10 @@ export function mapImport(input: { ig?: IgProfile | { error: string }; site?: Si
     }
   }
   // Instagram posts first: that is where an emerging artist's work actually lives, already captioned
-  d.works.push(...(input.posts ?? []).map((p) => ({ title: titleFromCaption(p.caption), description: cut(p.caption, 1500) || undefined, year: p.year, image_url: p.image, source: `instagram.com/p/${p.code}` })));
+  d.works.push(...(input.posts ?? []).map((p) => {
+    const f = fichaFromCaption(p.caption);   // the year the artist wrote beats the year the post went up
+    return { title: f.title ?? titleFromCaption(p.caption), description: cut(p.caption, 1500) || undefined, year: f.year ?? p.year, technique: f.technique, dimensions: f.dimensions, image_url: p.image, source: `instagram.com/p/${p.code}` };
+  }));
   if (site) {
     d.sources.push(site.url);
     d.profile.website = d.profile.website || site.url;

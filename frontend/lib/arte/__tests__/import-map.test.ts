@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { followRows, igPosts, mapImport, type GraphNodeImport } from "../import-map";
+import { fichaFromCaption, followRows, igPosts, mapImport, type GraphNodeImport } from "../import-map";
 
 const nodo: GraphNodeImport = {
   id: "n1", nombre: "Dante Arola", descripcion: "Dante Arola (Buenos Aires, 1993) vive y trabaja en Buenos Aires. Investiga el umbral entre materia y dato.",
@@ -50,7 +50,7 @@ describe("mapImport", () => {
 
   it("offers the artist's Instagram posts as works, with the caption as title and text", () => {
     const d = mapImport({ ig: { username: "x", pk: 1 }, posts: [{ code: "abc", caption: "🔥 Umbral, 2025.\nInstalación con tickets #arte", image: "https://cdn/1.jpg", year: "2025" }, { code: "d", caption: "", image: "https://cdn/2.jpg", year: null }] });
-    expect(d.works[0]).toEqual({ title: "Umbral, 2025.", description: "🔥 Umbral, 2025.\nInstalación con tickets #arte", year: "2025", image_url: "https://cdn/1.jpg", source: "instagram.com/p/abc" });
+    expect(d.works[0]).toEqual({ title: "Umbral", description: "🔥 Umbral, 2025.\nInstalación con tickets #arte", year: "2025", technique: "Instalación con tickets", image_url: "https://cdn/1.jpg", source: "instagram.com/p/abc" });
     expect(d.works[1].title).toBe("Obra sin título");
     expect(d.igPk).toBe("1");
   });
@@ -83,6 +83,24 @@ describe("followRows", () => {
       { user_id: "u1", handle: "galeria.uno", full_name: "Uno", node_id: "n1" },
       { user_id: "u1", handle: "otra", full_name: null, node_id: null },
     ]);
+  });
+});
+
+describe("fichaFromCaption", () => {
+  it("reads the sheet an artist already wrote in the caption", () => {
+    expect(fichaFromCaption("“Umbral”, 2025. Óleo sobre tela, 100 x 80 cm\n#pintura")).toEqual({ title: "Umbral", year: "2025", technique: "Óleo sobre tela", dimensions: "100 x 80 cm" });
+    expect(fichaFromCaption("Serie Liminales\nFotografía digital, impresión giclée · 60x90cm · 2024")).toMatchObject({ technique: "Fotografía digital, impresión giclée", dimensions: "60 x 90 cm" });
+    expect(fichaFromCaption("Sin título, 2023\nInstalación. Medidas variables")).toEqual({ title: "Sin título", year: "2023", technique: "Instalación", dimensions: "Medidas variables" });
+    expect(fichaFromCaption("Cerámica esmaltada 30 × 20 × 15 cm")).toMatchObject({ technique: "Cerámica esmaltada", dimensions: "30 x 20 x 15 cm" });
+  });
+  it("finds nothing in an ordinary post, and never takes pixels or a date for a size", () => {
+    expect(fichaFromCaption("Nos vemos el jueves en @acefalagaleria 🔥 18 a 21 hs")).toEqual({});
+    expect(fichaFromCaption("Wallpaper 1920x1080 para descargar")).toEqual({});
+    expect(fichaFromCaption("Life session by @aldihofman 💕")).toEqual({});
+  });
+  it("fills the draft work with it", () => {
+    const d = mapImport({ posts: [{ code: "a", caption: "Umbral, 2025. Acrílico sobre papel, 50 x 70 cm", image: "i", year: "2026" }] });
+    expect(d.works[0]).toMatchObject({ title: "Umbral", year: "2025", technique: "Acrílico sobre papel", dimensions: "50 x 70 cm" });
   });
 });
 
