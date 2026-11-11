@@ -1,4 +1,5 @@
 "use client";
+import { AI_ERROR } from "@/lib/arte/ai-answer";
 import { useState, useTransition } from "react";
 import { regenerateLetter, saveDossier, type DossierDraft } from "@/app/arte/(app)/postulaciones/[id]/dossier/actions";
 
@@ -14,8 +15,12 @@ export function DossierEditor({ applicationId, initial, works, maxWorks }: { app
   const save = () => start(async () => { await saveDossier(applicationId, d); setSaved(JSON.stringify(d)); setNote("Guardado"); });
   const regen = () => start(async () => {
     const r = await regenerateLetter(applicationId);
+    // at the daily AI cap a letter the artist already has is never replaced by the template
+    if (r.capped && d.letter.trim()) { setNote(AI_ERROR.limit); return; }
     setD((x) => ({ ...x, letter: r.text }));
-    setNote(r.usedAI ? "Borrador generado: revisalo y hacelo tuyo." : "Borrador armado con tu statement y tus obras (sin IA en este entorno).");
+    setNote(r.usedAI ? "Borrador generado: revisalo y hacelo tuyo."
+      : r.capped ? `${AI_ERROR.limit} Te armamos un borrador con tu statement y tus obras.`
+      : "Borrador armado con tu statement y tus obras (la IA no respondió).");
   });
   const toggle = (id: string) => setD((x) => ({ ...x, workIds: x.workIds.includes(id) ? x.workIds.filter((y) => y !== id) : x.workIds.length < maxWorks ? [...x.workIds, id] : x.workIds }));
   const field = (k: "letter" | "statement" | "bio", label: string, rows: string) => (
