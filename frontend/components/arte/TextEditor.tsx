@@ -1,6 +1,6 @@
 "use client";
 import { useState, useTransition } from "react";
-import { saveText } from "@/app/arte/(app)/perfil/actions";
+import { aiDraft, aiTranslate, saveText } from "@/app/arte/(app)/perfil/actions";
 import type { Lang } from "@/lib/arte/types";
 
 type Kind = "bio_short" | "bio_long" | "statement";
@@ -15,7 +15,24 @@ export function TextEditor({ kind, initial }: { kind: Kind; initial: Partial<Rec
   const [val, setVal] = useState<Record<Lang, string>>({ es: initial.es || "", en: initial.en || "" });
   const [saved, setSaved] = useState<Record<Lang, string>>({ es: initial.es || "", en: initial.en || "" });
   const [pending, start] = useTransition();
+  const [writing, startAI] = useTransition();
+  const [note, setNote] = useState("");
+  const [undo, setUndo] = useState<{ lang: Lang; text: string } | null>(null);
   const dirty = val[lang] !== saved[lang];
+  // AI drafts are saved right away (a draft lost on navigation is worse than one to edit); "Deshacer" puts the previous text back
+  const keep = async (l: Lang, text: string) => { await saveText(kind, l, text); setVal((v) => ({ ...v, [l]: text })); setSaved((v) => ({ ...v, [l]: text })); };
+  const ai = () => startAI(async () => {
+    setNote("");
+    try {
+      const before = val[lang];
+      const text = lang === "es" ? await aiDraft(kind, before) : await aiTranslate(val.es);
+      if (!text) { setNote("No pudimos generarlo ahora. Probá de nuevo en un momento."); return; }
+      await keep(lang, text);
+      setUndo({ lang, text: before });
+      setNote(lang === "es" ? "Borrador guardado: leelo y hacelo tuyo." : "Translation saved: read it once before using it.");
+    } catch { setNote("No pudimos generarlo ahora. Probá de nuevo en un momento."); }
+  });
+  const aiLabel = lang === "en" ? "Traducir del español" : val.es.trim() ? "Pulir con IA" : "Escribir con IA";
   const words = val[lang].trim() ? val[lang].trim().split(/\s+/).length : 0;
   return (
     <div className="card p-5">
@@ -30,7 +47,13 @@ export function TextEditor({ kind, initial }: { kind: Kind; initial: Partial<Rec
       <p className="mt-1 text-sm muted">{LABEL[kind].hint}</p>
       <textarea className="input mt-3 min-h-36 leading-relaxed" maxLength={LABEL[kind].max} value={val[lang]}
         onChange={(e) => setVal({ ...val, [lang]: e.target.value })} aria-label={`${LABEL[kind].t} (${lang})`}
-        placeholder={lang === "en" ? "English version (we can draft it for you from the Spanish one)" : "Escribilo con tus palabras."} />
+        placeholder={lang === "en" ? "English version: write it, or translate the Spanish one with one click." : "Escribilo con tus palabras, o dejá que lo escribamos con lo que ya cargaste."} />
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button type="button" className="btn btn-ghost !py-1.5 text-sm" disabled={writing || pending || (lang === "en" && !val.es.trim())} onClick={ai}>{writing ? "Escribiendo…" : aiLabel}</button>
+        {undo && undo.lang === lang && !writing && <button type="button" className="text-xs underline muted" onClick={() => startAI(async () => { await keep(undo.lang, undo.text); setUndo(null); setNote(""); })}>Deshacer</button>}
+        {note && <span className="text-xs text-[var(--ink-2)]" role="status">{note}</span>}
+        {lang === "es" && !val.es.trim() && !note && <span className="text-xs muted">o tirá dos líneas sueltas y tocá el botón: las ordenamos por vos.</span>}
+      </div>
       <div className="mt-2 flex items-center justify-between text-xs muted">
         <span>{words} palabras</span>
         <button type="button" disabled={!dirty || pending} className="btn btn-primary !py-1.5 disabled:opacity-40"

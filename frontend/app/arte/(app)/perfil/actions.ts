@@ -1,7 +1,9 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/arte/supabase-server";
-import { slugify, upsertProfile } from "@/lib/arte/data";
+import { loadStudio, slugify, upsertProfile } from "@/lib/arte/data";
+import { complete } from "@/lib/arte/llm";
+import { draftText, suggestTags, translateText, type WriterKind } from "@/lib/arte/writer";
 import { ownPaths } from "@/lib/arte/guards";
 import type { CvKind, Lang, TextKind } from "@/lib/arte/types";
 
@@ -77,4 +79,26 @@ export async function deleteCvItem(id: string) {
   const { supabase } = await requireUser();
   await supabase.from("arte_cv_items").delete().eq("id", id);
   revalidatePath("/arte/perfil/cv");
+}
+
+// ---------- AI drafts (nothing is saved here: the editor shows the text and the artist keeps or edits it) ----------
+// ponytail: no rate limit while the tool has a handful of users; add a per-user daily cap before opening sign-ups
+async function writerStudio() {
+  const { user, supabase } = await requireUser();
+  const s = await loadStudio(supabase, user.id);
+  if (!s.profile) throw new Error("Completá tu nombre primero");
+  return { profile: s.profile, works: s.works, cv: s.cv, texts: s.texts };
+}
+
+export async function aiDraft(kind: WriterKind, notes: string): Promise<string | null> {
+  return draftText(kind, await writerStudio(), notes, complete);
+}
+
+export async function aiTranslate(text: string): Promise<string | null> {
+  await requireUser();
+  return translateText(text.slice(0, 6000), complete);
+}
+
+export async function aiTags(): Promise<{ mediums: string[]; themes: string[] } | null> {
+  return suggestTags(await writerStudio(), complete);
 }
