@@ -11,6 +11,8 @@ export interface MatchContext {
   appliedProgramIds: Set<string>;
   similarArtistNodeIds: Set<string>;
   now: Date;
+  /** Words too frequent across calls to mean a connection (see commonWords); rankPrograms fills it in. */
+  common?: Set<string>;
 }
 export interface Ranked { program: Program; score: number; reasons: string[]; effortDays: number; state: ProgramState; eligibilityNotes: string[] }
 
@@ -56,7 +58,7 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
   if (aw.size < 4) {
     score += 5; reasons.push("Completá tu statement para afinar las recomendaciones");
   } else {
-    const comunes = [...palabras(progText)].filter((w) => aw.has(w));
+    const comunes = [...palabras(progText)].filter((w) => aw.has(w) && !ctx.common?.has(w));
     score += Math.min(15, comunes.length * 5);
     if (comunes.length) reasons.push(`Conecta con tu obra: ${comunes.slice(0, 3).join(", ")}`);
   }
@@ -92,8 +94,18 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
   return { score: Math.round(score), reasons, effortDays: eff };
 }
 
+/** Words that appear in many calls ("durante", "working", "materiales"): sharing them with a call is not a connection.
+ *  Measured on the calls themselves, so it holds in any language without a hand-kept list. */
+export function commonWords(programs: Program[]): Set<string> {
+  const df = new Map<string, number>();
+  for (const p of programs) for (const w of palabras([p.name, p.discipline, p.description, p.type].join(" "))) df.set(w, (df.get(w) ?? 0) + 1);
+  const limit = Math.max(4, programs.length * 0.05);
+  return new Set([...df].filter(([, n]) => n >= limit).map(([w]) => w));
+}
+
 /** Eligible, not applied, not closed-for-good; best first. */
-export function rankPrograms(ctx: MatchContext, programs: Program[]): Ranked[] {
+export function rankPrograms(ctx0: MatchContext, programs: Program[]): Ranked[] {
+  const ctx = { ...ctx0, common: ctx0.common ?? commonWords(programs) };
   const out: Ranked[] = [];
   for (const prog of programs) {
     if (ctx.appliedProgramIds.has(prog.id)) continue;

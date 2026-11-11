@@ -25,6 +25,8 @@ export default async function Hoy() {
   const today = todayAR(new Date());
   const enSemana = (apps.data || []).filter((a) => a.due_at && a.due_at >= today && a.due_at <= daysFrom(8));
   const nombre = ctx.profile.name?.split(" ")[0];
+  // a caption that is only a tag like "[REGISTROS/@cuenta]" says nothing: skip it
+  const shown = ((events.data || []) as ArteEvent[]).filter((e) => !/^\[[^\]]*\]$/.test(e.title.trim())).slice(0, 6);
 
   return (
     <div className="max-w-5xl">
@@ -54,11 +56,11 @@ export default async function Hoy() {
         </aside>
       </div>
 
-      {(events.data || []).length > 0 && (
+      {shown.length > 0 && (
         <section className="mt-10">
           <h2 className="display text-2xl">Pasando en la escena</h2>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
-            {(events.data as ArteEvent[]).filter((e) => !/^\[[^\]]*\]$/.test(e.title.trim())).slice(0, 6).map((e) => (
+            {shown.map((e) => (
               <a key={e.id} href={e.url || "#"} target="_blank" rel="noreferrer" className="card block p-4 hover:shadow-sm">
                 <p className="text-xs muted">{e.venue_name} · {e.starts_on ? formatDay(e.starts_on) : ""}</p>
                 <p className="mt-1 line-clamp-3 text-sm">{e.title}</p>

@@ -82,12 +82,14 @@ export function yourVenues(ctx: DiscoverCtx): Affine[] {
     .map((n) => ({ nodeId: n.id, name: n.name, kind: n.kind, reasons: [`ya trabajaste con ${n.kind === "museo" || n.kind === "programa" ? "este" : "esta"} ${KIND_LABEL[n.kind]}`], score: 60 })));
 }
 
-const NAV = /ir al contenido|skip to content|⟶|arteinformado|\bmen[uú]\b|english version|\bcontacto\b.*\b(obra|bio|statement)\b|\b(exhibiciones|exposiciones)\b.*\b(ferias|premios|contacto)\b|\|/i;
+const SCRAPE = /ir al contenido|skip to content|⟶|arteinformado|english version/i;
+// A sentence has mostly lowercase words; a scraped menu ("Inicio Obra Bio Contacto") is a short run of capitalised labels
+const readsAsSentence = (t: string) => { const w = t.split(/\s+/); return w.length >= 6 && w.filter((x) => /^\p{Ll}/u.test(x)).length / w.length >= 0.4; };
 
 /** One line about a person or space for a card: their own Instagram bio first; scraped page text only when it reads as a sentence. */
 export function sceneBlurb(descripcion: string | null, contact: { ig_bio?: string } | null | undefined): string | null {
   const bio = contact?.ig_bio?.split("\n").map((l) => l.replace(/^[^\p{L}\p{N}@#]+/u, "").trim()).filter(Boolean).join(" · ");
   if (bio) return bio;
   const d = descripcion?.trim();
-  return d && !NAV.test(d) ? d : null;
+  return d && !SCRAPE.test(d) && readsAsSentence(d) ? d : null;
 }

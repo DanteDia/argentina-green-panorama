@@ -95,5 +95,11 @@ describe("sceneBlurb", () => {
     const t = "Cursó estudios de Curaduría en la Universidad Nacional de las Artes y dirige La Escuelita.";
     expect(sceneBlurb(t, {})).toBe(t);
   });
+  it("keeps real sentences that mention exhibitions, fairs or contact", () => {
+    for (const t of ["Ha participado en numerosas exposiciones y ferias internacionales.", "Su práctica pone en contacto la obra con el público."]) expect(sceneBlurb(t, {})).toBe(t);
+  });
+  it("drops menus in any language: they are lists of capitalised labels, not sentences", () => {
+    for (const t of ["Menú Obra Bio Contacto", "Inicio Obra Bio CV Contacto", "Home About Works Exhibitions Contact"]) expect(sceneBlurb(t, {})).toBeNull();
+  });
 });
 

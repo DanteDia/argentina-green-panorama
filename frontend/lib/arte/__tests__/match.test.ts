@@ -88,5 +88,13 @@ describe("match reasons", () => {
     const r = scoreProgram(ctx(), programa({ description: "Convocatoria sobre identidad y verificación en la era de la máquina." }));
     expect(r.reasons.join(" ")).toMatch(/Conecta con tu obra: .*identidad/);
   });
-});
 
+  it("ignores words that most calls share, whatever they are", () => {
+    // 'durante', 'diferentes', 'materiales' are in every call below: they say nothing about this artist
+    const calls = Array.from({ length: 30 }, (_, i) => programa({ id: `p${i}`, name: `Beca ${i}`, description: "Durante la residencia se trabaja con diferentes materiales." }));
+    const c = ctx({ profile: perfil({ mediums: [], themes: [] }), statement: "Durante años trabajé con diferentes materiales, sobre todo cerámica esmaltada." });
+    const ranked = rankPrograms(c, [...calls, programa({ id: "x", name: "Premio de cerámica esmaltada", description: "Durante el premio se exhiben diferentes materiales." })]);
+    expect(ranked.find((r) => r.program.id === "p0")!.reasons.join(" ")).not.toMatch(/Conecta con tu obra/);
+    expect(ranked.find((r) => r.program.id === "x")!.reasons.join(" ")).toMatch(/Conecta con tu obra: ceramica, esmaltada/);
+  });
+});
