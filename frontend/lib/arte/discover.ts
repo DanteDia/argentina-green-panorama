@@ -82,14 +82,20 @@ export function yourVenues(ctx: DiscoverCtx): Affine[] {
     .map((n) => ({ nodeId: n.id, name: n.name, kind: n.kind, reasons: [`ya trabajaste con ${n.kind === "museo" || n.kind === "programa" ? "este" : "esta"} ${KIND_LABEL[n.kind]}`], score: 60 })));
 }
 
-const SCRAPE = /ir al contenido|skip to content|⟶|arteinformado|english version/i;
-// A sentence has mostly lowercase words; a scraped menu ("Inicio Obra Bio Contacto") is a short run of capitalised labels
-const readsAsSentence = (t: string) => { const w = t.split(/\s+/); return w.length >= 6 && w.filter((x) => /^\p{Ll}/u.test(x)).length / w.length >= 0.4; };
+// Signatures of text scraped from a page's chrome instead of written about the person. Measured on the scene graph's
+// ~3,000 descriptions: most are short Instagram-style bios ("Arquitecto. Artista visual. Tucumán"), so anything not flagged stays.
+const SCRAPE = /ir al contenido|saltar al contenido|alternar la navegaci|skip to (?:the |main )?content|skip to main|(?:top|bottom) of page|javascript|arteinformado|wikipedia|english version|cookies|lorem ipsum|duis aute|archiv(?:os|es) -|-->|⟶|<<|<\/?\w+>|<\s*click/i;
+const MENU = new Set(["inicio", "home", "menu", "obra", "obras", "works", "bio", "biografia", "cv", "statement", "contacto", "contact", "about", "exhibitions", "prensa", "press", "enlaces", "news", "tienda", "shop"]);
+const isMenu = (t: string) => {
+  const w = t.split(/\s+/);
+  const labels = w.filter((x) => MENU.has(x.normalize("NFD").replace(/[\u0300-\u036f]|[^\p{L}]/gu, "").toLowerCase())).length;
+  return labels >= 3 || /(?:\b\p{Lu}{3,}\b\s+){3}\p{Lu}{3,}/u.test(t);   // three menu labels, or a run of four shouted words
+};
 
-/** One line about a person or space for a card: their own Instagram bio first; scraped page text only when it reads as a sentence. */
+/** One line about a person or space for a card: their own Instagram bio first, else the stored description unless it is page chrome. */
 export function sceneBlurb(descripcion: string | null, contact: { ig_bio?: string } | null | undefined): string | null {
   const bio = contact?.ig_bio?.split("\n").map((l) => l.replace(/^[^\p{L}\p{N}@#]+/u, "").trim()).filter(Boolean).join(" · ");
   if (bio) return bio;
   const d = descripcion?.trim();
-  return d && !SCRAPE.test(d) && readsAsSentence(d) ? d : null;
+  return d && !SCRAPE.test(d) && !isMenu(d) ? d : null;
 }

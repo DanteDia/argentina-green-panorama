@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio } from "@/lib/arte/data";
 import { buildMatchContext, loadPrograms } from "@/lib/arte/context";
-import { commonWords, scoreProgram } from "@/lib/arte/match";
+import { scoreProgram, wordShare } from "@/lib/arte/match";
 import { checkEligibility } from "@/lib/arte/eligibility";
 import { programState } from "@/lib/arte/dates";
 import { createApplication } from "../../postulaciones/actions";
@@ -23,7 +23,7 @@ export default async function Oportunidad({ params }: { params: Promise<{ id: st
   const p = data as Program;
   const studio = await loadStudio(supabase, user.id);
   const [ctx, programs] = await Promise.all([buildMatchContext(supabase, user.id, studio), loadPrograms(supabase)]);
-  const s = scoreProgram({ ...ctx, common: commonWords(programs) }, p);   // same score and reasons as the list
+  const s = scoreProgram({ ...ctx, share: wordShare(programs) }, p);   // same score and reasons as the list
   const el = checkEligibility(ctx.profile, p, ctx.now);
   const st = programState(p, ctx.now);
   const ya = ctx.appliedProgramIds.has(p.id);

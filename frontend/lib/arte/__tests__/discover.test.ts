@@ -95,11 +95,14 @@ describe("sceneBlurb", () => {
     const t = "Cursó estudios de Curaduría en la Universidad Nacional de las Artes y dirige La Escuelita.";
     expect(sceneBlurb(t, {})).toBe(t);
   });
-  it("keeps real sentences that mention exhibitions, fairs or contact", () => {
-    for (const t of ["Ha participado en numerosas exposiciones y ferias internacionales.", "Su práctica pone en contacto la obra con el público."]) expect(sceneBlurb(t, {})).toBe(t);
+  it("keeps real descriptions, long or short, including ones that mention exhibitions or contact", () => {
+    for (const t of ["Ha participado en numerosas exposiciones y ferias internacionales.", "Su práctica pone en contacto la obra con el público.",
+      "Curadora del Museo de Arte Moderno de Buenos Aires.", "Nicolás Pontón (Buenos Aires, 1984) es artista visual.", "Artista visual y docente.",
+      "Arquitecto. Artista visual. Santa Maria (Cat.) - Tucumán | Arg."]) expect(sceneBlurb(t, {})).toBe(t);
   });
-  it("drops menus in any language: they are lists of capitalised labels, not sentences", () => {
-    for (const t of ["Menú Obra Bio Contacto", "Inicio Obra Bio CV Contacto", "Home About Works Exhibitions Contact"]) expect(sceneBlurb(t, {})).toBeNull();
+  it("drops menus and page chrome in any language", () => {
+    for (const t of ["Menú Obra Bio Contacto", "Inicio Obra Bio CV Contacto", "Home About Works Exhibitions Contact", "inicio obra bio cv contacto sobre mí",
+      "Home About Works Contact Jane Doe is a visual artist based in Rosario", "Este sitio utiliza cookies para mejorar tu experiencia de navegación.",
+      "--> María Blanco top of page << < > MARÍA BLANCO BIO STATEMENT OBRAS EXPOSICIONES PRENSA", "Silvina Lacarra - Wikipedia, la enciclopedia libre"]) expect(sceneBlurb(t, {})).toBeNull();
   });
 });
-

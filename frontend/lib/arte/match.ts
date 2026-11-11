@@ -11,8 +11,8 @@ export interface MatchContext {
   appliedProgramIds: Set<string>;
   similarArtistNodeIds: Set<string>;
   now: Date;
-  /** Words too frequent across calls to mean a connection (see commonWords); rankPrograms fills it in. */
-  common?: Set<string>;
+  /** Share of calls that contain each word (see wordShare); rankPrograms fills it in. */
+  share?: Map<string, number>;
 }
 export interface Ranked { program: Program; score: number; reasons: string[]; effortDays: number; state: ProgramState; eligibilityNotes: string[] }
 
@@ -58,9 +58,15 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
   if (aw.size < 4) {
     score += 5; reasons.push("Completá tu statement para afinar las recomendaciones");
   } else {
-    const comunes = [...palabras(progText)].filter((w) => aw.has(w) && !ctx.common?.has(w));
+    // Measured on the real calls: words in 10%+ of them are call vocabulary (premio, residency, international); real themes
+    // and mediums sit lower (fotografía ~5%, tecnología ~4%). What the artist declared always counts; a word is only
+    // *named* as the connection when it is declared or rare (<3% of calls), so the reason never reads as filler.
+    const declared = palabras(p.mediums.join(" ") + " " + p.themes.join(" "));
+    const share = (w: string) => ctx.share?.get(w) ?? 0;
+    const comunes = [...palabras(progText)].filter((w) => aw.has(w) && (declared.has(w) || share(w) < 0.1));
     score += Math.min(15, comunes.length * 5);
-    if (comunes.length) reasons.push(`Conecta con tu obra: ${comunes.slice(0, 3).join(", ")}`);
+    const citar = comunes.filter((w) => declared.has(w) || share(w) < 0.03);
+    if (citar.length) reasons.push(`Conecta con tu obra: ${citar.slice(0, 3).join(", ")}`);
   }
 
   // strategic · type for career stage
@@ -94,18 +100,17 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
   return { score: Math.round(score), reasons, effortDays: eff };
 }
 
-/** Words that appear in many calls ("durante", "working", "materiales"): sharing them with a call is not a connection.
- *  Measured on the calls themselves, so it holds in any language without a hand-kept list. */
-export function commonWords(programs: Program[]): Set<string> {
+/** Share of calls containing each word. Under 30 calls the numbers mean nothing, so nothing is discounted. */
+export function wordShare(programs: Program[]): Map<string, number> {
   const df = new Map<string, number>();
+  if (programs.length < 30) return df;
   for (const p of programs) for (const w of palabras([p.name, p.discipline, p.description, p.type].join(" "))) df.set(w, (df.get(w) ?? 0) + 1);
-  const limit = Math.max(4, programs.length * 0.05);
-  return new Set([...df].filter(([, n]) => n >= limit).map(([w]) => w));
+  return new Map([...df].map(([w, n]) => [w, n / programs.length]));
 }
 
 /** Eligible, not applied, not closed-for-good; best first. */
 export function rankPrograms(ctx0: MatchContext, programs: Program[]): Ranked[] {
-  const ctx = { ...ctx0, common: ctx0.common ?? commonWords(programs) };
+  const ctx = { ...ctx0, share: ctx0.share ?? wordShare(programs) };
   const out: Ranked[] = [];
   for (const prog of programs) {
     if (ctx.appliedProgramIds.has(prog.id)) continue;

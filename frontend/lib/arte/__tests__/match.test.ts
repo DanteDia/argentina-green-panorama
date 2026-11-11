@@ -89,12 +89,16 @@ describe("match reasons", () => {
     expect(r.reasons.join(" ")).toMatch(/Conecta con tu obra: .*identidad/);
   });
 
-  it("ignores words that most calls share, whatever they are", () => {
-    // 'durante', 'diferentes', 'materiales' are in every call below: they say nothing about this artist
-    const calls = Array.from({ length: 30 }, (_, i) => programa({ id: `p${i}`, name: `Beca ${i}`, description: "Durante la residencia se trabaja con diferentes materiales." }));
-    const c = ctx({ profile: perfil({ mediums: [], themes: [] }), statement: "Durante años trabajé con diferentes materiales, sobre todo cerámica esmaltada." });
-    const ranked = rankPrograms(c, [...calls, programa({ id: "x", name: "Premio de cerámica esmaltada", description: "Durante el premio se exhiben diferentes materiales." })]);
-    expect(ranked.find((r) => r.program.id === "p0")!.reasons.join(" ")).not.toMatch(/Conecta con tu obra/);
-    expect(ranked.find((r) => r.program.id === "x")!.reasons.join(" ")).toMatch(/Conecta con tu obra: ceramica, esmaltada/);
+  it("never names a word that many calls share, and still names a rare one or one the artist declared", () => {
+    // 'durante', 'diferentes', 'materiales' are in every call; 'fotografia' is in 6% of them (a real medium, like in the real data)
+    const calls = Array.from({ length: 49 }, (_, i) => programa({ id: `p${i}`, name: `Beca ${i}`, description: `Durante la residencia se trabaja con diferentes materiales.${i < 3 ? " Fotografía." : ""}` }));
+    const st = "Durante años trabajé con diferentes materiales, sobre todo cerámica esmaltada y fotografía.";
+    const rare = programa({ id: "x", name: "Premio de cerámica esmaltada", description: "Durante el premio se exhiben diferentes materiales." });
+    const reasons = (c: MatchContext, id: string) => rankPrograms(c, [...calls, rare]).find((r) => r.program.id === id)!.reasons.join(" ");
+    const undeclared = ctx({ profile: perfil({ mediums: [], themes: [] }), statement: st });
+    expect(reasons(undeclared, "p10")).not.toMatch(/Conecta con tu obra/);
+    expect(reasons(undeclared, "x")).toMatch(/Conecta con tu obra: ceramica, esmaltada/);
+    expect(reasons(undeclared, "p0")).not.toMatch(/fotografia/);                      // 6% of calls and not declared: counts, but isn't named
+    expect(reasons(ctx({ profile: perfil({ mediums: ["fotografía"], themes: [] }), statement: st }), "p0")).toMatch(/Conecta con tu obra: fotografia/);
   });
 });
