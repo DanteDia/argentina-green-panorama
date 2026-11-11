@@ -35,22 +35,34 @@ python3 sync_supabase.py --solo programas
 | Source | Script | What is kept |
 | --- | --- | --- |
 | Curated list | `programas_curados.py` | Reference programs, each with its official page and usual window (`ventana`). `OVERRIDES` holds dates read by hand from the official page or post. |
-| Res Artis open calls | `fuentes.py resartis` | Residencies whose "Fees and support" text says the artist is paid or pays nothing. Most listings there are pay-to-stay and are dropped. |
-| On the Move deadlines | `fuentes.py onthemove` | Funded mobility calls whose text says they are open worldwide, in visual arts. |
-| Recursos Culturales | `fuentes.py recursos` | Posts tagged visual arts or photography with a stated deadline; only prizes, grants, residencies and biennials, one per organiser. Generic "open calls" there are mostly pay-to-show and are dropped. |
-| Instagram of spaces in the map | `convocatorias_ig.py [max accounts]` | Posts from the last 60 days that announce an open call with a closing date ahead. A post naming a curated program (its distinctive word, e.g. "manglar") updates that program; any other becomes its own row linking to the post. One paid HikerAPI request per account. |
+| Res Artis open calls | `fuentes.py resartis` | Residencies whose "Fees and support" text mentions support (stipend, fully funded, no fee, a travel or materials grant…) and no cost to the artist. A heuristic on the listing text: partial support passes. Most listings there are pay-to-stay and are dropped. |
+| On the Move deadlines | `fuentes.py onthemove` | Visual-arts calls whose text says they are open beyond Europe (worldwide, international artists, Latin America…) and names no residence requirement. Funding is On the Move's own criterion, not checked. |
+| Recursos Culturales | `fuentes.py recursos` | Posts tagged visual arts or photography with a stated deadline; only prizes, grants, residencies and biennials, one per organiser site (host of the post's first outbound link). Generic "open calls" there are mostly pay-to-show and are dropped. |
+| Instagram of spaces in the map | `convocatorias_ig.py [max accounts=300] [--dry]` | Posts from the last 60 days that announce an open call with a closing date ahead. A post naming a curated program (its distinctive word, e.g. "manglar") updates that program; any other becomes its own row linking to the post. Paid HikerAPI requests: the posts of each account (cached 3 days) and its profile (cached 60 days), so up to two per account and none on a re-run within 3 days. |
 
-Rules shared by the listing sources: only calls with a stated future deadline are stored, eligibility says what the
-listing says ("confirmá en las bases"), and each row keeps the listing URL in `source`. `sync_supabase.py` deletes
-listing rows (`aad-`, `ra-`, `otm-`, `rc-`, `ig-`) that left their source unless an artist applied; curated rows are
-never deleted.
+Rules for these four sources (`ra-`, `otm-`, `rc-`, `ig-` rows):
+
+- Only calls with a stated closing date still ahead are stored, and each row keeps the listing URL in `source`.
+- Eligibility is what the text suggests, not a verified rule: Res Artis and On the Move rows say "confirmá en las
+  bases"; Recursos Culturales rows get "sí (Argentina / Iberoamérica / internacional)" or "verificar" from keywords
+  in the post; Instagram rows are marked "sí (Argentina)" because the accounts are Argentine spaces.
+- Each run rebuilds a site's rows from that day's listing (skipped when the site did not answer), and the Instagram
+  reader drops its rows once their date passes. `sync_supabase.py` then deletes from Supabase the `aad-`, `ra-`,
+  `otm-`, `rc-` and `ig-` rows that are no longer in the pipeline's table, unless an artist applied. Arte al Día
+  rows (`aad-`) are kept with their past date after closing and read as closed. Curated rows are never deleted.
 
 ### The usual window (`window_text`)
 
-The app reads months from `ventana` ("anual; convocatoria ~ene–mar"): the first range named, or the first month.
-Within 90 days of that window, or inside it with no announced date, the call is shown as upcoming and marked as an
-estimate. So `ventana` must name the months **applications are open**, not when results or the program happen:
-"selección feb–mar" made Manglar read as opening in February while its call was open in November.
+For yearly calls the app reads months from `ventana` (`nextWindow` in `frontend/lib/arte/dates.ts`): the text is split
+on `;` and `(`, and it takes the first range of months (or else the first month) in the part that talks about
+applying (convocatoria, inscripción, postulación, cierre, abre…), or failing that in a part that is not about
+something else (inicio, selección, resultados, finalistas…). Within 90 days of that window, or inside it with no
+announced date, the call is shown as upcoming and marked as an estimate. Texts with "bienal" or "trienal" are never
+projected.
+
+So `ventana` must name the months **applications are open**, in a part that says so: "anual; convocatoria ~nov–dic".
+A `ventana` that only names when selection or the program happens ("anual; selección feb–mar", Manglar's until
+2026-11-11) gives no estimate, and the call stays under "para agendar" while it is open.
 
 ## Arte al Día open calls (news articles)
 
