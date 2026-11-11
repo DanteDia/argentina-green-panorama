@@ -22,7 +22,7 @@ export default async function Plan() {
       <ol className="mt-8 space-y-8">
         {plan.map((m) => (
           <li key={m.month}>
-            <h2 className="display text-2xl capitalize">{mesNombre(m.month)}</h2>
+            <h2 className="display text-2xl first-letter:uppercase">{mesNombre(m.month)}</h2>
             <ul className="mt-3 space-y-2">
               {m.items.map((i) => (
                 <li key={i.programId}>

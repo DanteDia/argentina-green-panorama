@@ -16,7 +16,7 @@ const ITEMS = [
 export function Nav() {
   const path = usePathname();
   return (
-    <nav className="mt-6 flex gap-1 overflow-x-auto md:flex-col" aria-label="Secciones">
+    <nav className="mt-4 flex flex-wrap gap-1 md:mt-6 md:flex-col md:flex-nowrap" aria-label="Secciones">
       {ITEMS.map(([href, label]) => {
         const on = path === href || path.startsWith(href + "/");
         return (

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ArteProfile, CvItem } from "./types";
 import type { DiscoverCtx, GEdge, GNode } from "./discover";
 
-type NodeRow = { id: string; nombre: string; categoria: string; descripcion: string | null; link: string | null; contact_info: { email?: string; instagram?: string } | null };
+type NodeRow = { id: string; nombre: string; categoria: string; descripcion: string | null; link: string | null; contact_info: { email?: string; instagram?: string; ig_bio?: string } | null };
 const COLS = "id, nombre, categoria, descripcion, link, contact_info";
 const unescape = (s: string | null) => s?.replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, "&") ?? null;
 const chunks = <T,>(xs: T[], n = 200) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));

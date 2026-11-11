@@ -34,7 +34,8 @@ export async function buildMatchContext(supabase: SupabaseClient, userId: string
     profile: studio.profile ?? EMPTY_PROFILE(userId),
     works: studio.works,
     cv: studio.cv,
-    statement: [studio.texts.statement?.es, studio.texts.bio_long?.es, studio.texts.bio_short?.es].filter(Boolean).join(" "),
+    // what the work is about, in both languages (calls are often in English). Bios list where you studied, not your themes
+    statement: [studio.texts.statement?.es, studio.texts.statement?.en].filter(Boolean).join(" "),
     appliedProgramIds: new Set((apps || []).map((a) => a.program_id)),
     similarArtistNodeIds: similar,
     now,
