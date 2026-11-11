@@ -81,6 +81,24 @@ describe("arte follows rate-limit claim", () => {
   });
 });
 
+describe("arte AI daily cap", () => {
+  it("grants up to the cap, counts concurrent requests once each, and a caller cannot raise or reset it", async () => {
+    const { client, id } = await userClient(`ai-${Date.now()}@example.invalid`);
+    const burst = await Promise.all(Array.from({ length: 8 }, () => client.rpc("claim_arte_ai", { max_per_day: 5 })));
+    expect(burst.map((r) => r.error)).toEqual(Array(8).fill(null));
+    expect(burst.filter((r) => r.data === true)).toHaveLength(5);
+    expect((await client.rpc("claim_arte_ai", { max_per_day: 5 })).data).toBe(false);
+    // asking for a huge cap is clamped to the real one (40): 35 more are granted, then no more
+    const rest = await Promise.all(Array.from({ length: 40 }, () => client.rpc("claim_arte_ai", { max_per_day: 100000 })));
+    expect(rest.filter((r) => r.data === true)).toHaveLength(35);
+    await client.from("arte_ai_usage").update({ n: 0 }).eq("user_id", id);
+    await client.from("arte_ai_usage").delete().eq("user_id", id);
+    expect((await client.rpc("claim_arte_ai")).data).toBe(false);
+    const { data } = await admin.from("arte_ai_usage").select("n").eq("user_id", id).single();
+    expect(data!.n).toBe(40);
+  });
+});
+
 describe("arte invitations", () => {
   it("shows and their invite list are private, and a guest is recorded once per show", async () => {
     const a = await userClient(`inv-a-${Date.now()}@example.invalid`);

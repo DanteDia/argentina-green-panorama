@@ -1,4 +1,6 @@
 "use server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { underCap, type AiAnswer } from "@/lib/arte/ai-answer";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio, slugify, upsertProfile } from "@/lib/arte/data";
@@ -84,31 +86,38 @@ export async function deleteCvItem(id: string) {
 }
 
 // ---------- AI drafts: these only return text; the editor saves it when the artist presses Guardar ----------
-// ponytail: no rate limit while the tool has a handful of users; add a per-user daily cap before opening sign-ups
+// Every draft is a paid model call and sign-up is open: each one first claims a slot of the artist's daily cap (claim_arte_ai).
+// If the counter can't be read, no call is made.
+const claimAi = (supabase: SupabaseClient) => async () => { const { data, error } = await supabase.rpc("claim_arte_ai"); return !error && data === true; };
+
 async function writerStudio() {
   const { user, supabase } = await requireUser();
   const s = await loadStudio(supabase, user.id);
   if (!s.profile) throw new Error("Completá tu nombre primero");
-  return { profile: s.profile, works: s.works, cv: s.cv, texts: s.texts };
+  return { supabase, studio: { profile: s.profile, works: s.works, cv: s.cv, texts: s.texts } };
 }
 
-export async function aiDraft(kind: WriterKind, notes: string): Promise<string | null> {
-  return draftText(kind, await writerStudio(), notes, complete);
+export async function aiDraft(kind: WriterKind, notes: string): Promise<AiAnswer<string>> {
+  const { supabase, studio } = await writerStudio();
+  return underCap(claimAi(supabase), () => draftText(kind, studio, notes, complete));
 }
 
-export async function aiTranslate(text: string): Promise<string | null> {
-  await requireUser();
-  return translateText(text.slice(0, 6000), complete);
+export async function aiTranslate(text: string): Promise<AiAnswer<string>> {
+  const { supabase } = await requireUser();
+  if (!text.trim()) return { error: "unavailable" };
+  return underCap(claimAi(supabase), () => translateText(text.slice(0, 6000), complete));
 }
 
-export async function aiTags(): Promise<{ mediums: string[]; themes: string[] } | null> {
-  return suggestTags(await writerStudio(), complete);
+export async function aiTags(): Promise<AiAnswer<{ mediums: string[]; themes: string[] }>> {
+  const { supabase, studio } = await writerStudio();
+  return underCap(claimAi(supabase), () => suggestTags(studio, complete));
 }
 
-/** Reads a pasted CV into items for the artist to review. Null when the AI is unavailable. Saves nothing. */
-export async function aiCvFromText(text: string): Promise<CvDraftItem[] | null> {
-  await requireUser();
-  return parseCv(text, complete);
+/** Reads a pasted CV into items for the artist to review. Saves nothing. */
+export async function aiCvFromText(text: string): Promise<AiAnswer<CvDraftItem[]>> {
+  const { supabase } = await requireUser();
+  if (!text.trim()) return { value: [] };
+  return underCap(claimAi(supabase), () => parseCv(text, complete));
 }
 
 /** Adds the reviewed items, skipping the ones the CV already has. The list comes from the client, so it is validated again. */

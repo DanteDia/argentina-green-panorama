@@ -1,6 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { addCvItems, aiCvFromText } from "@/app/arte/(app)/perfil/actions";
+import { AI_ERROR } from "@/lib/arte/ai-answer";
 import { CV_KINDS } from "@/lib/arte/cv";
 import { MAX_CHARS, type CvDraftItem } from "@/lib/arte/cv-parse";
 
@@ -16,10 +17,10 @@ export function CvPaste() {
 
   const read = () => start(async () => {
     setNote("");
-    const r = await aiCvFromText(text).catch(() => null);
-    if (r === null) { setNote("No pudimos leerlo ahora. Probá de nuevo en un momento."); return; }
-    if (!r.length) { setNote("No encontramos muestras, premios ni formación en ese texto."); return; }
-    setItems(r); setOn(r.map(() => true));
+    const r = await aiCvFromText(text).catch(() => ({ error: "unavailable" as const }));
+    if ("error" in r) { setNote(r.error === "limit" ? AI_ERROR.limit : "No pudimos leerlo ahora. Probá de nuevo en un momento."); return; }
+    if (!r.value.length) { setNote("No encontramos muestras, premios ni formación en ese texto."); return; }
+    setItems(r.value); setOn(r.value.map(() => true));
   });
   const add = () => start(async () => {
     try {
