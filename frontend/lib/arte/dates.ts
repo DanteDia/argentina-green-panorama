@@ -50,7 +50,8 @@ export function nextWindow(text: string | null, today: string, lastClose?: strin
   for (const year of [y - 1, y, y + 1, y + 2]) {
     const opens = `${year}-${pad(from)}-01`;
     const closes = `${to < from ? year + 1 : year}-${pad(to)}-28`;
-    if (closes >= today && (!lastClose || dayDiff(lastClose, closes) >= SAME_EDITION_DAYS)) return { opens, closes, single: !r[2] };
+    // not the window that edition closed in, nor one that ends too soon after it to be a new edition
+    if (closes >= today && (!lastClose || (opens > lastClose && dayDiff(lastClose, closes) >= SAME_EDITION_DAYS))) return { opens, closes, single: !r[2] };
   }
   return null;
 }

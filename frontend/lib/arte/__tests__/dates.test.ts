@@ -142,6 +142,8 @@ describe("nextWindow", () => {
   });
   it("skips the window an already-held edition closed in", () => {
     expect(nextWindow("anual; ~ene–mar", "2027-02-10", "2027-02-01")).toMatchObject({ opens: "2028-01-01", closes: "2028-03-28" });
+    // also when the window is long enough to end more than 180 days after that closing
+    expect(nextWindow("anual; ~mar–nov", "2026-06-01", "2026-03-15")).toMatchObject({ opens: "2027-03-01" });
   });
 });
 
