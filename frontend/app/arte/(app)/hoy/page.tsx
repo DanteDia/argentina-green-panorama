@@ -9,6 +9,8 @@ import { ProgramCard } from "@/components/arte/ProgramCard";
 import { Meter } from "@/components/arte/ProfileTabs";
 import type { ArteEvent } from "@/lib/arte/types";
 
+const daysFrom = (n: number) => new Date(new Date().getTime() + n * 864e5).toISOString().slice(0, 10);
+
 export default async function Hoy() {
   const { user, supabase } = await requireUser();
   const studio = await loadStudio(supabase, user.id);
@@ -16,13 +18,15 @@ export default async function Hoy() {
     loadPrograms(supabase),
     buildMatchContext(supabase, user.id, studio),
     supabase.from("arte_applications").select("id, status, due_at, program_id, arte_programs(name)").eq("user_id", user.id).in("status", ["idea", "preparing"]).order("due_at"),
-    supabase.from("arte_events").select("*").gte("starts_on", new Date(Date.now() - 21 * 864e5).toISOString().slice(0, 10)).order("starts_on", { ascending: false }).limit(6),
+    supabase.from("arte_events").select("*").gte("starts_on", daysFrom(-21)).order("starts_on", { ascending: false }).limit(18),
   ]);
   const top = rankPrograms(ctx, programs).filter((r) => ["abierta", "próxima", "cierra hoy"].includes(r.state.label)).slice(0, 3);
   const c = completeness(ctx.profile, studio.works, studio.cv, studio.texts);
   const today = todayAR(new Date());
-  const enSemana = (apps.data || []).filter((a) => a.due_at && a.due_at >= today && a.due_at <= new Date(Date.now() + 8 * 864e5).toISOString().slice(0, 10));
+  const enSemana = (apps.data || []).filter((a) => a.due_at && a.due_at >= today && a.due_at <= daysFrom(8));
   const nombre = ctx.profile.name?.split(" ")[0];
+  // a caption that is only a tag like "[REGISTROS/@cuenta]" says nothing: skip it
+  const shown = ((events.data || []) as ArteEvent[]).filter((e) => !/^\[[^\]]*\]$/.test(e.title.trim())).slice(0, 6);
 
   return (
     <div className="max-w-5xl">
@@ -30,8 +34,8 @@ export default async function Hoy() {
       <h1 className="display mt-2 text-4xl md:text-5xl">Hola{nombre ? `, ${nombre}` : ""}.</h1>
       <p className="mt-2 text-[var(--ink-2)]">{enSemana.length ? `Tenés ${enSemana.length} cierre${enSemana.length > 1 ? "s" : ""} esta semana.` : "Esta semana no se te vence nada."} {top.length > 0 && "Estas son tus mejores oportunidades ahora."}</p>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_300px]">
-        <section>
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section className="min-w-0">
           <div className="flex items-baseline justify-between"><h2 className="display text-2xl">Para vos, ahora</h2><Link href="/arte/oportunidades" className="text-sm muted hover:text-[var(--ink)]">Ver todas →</Link></div>
           <div className="mt-3 space-y-3">{top.map((r) => <ProgramCard key={r.program.id} r={r} compact />)}</div>
         </section>
@@ -52,11 +56,11 @@ export default async function Hoy() {
         </aside>
       </div>
 
-      {(events.data || []).length > 0 && (
+      {shown.length > 0 && (
         <section className="mt-10">
           <h2 className="display text-2xl">Pasando en la escena</h2>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
-            {(events.data as ArteEvent[]).map((e) => (
+            {shown.map((e) => (
               <a key={e.id} href={e.url || "#"} target="_blank" rel="noreferrer" className="card block p-4 hover:shadow-sm">
                 <p className="text-xs muted">{e.venue_name} · {e.starts_on ? formatDay(e.starts_on) : ""}</p>
                 <p className="mt-1 line-clamp-3 text-sm">{e.title}</p>
