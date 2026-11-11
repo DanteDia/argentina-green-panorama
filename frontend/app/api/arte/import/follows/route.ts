@@ -1,0 +1,47 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { createServerSupabase } from "@/lib/arte/supabase-server";
+import { fetchIgFollowing, fetchIgProfile } from "@/lib/arte/hiker";
+import { followRows } from "@/lib/arte/import-map";
+
+export const maxDuration = 120; // up to 20 sequential pages from the Instagram API
+
+/** Stores who the artist follows on Instagram and which of those accounts are in the scene graph (seed for Descubrir and Invitar).
+ *  Skipped when the artist already has follows stored unless they ask again; every read is metered by claim_arte_follows. */
+export async function POST(request: NextRequest) {
+  const supabase = await createServerSupabase();
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth.user) return NextResponse.json({ error: "no autenticado" }, { status: 401 });
+  const deadline = Date.now() + 85_000;   // of the route's 120 s: leave time for the last page (20 s) and for storing
+  const body = (await request.json().catch(() => ({}))) as { pk?: string; again?: boolean };
+  const { count } = await supabase.from("arte_follows").select("handle", { count: "exact", head: true }).eq("user_id", auth.user.id);
+  // The onboarding page calls this once; "again" is the artist asking from Descubrir (a cut read, or new follows since)
+  if (count && !body.again) return NextResponse.json({ total: count, skipped: true });
+  // Paid and slow: one attempt per artist every 10 minutes, claimed atomically before any API call
+  const { data: granted } = await supabase.rpc("claim_arte_follows");
+  if (!granted) return NextResponse.json({ error: "Ya lo intentamos hace unos minutos. Probá de nuevo en un rato." }, { status: 429 });
+
+  // The onboarding page sends the id it just read; from Descubrir we look it up from the profile's handle
+  let pk = body.pk && /^\d{1,20}$/.test(body.pk) ? body.pk : null;
+  if (!pk) {
+    const { data: profile } = await supabase.from("arte_profiles").select("instagram").eq("user_id", auth.user.id).maybeSingle();
+    const ig = profile?.instagram ? await fetchIgProfile(profile.instagram) : null;
+    pk = ig && !("error" in ig) && ig.pk ? String(ig.pk) : null;
+  }
+  if (!pk) return NextResponse.json({ error: "Cargá tu Instagram en el perfil primero." }, { status: 400 });
+
+  const { list: follows, complete } = await fetchIgFollowing(pk, deadline);
+  if (!follows.length) return NextResponse.json({ error: "Instagram no respondió. Probá de nuevo en unos minutos." }, { status: 502 });
+  const handles = [...new Set(follows.map((f) => f.username.toLowerCase()))];
+  const byHandle = new Map<string, string>();
+  for (let i = 0; i < handles.length; i += 100) {   // short lists keep the query string well under URL limits
+    const { data, error } = await supabase.from("nodes").select("id, contact_info").contains("industries", ["arte"]).in("contact_info->>instagram", handles.slice(i, i + 100));
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });   // storing unmatched rows would hide them from Descubrir for good
+    for (const m of data || []) byHandle.set(String((m.contact_info as Record<string, string>).instagram).toLowerCase(), m.id);
+  }
+  const rows = followRows(auth.user.id, follows, byHandle);
+  for (let i = 0; i < rows.length; i += 200) {
+    const { error } = await supabase.from("arte_follows").upsert(rows.slice(i, i + 200));
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ total: rows.length, inMap: rows.filter((r) => r.node_id).length, complete });
+}
