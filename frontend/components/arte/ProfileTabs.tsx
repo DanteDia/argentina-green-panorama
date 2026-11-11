@@ -18,11 +18,14 @@ export function ProfileTabs() {
 export function Meter({ score, todo }: { score: number; todo: { label: string; href: string }[] }) {
   return (
     <div className="card p-5">
-      <div className="flex items-baseline justify-between">
-        <p className="eyebrow">Tu perfil para postular</p>
-        <p className="display text-3xl">{score}%</p>
-      </div>
-      <div className="mt-3 h-1.5 rounded-full bg-[var(--paper-2)]"><div className="h-1.5 rounded-full bg-[var(--ink)]" style={{ width: `${score}%` }} /></div>
+      {/* the score and bar are the obvious click target: send them to the next thing to complete */}
+      <Link href={todo[0]?.href ?? "/arte/perfil"} className="block" aria-label={`Completar perfil: ${score}%`}>
+        <div className="flex items-baseline justify-between">
+          <p className="eyebrow">Tu perfil para postular</p>
+          <p className="display text-3xl">{score}%</p>
+        </div>
+        <div className="mt-3 h-1.5 rounded-full bg-[var(--paper-2)]"><div className="h-1.5 rounded-full bg-[var(--ink)]" style={{ width: `${score}%` }} /></div>
+      </Link>
       {todo.length > 0 && (
         <p className="mt-3 text-sm text-[var(--ink-2)]">Siguiente: <Link href={todo[0].href} className="font-medium underline decoration-[var(--line)] underline-offset-4 hover:decoration-[var(--ink)]">{todo[0].label} →</Link></p>
       )}
