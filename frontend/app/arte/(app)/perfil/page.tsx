@@ -3,6 +3,7 @@ import { loadStudio } from "@/lib/arte/data";
 import { completeness } from "@/lib/arte/completeness";
 import { Meter, ProfileTabs } from "@/components/arte/ProfileTabs";
 import { TextEditor } from "@/components/arte/TextEditor";
+import { TagFields } from "@/components/arte/TagFields";
 import { saveProfile } from "./actions";
 
 function Campo({ label, name, def, placeholder, type = "text" }: { label: string; name: string; def?: string | number | null; placeholder?: string; type?: string }) {
@@ -34,8 +35,7 @@ export default async function Perfil() {
             <Campo label="Ciudad donde vivís" name="base_city" def={p?.base_city} placeholder="Buenos Aires" />
             <Campo label="Web" name="website" def={p?.website} placeholder="https://" />
             <Campo label="Instagram" name="instagram" def={p?.instagram} placeholder="@usuario" />
-            <Campo label="Disciplinas (separadas por coma)" name="mediums" def={p?.mediums.join(", ")} placeholder="instalación, fotografía, cerámica" />
-            <Campo label="Temas de tu obra" name="themes" def={p?.themes.join(", ")} placeholder="identidad, tecnología, materia" />
+            <TagFields mediums={p?.mediums.join(", ") ?? ""} themes={p?.themes.join(", ") ?? ""} />
             <label className="block text-sm"><span className="text-[var(--ink-2)]">Momento de carrera</span>
               <select name="career_stage" className="input mt-1" defaultValue={p?.career_stage || "emerging"}>
                 <option value="emerging">Emergente</option><option value="mid">Media carrera</option><option value="established">Consolidada</option>
