@@ -9,7 +9,7 @@ export type WriterKind = "statement" | "bio_short" | "bio_long";
 export interface WriterStudio { profile: ArteProfile; works: ArteWork[]; cv: CvItem[]; texts: TextSet }
 
 const BASE = "Escribís textos profesionales para artistas visuales, en español rioplatense neutro. Concreto y sobrio: sin adjetivos grandilocuentes ni frases hechas del mundo del arte. "
-  + "Usá solo los datos provistos: no inventes muestras, premios, estudios, fechas ni obras. Si falta un dato, no lo menciones. Devolvé solo el texto, sin título ni comillas.";
+  + "Usá solo los datos provistos: no inventes muestras, premios, estudios, fechas ni obras. Si falta un dato, no lo menciones. Si las notas del artista ya son un texto completo, corregilo y ordenalo sin acortarlo ni cambiarle la voz. Devolvé solo el texto, sin título ni comillas.";
 const BRIEF: Record<WriterKind, string> = {
   statement: "Escribí el statement del artista: en primera persona, 120-180 palabras, qué investiga su obra, con qué materiales o medios y por qué. Apoyate en sus notas y en las descripciones de sus obras.",
   bio_short: "Escribí la bio corta: en tercera persona, unas 80 palabras, quién es, dónde vive y trabaja, qué hace y lo más relevante de su trayectoria.",
@@ -20,6 +20,7 @@ const BRIEF: Record<WriterKind, string> = {
 export function facts(s: WriterStudio): string {
   const p = s.profile;
   const kind = (k: string) => CV_KINDS.find(([x]) => x === k)?.[1] ?? k;
+  const cv = s.cv.filter((c) => c.confirmed).slice(0, 25);
   return [
     `Nombre: ${p.name}`,
     p.base_city && `Vive y trabaja en: ${p.base_city}`,
@@ -27,14 +28,15 @@ export function facts(s: WriterStudio): string {
     p.mediums.length > 0 && `Disciplinas: ${p.mediums.join(", ")}`,
     p.themes.length > 0 && `Temas: ${p.themes.join(", ")}`,
     s.works.length > 0 && `Obras:\n${s.works.slice(0, 12).map((w) => `- ${w.title} (${[w.year, w.technique].filter(Boolean).join(", ") || "s/f"})${w.description ? `: ${w.description}` : ""}`).join("\n")}`,
-    s.cv.length > 0 && `Trayectoria:\n${s.cv.filter((c) => c.confirmed).slice(0, 25).map((c) => `- ${kind(c.kind)}: ${c.title}${c.org ? ` — ${c.org}` : ""}${c.year ? ` (${c.year})` : ""}`).join("\n")}`,
+    cv.length > 0 && `Trayectoria:\n${cv.map((c) => `- ${kind(c.kind)}: ${c.title}${c.org ? ` — ${c.org}` : ""}${c.year ? ` (${c.year})` : ""}`).join("\n")}`,
     s.texts.statement?.es && `Statement actual: ${s.texts.statement.es}`,
     s.texts.bio_short?.es && `Bio corta actual: ${s.texts.bio_short.es}`,
     s.texts.bio_long?.es && `Bio larga actual: ${s.texts.bio_long.es}`,
   ].filter(Boolean).join("\n");
 }
 
-const clean = (t: string) => t.replace(/^```\w*\n?|\n?```$/g, "").trim().replace(/^["“]|["”]$/g, "").trim();
+// models sometimes wrap the whole answer in a code fence or one pair of quotes; quotes inside the text stay
+const clean = (t: string) => t.replace(/^```\w*\n?|\n?```$/g, "").trim().replace(/^["“]([^"“”]*)["”]$/, "$1").trim();
 
 /** A first draft in Spanish, from the artist's data and whatever they jotted down (`notes`, may be empty). Null without AI. */
 export async function draftText(kind: WriterKind, s: WriterStudio, notes: string, complete: Complete): Promise<string | null> {
@@ -49,7 +51,7 @@ export async function translateText(text: string, complete: Complete): Promise<s
   if (!text.trim()) return null;
   const out = await complete(text.trim(), {
     system: "Translate this artist's text into natural, professional English as used in international open calls. Keep names, titles of works and institutions as written. Same person, same length, no additions. Return only the translation.",
-    maxTokens: 900,
+    maxTokens: 2000,   // the long bio allows 4000 characters
   });
   return out ? clean(out) : null;
 }

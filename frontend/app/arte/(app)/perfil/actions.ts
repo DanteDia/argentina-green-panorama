@@ -81,7 +81,7 @@ export async function deleteCvItem(id: string) {
   revalidatePath("/arte/perfil/cv");
 }
 
-// ---------- AI drafts (nothing is saved here: the editor shows the text and the artist keeps or edits it) ----------
+// ---------- AI drafts: these only return text; the editor saves it when the artist presses Guardar ----------
 // ponytail: no rate limit while the tool has a handful of users; add a per-user daily cap before opening sign-ups
 async function writerStudio() {
   const { user, supabase } = await requireUser();

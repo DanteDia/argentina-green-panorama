@@ -10,7 +10,7 @@ export function TagFields({ mediums, themes }: { mediums: string; themes: string
   const [pending, start] = useTransition();
   const suggest = () => start(async () => {
     const r = await aiTags().catch(() => null);
-    if (!r) { setNote("Cargá tu statement, bio u obras y probá de nuevo."); return; }
+    if (!r) { setNote("No pudimos leerlas ahora. Probá de nuevo en un momento."); return; }
     if (r.mediums.length) setM(r.mediums.join(", "));
     if (r.themes.length) setT(r.themes.join(", "));
     setNote("Revisalas y tocá Guardar datos.");

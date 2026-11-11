@@ -15,6 +15,9 @@ describe("facts", () => {
     expect(f).toContain("Liminales Expandidas — Acéfala Galería (2026)");
     expect(f).toContain("Bio vieja.");
   });
+  it("leaves out sections with nothing confirmed", () => {
+    expect(facts({ ...studio, cv: [{ ...cv, confirmed: false }] })).not.toContain("Trayectoria");
+  });
 });
 
 describe("draftText", () => {
@@ -33,6 +36,11 @@ describe("draftText", () => {
     await draftText("bio_short", studio, "", async (_p, o) => { system = o?.system ?? ""; return "x"; });
     expect(system).toMatch(/tercera persona/i);
     expect(system).toMatch(/80 palabras/);
+  });
+
+  it("keeps quotes that belong to the text and only strips a wrapping pair", async () => {
+    expect(await draftText("statement", studio, "", async () => 'Presenté la serie "Umbral"')).toBe('Presenté la serie "Umbral"');
+    expect(await draftText("statement", studio, "", async () => '"Todo el texto."')).toBe("Todo el texto.");
   });
 
   it("returns null when there is no AI, so the UI can say so", async () => {
