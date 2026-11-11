@@ -1,6 +1,6 @@
 import type { ArteProfile, Program } from "./types";
 
-const LATAM = new Set(["AR", "BO", "BR", "CL", "CO", "CR", "CU", "DO", "EC", "SV", "GT", "HN", "MX", "NI", "PA", "PY", "PE", "PR", "UY", "VE", "HT", "JM", "TT"]);
+export const LATAM = new Set(["AR", "BO", "BR", "CL", "CO", "CR", "CU", "DO", "EC", "SV", "GT", "HN", "MX", "NI", "PA", "PY", "PE", "PR", "UY", "VE", "HT", "JM", "TT"]);
 
 /** Hard filter. Missing artist data never excludes: it becomes a 'confirmá …' reason instead. */
 export function checkEligibility(p: ArteProfile, prog: Program, now: Date): { ok: boolean; reasons: string[] } {
