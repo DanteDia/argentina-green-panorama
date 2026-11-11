@@ -98,7 +98,7 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
   if (st.label === "abierta") {
     if ((st.daysLeft ?? 0) >= eff) { score += 20; } else { score += 8; reasons.push(`Llegás justo: necesitás ~${eff} días`); }
   } else if (st.label === "cierra hoy") { score += 4; reasons.push("Cierra hoy"); }
-  else if (st.label === "próxima") { score += 15; reasons.push("Abre pronto: podés prepararla con tiempo"); }
+  else if (st.label === "próxima") { score += 15; reasons.push(st.projected ? "Por su calendario habitual, conviene prepararla ahora" : "Abre pronto: podés prepararla con tiempo"); }
   else if (st.label === "recurrente") { score += 10; reasons.push("Para agendar: vuelve a abrir"); }
 
   return { score: Math.round(score), reasons, effortDays: eff };

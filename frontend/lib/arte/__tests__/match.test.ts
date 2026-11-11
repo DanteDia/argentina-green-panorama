@@ -58,10 +58,18 @@ describe("ranking", () => {
 
   it("closed non-recurring calls are left out; recurring ones stay as 'para agendar'", () => {
     const cerrada = programa({ id: "c", closes_at: "2026-03-01", window_text: null });
-    const recurrente = programa({ id: "r", closes_at: null, window_text: "anual; convocatoria ~ene–mar" });
+    const recurrente = programa({ id: "r", closes_at: null, window_text: "anual; convocatoria ~jun–ago" });
     const r = rankPrograms(ctx(), [cerrada, recurrente]);
     expect(r.map((x) => x.program.id)).toEqual(["r"]);
     expect(r[0].reasons.join(" ")).toMatch(/agendar/);
+  });
+
+  it("a yearly call near its usual window outranks the same call when its window is far, and says why", () => {
+    const cerca = programa({ id: "cerca", closes_at: "2026-03-09", window_text: "anual; convocatoria ~ene–mar" });
+    const lejos = programa({ id: "lejos", closes_at: "2026-08-09", window_text: "anual; convocatoria ~jun–ago" });
+    const r = rankPrograms(ctx(), [lejos, cerca]);
+    expect(r.map((x) => x.program.id)).toEqual(["cerca", "lejos"]);
+    expect(r[0].reasons.join(" ")).toMatch(/calendario habitual/);
   });
 
   it("artists similar to you who went through the program raise its score", () => {

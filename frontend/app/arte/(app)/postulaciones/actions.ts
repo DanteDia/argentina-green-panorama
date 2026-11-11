@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio } from "@/lib/arte/data";
 import { completeness } from "@/lib/arte/completeness";
 import { buildChecklist } from "@/lib/arte/checklist";
+import { dueDate, todayAR } from "@/lib/arte/dates";
 import type { AppStatus, Program } from "@/lib/arte/types";
 
 const minusDays = (d: string, n: number) => new Date(Date.parse(d + "T00:00:00Z") - n * 86_400_000).toISOString().slice(0, 10);
@@ -16,8 +17,10 @@ export async function createApplication(programId: string) {
   if (!prog) throw new Error("No existe esa convocatoria");
   const { data: existing } = await supabase.from("arte_applications").select("id").eq("user_id", user.id).eq("program_id", programId).maybeSingle();
   if (existing) redirect(`/arte/postulaciones/${existing.id}`);
+  // a recurring call keeps its last edition's closing date: that is not when this application is due
+  const due = dueDate(prog as Program, todayAR(new Date()));
   const { data, error } = await supabase.from("arte_applications")
-    .insert({ user_id: user.id, program_id: programId, status: "preparing", due_at: (prog as Program).closes_at ?? null }).select("id").single();
+    .insert({ user_id: user.id, program_id: programId, status: "preparing", due_at: due }).select("id").single();
   if (error) throw new Error(error.message);
   const studio = await loadStudio(supabase, user.id);
   const gaps = completeness(studio.profile ?? ({ name: "", mediums: [], themes: [] } as never), studio.works, studio.cv, studio.texts).missing
@@ -25,7 +28,7 @@ export async function createApplication(programId: string) {
   const items = buildChecklist((prog as Program).requirements || {}, gaps);
   await supabase.from("arte_application_items").insert(items.map((it, i) => ({
     user_id: user.id, application_id: data.id, key: it.key, label: it.label, sort: i,
-    due_at: (prog as Program).closes_at ? minusDays((prog as Program).closes_at!, it.due_offset_days) : null,
+    due_at: due ? minusDays(due, it.due_offset_days) : null,
   })));
   revalidatePath("/arte", "layout");
   redirect(`/arte/postulaciones/${data.id}`);
