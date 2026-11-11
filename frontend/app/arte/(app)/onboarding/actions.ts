@@ -46,7 +46,8 @@ export async function applyDraft(d: DraftProfile) {
   }));
   const rows = got.filter((x) => x !== null).map(({ w, path }, i) => ({
     user_id: user.id, title: cut(w.title || "Obra sin título", 200), description: (w.description && cut(w.description, 1500)) || null,
-    year: /^\d{4}$/.test(w.year ?? "") ? w.year : null, images: [path], sort: count + i, source: workOrigin(w),
+    year: /^\d{4}$/.test(w.year ?? "") ? w.year : null, technique: (typeof w.technique === "string" && cut(w.technique, 200)) || null,
+    dimensions: (typeof w.dimensions === "string" && cut(w.dimensions, 100)) || null, images: [path], sort: count + i, source: workOrigin(w),
   }));
   if (rows.length) {
     const { error } = await supabase.from("arte_works").insert(rows);

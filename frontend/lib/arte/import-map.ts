@@ -10,7 +10,7 @@ export interface GraphNodeImport {
   edges: GraphEdgeImport[];
 }
 export interface IgPost { code: string; caption: string; image: string; year: string | null }
-export interface DraftWork { title: string; image_url: string; source: string; description?: string; year?: string | null }
+export interface DraftWork { title: string; image_url: string; source: string; description?: string; year?: string | null; technique?: string; dimensions?: string }
 export interface DraftProfile {
   profile: Partial<ArteProfile>;
   texts: { bio_short?: string; bio_long?: string; statement?: string };
@@ -88,6 +88,35 @@ function titleFromCaption(caption: string): string {
   return !line ? "Obra sin título" : [...line].length <= 80 ? line : `${cut(line, 77).trimEnd()}…`;
 }
 
+const NUM = String.raw`\d{1,4}(?:[.,]\d+)?`;
+const DIMS = new RegExp(`(${NUM})\\s*[x×]\\s*(${NUM})(?:\\s*[x×]\\s*(${NUM}))?\\s*(cm|mm|mts?|m)\\b`, "i");   // a unit is required: "1920x1080" is pixels
+const VARIABLE = /(medidas|dimensiones) variables|variable dimensions/i;
+// a short title, then the year closing its clause: "Umbral, 2025." yes; "Feliz año nuevo, 2025 viene con todo" no
+const TITLE_YEAR = /^["“«]?([^,."“”«»\n]{1,80})["”»]?,\s*((?:19|20)\d{2})(?=\s*(?:[.,;)]|$))/;
+const TECHNIQUE = /^(?:[oó]leo|acr[ií]lico|acuarela|tinta|grafito|carbonilla|pastel|collage|fotograf[ií]a|impresi[oó]n|gicl[eé]e|serigraf[ií]a|grabado|xilograf[ií]a|litograf[ií]a|cer[aá]mica|bronce|resina|textil|bordado|video|instalaci[oó]n|escultura|t[eé]cnica mixta|mixed media|oil on|acrylic on)/i;
+
+/** The technical sheet many artists already write in the caption ("Umbral, 2025. Óleo sobre tela, 100 x 80 cm").
+ *  Conservative on purpose (a wrong sheet is worse than an empty one): the caption must state a size AND have a
+ *  clause that starts with a technique. "Mirá el video", "impresión de remeras 30 x 40 cm" or a year in a sentence give nothing. */
+export function fichaFromCaption(caption: string): { title?: string; year?: string; technique?: string; dimensions?: string } {
+  const text = caption.replace(/#\S+/g, " ");
+  const dims = text.match(DIMS);
+  if (!dims && !VARIABLE.test(text)) return {};
+  let technique: string | undefined;
+  for (const seg of text.split(/\n|\s[·|]\s|\.(?:\s|$)/)) {
+    const clean = seg.replace(DIMS, " ").replace(VARIABLE, " ").replace(/\b(?:19|20)\d{2}\b/g, " ").replace(/^\s*t[eé]cnica\s*:\s*/i, "")
+      .replace(/\s+/g, " ").replace(/(?:\s*,)+\s*$/, "").replace(/^[\s,;:·-]+|[\s,;:·-]+$/g, "");
+    if (clean.length <= 90 && TECHNIQUE.test(clean) && !clean.includes("@")) { technique = clean[0].toUpperCase() + clean.slice(1); break; }
+  }
+  if (!technique) return {};
+  const out: { title?: string; year?: string; technique?: string; dimensions?: string } = {
+    technique, dimensions: dims ? `${[dims[1], dims[2], dims[3]].filter(Boolean).join(" x ")} ${dims[4].toLowerCase().replace(/^mts?$/, "m")}` : "Medidas variables",
+  };
+  const head = (text.split("\n").find((l) => /\p{L}/u.test(l)) ?? "").replace(/^[^\p{L}\p{N}"“«]+/u, "").match(TITLE_YEAR);
+  if (head && !TECHNIQUE.test(head[1].trim())) return { title: head[1].trim(), year: head[2], ...out };
+  return out;
+}
+
 /** Merge what we could read (graph > site > Instagram) into a draft the artist confirms item by item. */
 export function mapImport(input: { ig?: IgProfile | { error: string }; site?: SiteImport | { error: string }; graphNode?: GraphNodeImport | null; posts?: IgPost[] }): DraftProfile {
   const d: DraftProfile = { profile: {}, texts: {}, cv: [], works: [], graphNodeId: null, warnings: [], sources: [] };
@@ -117,7 +146,10 @@ export function mapImport(input: { ig?: IgProfile | { error: string }; site?: Si
     }
   }
   // Instagram posts first: that is where an emerging artist's work actually lives, already captioned
-  d.works.push(...(input.posts ?? []).map((p) => ({ title: titleFromCaption(p.caption), description: cut(p.caption, 1500) || undefined, year: p.year, image_url: p.image, source: `instagram.com/p/${p.code}` })));
+  d.works.push(...(input.posts ?? []).map((p) => {
+    const f = fichaFromCaption(p.caption);   // the year the artist wrote beats the year the post went up
+    return { title: f.title ?? titleFromCaption(p.caption), description: cut(p.caption, 1500) || undefined, year: f.year ?? p.year, technique: f.technique, dimensions: f.dimensions, image_url: p.image, source: `instagram.com/p/${p.code}` };
+  }));
   if (site) {
     d.sources.push(site.url);
     d.profile.website = d.profile.website || site.url;
