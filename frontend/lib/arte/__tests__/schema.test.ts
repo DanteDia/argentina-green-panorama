@@ -69,3 +69,18 @@ describe("arte_imports rate-limit claim", () => {
     expect(results.filter((r) => r.data === true)).toHaveLength(1);
   });
 });
+
+describe("arte invitations", () => {
+  it("shows and their invite list are private, and a guest is recorded once per show", async () => {
+    const a = await userClient(`inv-a-${Date.now()}@example.invalid`);
+    const b = await userClient(`inv-b-${Date.now()}@example.invalid`);
+    const { data: show, error } = await a.client.from("arte_shows").insert({ user_id: a.id, title: "Muestra A" }).select("id").single();
+    expect(error).toBeNull();
+    const guest = { user_id: a.id, show_id: show!.id, key: "email:x@y.com", name: "X", email: "x@y.com" };
+    expect((await a.client.from("arte_invites").insert(guest)).error).toBeNull();
+    expect((await a.client.from("arte_invites").insert(guest)).error).not.toBeNull();
+    expect((await b.client.from("arte_shows").select("id").eq("id", show!.id)).data).toEqual([]);
+    expect((await b.client.from("arte_invites").select("id").eq("show_id", show!.id)).data).toEqual([]);
+    expect((await b.client.from("arte_invites").insert({ ...guest, user_id: b.id, key: "email:z@y.com" })).error).not.toBeNull();
+  });
+});

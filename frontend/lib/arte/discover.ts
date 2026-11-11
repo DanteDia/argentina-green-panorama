@@ -54,3 +54,30 @@ export function affineVenues(ctx: DiscoverCtx): Affine[] {
     return { nodeId: n.id, name: n.name, kind: n.kind, reasons, score };
   }));
 }
+
+const PEOPLE = new Set(["persona", "curador", "coleccionista", "gestor"]);
+const FOLLOW_IS_ENOUGH = new Set(["curador", "coleccionista", "gestor"]); // "persona" also holds celebrities you happen to follow
+
+/** People to invite (curators, collectors, managers): tied to your spaces or to artists you follow. */
+export function affinePeople(ctx: DiscoverCtx): Affine[] {
+  const { byId, nb, follows, mine } = index(ctx);
+  return done(ctx.nodes.filter((n) => PEOPLE.has(n.kind) && n.id !== ctx.myNodeId).map((n) => {
+    const reasons: string[] = [];
+    let score = 0;
+    const around = [...(nb.get(n.id) ?? [])];
+    for (const v of around.filter((v) => mine.has(v) && VENUES.has(byId.get(v)?.kind ?? "")).slice(0, 2)) {
+      const x = byId.get(v)!; score += 20; reasons.push(`vínculo con ${KIND_LABEL[x.kind]} ${x.name}`);
+    }
+    const artists = around.filter((a) => follows.has(a) && byId.get(a)?.kind === "artista").length;
+    if (artists) { score += 8 * artists; reasons.push(`conexión con ${artists} artista${artists > 1 ? "s" : ""} que seguís`); }
+    if (follows.has(n.id) && (score > 0 || FOLLOW_IS_ENOUGH.has(n.kind))) { score += 25; reasons.unshift("seguís a esta persona en Instagram"); }
+    return { nodeId: n.id, name: n.name, kind: n.kind, reasons, score };
+  }));
+}
+
+/** Spaces you already showed at or worked with: the warmest guests for your own opening. */
+export function yourVenues(ctx: DiscoverCtx): Affine[] {
+  const { byId, mine } = index(ctx);
+  return done([...mine].map((id) => byId.get(id)).filter((n): n is GNode => !!n && VENUES.has(n.kind))
+    .map((n) => ({ nodeId: n.id, name: n.name, kind: n.kind, reasons: [`ya trabajaste con ${n.kind === "museo" || n.kind === "programa" ? "este" : "esta"} ${KIND_LABEL[n.kind]}`], score: 60 })));
+}
