@@ -11,5 +11,5 @@ export const programa = (o: Partial<Program> = {}): Program => ({
   id: "p", name: "Programa", type: "Convocatoria", discipline: "Artes Visuales", organizer: "Org", country: "Argentina", url: "https://x",
   description: "Convocatoria abierta para artistas visuales.", benefit: null, eligibility: {}, requirements: {}, evidence: {},
   opens_at: null, closes_at: "2026-12-10", status: null, window_text: null, digital_focus: false, for_argentines: "sí",
-  alumni_text: null, alumni_node_ids: [], source: "test", verified_at: "2026-10-30", ...o,
+  alumni_text: null, alumni_node_ids: [], source: "test", verified_at: "2026-10-30", cost: null, ...o,
 });

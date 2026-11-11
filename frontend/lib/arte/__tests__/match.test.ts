@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { checkEligibility } from "../eligibility";
-import { needsStatement, rankPrograms, scoreProgram, type MatchContext } from "../match";
+import { matchesSearch, needsStatement, rankPrograms, scoreProgram, type MatchContext } from "../match";
+import { tier } from "../tiers";
 import { perfil, programa } from "./fixtures";
 
 const NOW = new Date("2026-11-01T13:00:00Z");
@@ -186,5 +187,80 @@ describe("match reasons", () => {
     expect(reasons(undeclared, "x")).toMatch(/Conecta con tu obra: ceramica, esmaltada/);
     expect(reasons(undeclared, "p0")).not.toMatch(/fotografia/);                      // 6% of calls and not declared: counts, but isn't named
     expect(reasons(ctx({ profile: perfil({ mediums: ["fotografía"], themes: [] }), statement: st }), "p0")).toMatch(/Conecta con tu obra: fotografia/);
+  });
+});
+
+describe("what a residency costs", () => {
+  const residencia = (cost: "funded" | "free" | "low" | null) => programa({ id: `r-${cost}`, type: "Residencia", closes_at: "2026-12-20", cost });
+
+  it("a residency that pays the artist ranks above a free one, and a free one above one with a fee", () => {
+    const [paga, gratis, cobra] = (["funded", "free", "low"] as const).map((c) => scoreProgram(ctx(), residencia(c)).score);
+    expect(paga).toBeGreaterThan(gratis);
+    expect(gratis).toBeGreaterThan(cobra);
+  });
+
+  it("says why: the stay is paid for, or costs nothing", () => {
+    expect(scoreProgram(ctx(), residencia("funded")).reasons.join(" ")).toMatch(/apoyo económico/);
+    expect(scoreProgram(ctx(), residencia("free")).reasons.join(" ")).toMatch(/sin costo/i);
+  });
+
+  it("a call that does not state its cost scores like one with a fee: nothing is assumed", () => {
+    expect(scoreProgram(ctx(), residencia(null)).score).toBe(scoreProgram(ctx(), residencia("low")).score);
+  });
+
+  it("the residencies artists dream of count as international references", () => {
+    for (const [name, org] of [["MacDowell Fellowship", "MacDowell"], ["Pro Helvetia — Residencias en Suiza", "Pro Helvetia"], ["Arts at CERN — Residencias", "CERN"], ["Yaddo", "Yaddo"]])
+      expect(tier(name, org)).toBe("A");
+    expect(tier("Residencia en un pueblo", "Casa Rural")).toBe("C");
+  });
+});
+
+describe("reference programmes stay on top of bulk listings", () => {
+  const stipend = programa({ id: "aca-x", name: "Lakeside Artist Residency", organizer: "Lakeside Arts", type: "Residencia", closes_at: "2026-12-20", cost: "funded" });
+  const stipendAfin = { ...stipend, id: "aca-y", description: "A residency about identidad." };
+
+  it("an international reference prize that opens soon outranks an unknown residency that is open, pays a stipend and even shares a theme with the artist", () => {
+    const ars = programa({ id: "ars", name: "Prix Ars Electronica", organizer: "Ars Electronica", type: "Premio", closes_at: "2026-03-09", window_text: "anual; convocatoria ~ene–mar" });
+    expect(scoreProgram(ctx(), ars).score).toBeGreaterThan(scoreProgram(ctx(), stipendAfin).score);
+  });
+
+  it("an open programme of an Argentine reference space outranks it when the fit is the same (affinity can still tip it)", () => {
+    const klemm = programa({ id: "klemm", name: "Premio Klemm", organizer: "Fundación Federico Jorge Klemm", type: "Premio", closes_at: "2026-12-06" });
+    expect(scoreProgram(ctx(), klemm).score).toBeGreaterThan(scoreProgram(ctx(), stipend).score);
+  });
+
+  it("the score never passes 100", () => {
+    const todo = programa({ id: "mac", name: "MacDowell Fellowship", organizer: "MacDowell", type: "Residencia", closes_at: "2026-12-20", cost: "funded", digital_focus: true,
+      discipline: "Artes Visuales · Arte y tecnología", description: "identidad verificación facial cuerpo máquina dato materia umbral", alumni_node_ids: ["n1"] });
+    expect(scoreProgram(ctx({ similarArtistNodeIds: new Set(["n1"]) }), todo).score).toBeLessThanOrEqual(100);
+  });
+});
+
+describe("tier names do not catch look-alikes", () => {
+  it.each([["Residencia de fotografía documental", "Casa Rural"], ["Kemiönsaari Artist Residency", "Saarinen Studio"], ["Studio in Venice for rent", "Venezia Contemporanea"],
+    ["Pivot Art Residency", "Pivot"], ["Call for Artistic Director", "Centro Cultural de Belém"], ["Salón de Otoño", "Museo de Arte Moderno de Bogotá"]])("%s is not a reference", (name, org) => {
+    expect(tier(name, org)).toBe("C");
+  });
+
+  it.each([["Saari Residence", "Kone Foundation", "A"], ["documenta 16 open call", null, "A"], ["Pivô Pesquisa", "Pivô", "A"], ["Premio", "Museo de Arte Moderno de Buenos Aires", "B"],
+    ["Convocatoria", "Centro Cultural Recoleta", "B"]])("%s by %s is tier %s", (name, org, t) => {
+    expect(tier(name, org)).toBe(t);
+  });
+});
+
+describe("searching opportunities", () => {
+  const p = programa({ name: "Hangar — Residencias", organizer: null, country: "España", benefit: "Estipendio mensual", description: null });
+
+  it("finds a country however it is typed", () => {
+    expect(matchesSearch(p, "espana")).toBe(true);
+    expect(matchesSearch(p, "ESPAÑA")).toBe(true);
+    expect(matchesSearch(programa({ country: "EE.UU. (abierto internacional)" }), "eeuu")).toBe(true);
+    expect(matchesSearch(programa({ country: "EE.UU." }), "estados unidos")).toBe(true);
+  });
+
+  it("matches what the programme offers, and not the word null for empty fields", () => {
+    expect(matchesSearch(p, "estipendio")).toBe(true);
+    expect(matchesSearch(p, "null")).toBe(false);
+    expect(matchesSearch(p, "japon")).toBe(false);
   });
 });

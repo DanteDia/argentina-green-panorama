@@ -116,7 +116,12 @@ export interface Program {
   alumni_node_ids: string[];
   source: string | null;
   verified_at: string | null;
+  /** What the stay costs, only when the listing states it: the artist is paid, pays nothing, or pays a low fee. */
+  cost: ProgramCost | null;
 }
+
+export type ProgramCost = "funded" | "free" | "low";
+export const COST_LABEL: Record<ProgramCost, string> = { funded: "con apoyo económico", free: "sin costo", low: "costo bajo" };
 
 export interface Application {
   id: string;

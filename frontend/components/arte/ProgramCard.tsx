@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Ranked } from "@/lib/arte/match";
+import { COST_LABEL } from "@/lib/arte/types";
 
 const TONO: Record<string, string> = {
   abierta: "bg-[#e3ecdf] text-[var(--ok)]", "cierra hoy": "bg-[var(--accent-soft)] text-[var(--accent)]",
@@ -16,6 +17,7 @@ export function ProgramCard({ r, compact = false }: { r: Ranked; compact?: boole
           <div className="flex flex-wrap items-center gap-2">
             <span className={`pill border-transparent ${TONO[r.state.label]}`}>{r.state.projected ? "próxima · estimada" : r.state.label}</span>
             {p.type && <span className="pill">{p.type}</span>}
+            {p.cost && <span className="pill">{COST_LABEL[p.cost]}</span>}
             {p.digital_focus && <span className="pill">arte y tecnología</span>}
             {p.country && <span className="text-xs muted">{p.country}</span>}
           </div>

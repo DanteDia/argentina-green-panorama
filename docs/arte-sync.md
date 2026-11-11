@@ -35,21 +35,61 @@ python3 sync_supabase.py --solo programas
 | Source | Script | What is kept |
 | --- | --- | --- |
 | Curated list | `programas_curados.py` | Reference programs, each with its official page and usual window (`ventana`). `OVERRIDES` holds dates read by hand from the official page or post. |
-| Res Artis open calls | `fuentes.py resartis` | Residencies whose "Fees and support" text mentions support (stipend, fully funded, no fee, a travel or materials grant…) and no cost to the artist. A heuristic on the listing text: a travel or materials grant alone passes. Listings for residents or one community only are dropped. Most listings there are pay-to-stay and are dropped. |
+| Res Artis open calls | `fuentes.py resartis` | Residencies whose "Fees and support" field says the artist is paid, pays nothing, or pays a low fee (see "What a residency costs"). |
+| Artist Communities Alliance | `fuentes.py aca` | Open calls whose listing says "Open to artists based anywhere in the world", ticks a visual discipline, and states a stipend, a zero fee or a low fee in its own number fields. |
+| Rivet | `fuentes.py rivet` | Calls with a deadline, housing and "residen…" in the text (the site also lists prizes and magazines), tagged "With Funding" or "Free / No Costs", or with a low program fee. |
 | On the Move deadlines | `fuentes.py onthemove` | Visual-arts calls whose text says they are open beyond Europe (worldwide, international artists, Latin America…) and names no residence requirement. Funding is On the Move's own criterion, not checked. |
 | Recursos Culturales | `fuentes.py recursos` | Posts tagged visual arts or photography with a stated deadline; only prizes, grants, residencies and biennials, one per organiser site (host of the post's first outbound link). Generic "open calls" there are mostly pay-to-show and are dropped. |
 | Instagram of spaces in the map | `convocatorias_ig.py [max accounts=300] [--dry]` | Posts from the last 60 days that announce an open call with a closing date ahead. A post naming a curated program (its distinctive word, e.g. "manglar") updates that program; any other becomes its own row linking to the post. Paid HikerAPI requests: the posts of each account (cached 3 days) and its profile (cached 60 days), so up to two per account and none on a re-run within 3 days. |
 
-Rules for these four sources (`ra-`, `otm-`, `rc-`, `ig-` rows):
+Rules for these sources (`ra-`, `aca-`, `rv-`, `otm-`, `rc-`, `ig-` rows):
 
 - Only calls with a stated closing date still ahead are stored, and each row keeps the listing URL in `source`.
-- Eligibility is what the text suggests, not a verified rule: Res Artis and On the Move rows say "confirmá en las
+- Eligibility is what the text suggests, not a verified rule: Res Artis, ACA, Rivet and On the Move rows say "confirmá en las
   bases"; Recursos Culturales rows get "sí (Argentina / Iberoamérica / internacional)" or "verificar" from keywords
   in the post; Instagram rows are marked "sí (Argentina)" because the accounts read are spaces in the map, nearly all in Buenos Aires.
 - Each run rebuilds a site's rows from that day's listing (skipped when the site did not answer), and the Instagram
   reader drops its rows once their date passes. `sync_supabase.py` then deletes from Supabase the `aad-`, `ra-`,
-  `otm-`, `rc-` and `ig-` rows that are no longer in the pipeline's table, unless an artist applied. Arte al Día
+  `aca-`, `rv-`, `otm-`, `rc-` and `ig-` rows that are no longer in the pipeline's table, unless an artist applied. Arte al Día
   rows (`aad-`) are kept with their past date after closing and read as closed. Curated rows are never deleted.
+
+### What a residency costs (`cost`)
+
+`arte_programs.cost` is set only when the listing or the program's own page states it:
+
+- `funded`: the artist is paid or travel is covered (stipend, grant, "fully funded"). A small stipend with travel at
+  the artist's expense also counts, so the card quotes the listing's own words in `benefit`.
+- `free`: no residency fee.
+- `low`: a stated fee of up to `BARATO` (USD 800 a month, about a room's rent). For free-text fees (`mensual` in
+  `fuentes.py`) it is the first fee the text states, scaled by the period named next to it ("per week", "for 2
+  weeks") or else by the stay's stated length, at rough fixed exchange rates. Fees in currencies it does not read
+  (AR$, AUD, THB…) are not classified.
+
+Residencies from the three listing sites that cost more, or do not say, are **not stored**: a stay at €2,000 a month
+is not an opportunity for an emerging artist. Curated residencies get their label from `COSTO` in
+`programas_curados.py`, quoted from the program's page. In the app: a pill on the card, the "Sin costo o con apoyo"
+filter (funded or free), and up to +5 in the score.
+
+`sync_supabase.py` always writes `cost`, so the migration `20261111000002_arte_program_cost.sql` must be applied to a
+database before the next programs sync against it (production: applied 2026-11-11).
+
+The reading is a heuristic over listing text. Known misses: a waived fee for one group read as free for all; a grant
+described in German or French read as a fee; virtual programmes are skipped by title only.
+
+### Weekly run
+
+`escena-arte/semanal.sh` runs `fuentes.py` and `artealdia_calls.py` and then syncs programs to production; it is
+installed as the LaunchAgent `com.arte.convocatorias-semanal` on the owner's Mac (Mondays 09:17, or at the next wake;
+the plist is kept in `escena-arte/` and copied to `~/Library/LaunchAgents/`).
+It writes `escena-arte/logs/semanal-YYYY-MM-DD.log`. If `fuentes.py` exits with an error, or the calls with a deadline
+ahead drop by more than half, it restores `arte.db` and does not sync. It does not run `programas_curados.py` (hand-verified: run it
+after editing the list) nor `convocatorias_ig.py` (paid requests).
+
+```bash
+./semanal.sh --sin-sync                                   # read sources only
+launchctl list | grep convocatorias                       # is it installed?
+launchctl bootout gui/$(id -u)/com.arte.convocatorias-semanal   # stop it
+```
 
 ### The usual window (`window_text`)
 

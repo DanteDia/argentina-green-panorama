@@ -18,7 +18,7 @@ export interface MatchContext {
 }
 export interface Ranked { program: Program; score: number; reasons: string[]; effortDays: number; state: ProgramState; eligibilityNotes: string[] }
 
-// Weights (tunable): fit 40 (discipline 15, digital 10, themes 15) · strategic 40 (type for stage 15, tier 15, alumni 10) · timing 20
+// Weights (tunable): fit 40 (discipline 15, digital 10, themes 15) · strategic 50 (type for stage 15, tier 25, your scene 10) · timing 20 · stated cost up to +5 · capped at 100
 const NO_VISUAL = /literatura|novela|poes[ií]a|m[uú]sica|danza|teatro|esc[eé]nic|dramaturg|coreograf|cine documental|guion/i;
 const DIGITAL = /digital|tecnolog|new media|nuevos medios|interactiv|c[oó]digo|software|algor|dato|data|\bia\b|inteligencia artificial|virtual|net\.?art|electr[oó]nic|bioarte|sonoro|instalaci/i;
 // Words that say nothing about a practice: every call and every bio has them, in Spanish or English
@@ -115,7 +115,9 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
 
   // strategic · tier
   const tr = tier(prog.name, prog.organizer);
-  score += tr === "A" ? 15 : tr === "B" ? 11 : 6;
+  // a reference programme has to outrank the hundreds of calls read from listing sites, whose standing nobody checked.
+  // Weights, not a hard rule: a much closer fit to the artist's work can still put an unknown call above a tier-B one.
+  score += tr === "A" ? 25 : tr === "B" ? 18 : 6;
   if (tr === "A") reasons.push("Programa de referencia internacional");
   else if (tr === "B") reasons.push("Referencia en la escena argentina");
 
@@ -127,6 +129,10 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
     score += 10; reasons.push("Artistas afines a vos pasaron por acá");
   }
 
+  // what it costs (only when the listing says so): being paid to go beats going free, and both beat paying
+  if (prog.cost === "funded") { score += 5; reasons.push("Con apoyo económico: te pagan o te cubren el viaje"); }
+  else if (prog.cost === "free") { score += 3; reasons.push("Sin costo de residencia"); }
+
   // timing / effort
   const st = programState(prog, ctx.now);
   const eff = effortDays(prog);
@@ -136,7 +142,16 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
   else if (st.label === "próxima") { score += 15; reasons.push(st.projected ? "Por su calendario habitual, conviene prepararla ahora" : "Abre pronto: podés prepararla con tiempo"); }
   else if (st.label === "recurrente") { score += 10; reasons.push("Para agendar: vuelve a abrir"); }
 
-  return { score: Math.round(score), reasons, effortDays: eff };
+  return { score: Math.min(100, Math.round(score)), reasons, effortDays: eff };
+}
+
+const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f.]/g, "");
+
+/** Free-text search over what an artist would type: name, organiser, country, what it offers. Accents, case and dots
+ *  do not matter ("espana", "eeuu"), and a country written as an abbreviation is also found by its name. */
+export function matchesSearch(p: Program, q: string): boolean {
+  const hay = fold([p.name, p.organizer, p.country, p.description, p.benefit].filter(Boolean).join(" "));
+  return (hay + (/\beeuu\b/.test(hay) ? " estados unidos usa" : "")).includes(fold(q).trim());
 }
 
 /** Share of calls containing each word. Under 30 calls the numbers mean nothing, so nothing is discounted. */
