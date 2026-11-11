@@ -79,6 +79,7 @@ Verifiable Industries — protocol for AI-discovered, on-chain-verified industry
 ## Environment Variables
 - `backend/.env`: OPENROUTER_API_KEY, SUPABASE_URL, SUPABASE_KEY, SERPER_API_KEY (Google search for BD contacts)
 - `frontend/.env.local`: NEXT_PUBLIC_GENLAYER_CONTRACT, NEXT_PUBLIC_GENLAYER_EXPLORER, OUTBOUND_BACKEND_URL (VPS FastAPI, e.g. `http://72.61.216.166:8000`)
+- Vercel project `green-panorama-ar` (Arte): `OPENROUTER_API_KEY` (AI drafts: statement, bios, translations, letters, CV paste; without a valid key they answer "no pudimos generarlo" and log `[arte/llm] OpenRouter <status>` in the runtime logs), `HIKERAPI_KEY` (Instagram import, paid per call), optional `ARTE_LLM_MODEL` (comma-separated OpenRouter model ids, tried in order) and `NEXT_PUBLIC_SITE_URL`.
 
 ## VPS (Hostinger)
 - IP: `72.61.216.166`, SSH key at `/Users/Macbook/Openclaw Master/hostingerVpsSsh`
