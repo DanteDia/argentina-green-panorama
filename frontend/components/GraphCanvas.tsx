@@ -22,6 +22,10 @@ interface GraphCanvasProps {
   darkMode?: boolean;
   hideVerificationBadges?: boolean;
   isMobile?: boolean;
+  /** Zoom to show every node once the layout settles (small graphs otherwise sit off-centre). Fits once per canvas size. */
+  fitOnSettle?: boolean;
+  /** Canvas size when the host lays the graph out in its own box; default is the full-page map's window-based size. */
+  size?: { width: number; height: number };
 }
 
 interface ForceNode {
@@ -62,11 +66,14 @@ export default function GraphCanvas({
   edgeColors,
   darkMode = false,
   hideVerificationBadges = false,
+  fitOnSettle = false,
+  size,
   isMobile = false,
 }: GraphCanvasProps) {
   const fgRef = useRef<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const fitted = useRef("");
 
   useEffect(() => {
     const updateSize = () => {
@@ -285,8 +292,8 @@ export default function GraphCanvas({
   return (
     <ForceGraph2D
       ref={fgRef}
-      width={dimensions.width}
-      height={dimensions.height}
+      width={(size ?? dimensions).width}
+      height={(size ?? dimensions).height}
       graphData={graphData}
       nodeCanvasObject={paintNode as any}
       linkCanvasObject={paintLink as any}
@@ -306,6 +313,13 @@ export default function GraphCanvas({
       d3VelocityDecay={0.3}
       warmupTicks={100}
       cooldownTicks={200}
+      onEngineStop={fitOnSettle ? () => {
+        // the engine also stops after a drag or a hover: fit only once per size, or the artist's own zoom would snap back
+        const key = `${(size ?? dimensions).width}x${(size ?? dimensions).height}`;
+        if (fitted.current === key) return;
+        fitted.current = key;
+        fgRef.current?.zoomToFit(400, 48);
+      } : undefined}
       linkDirectionalArrowLength={3}
       linkDirectionalArrowRelPos={0.8}
     />

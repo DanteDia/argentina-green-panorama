@@ -39,7 +39,7 @@ export default async function Hoy() {
           <div className="flex items-baseline justify-between"><h2 className="display text-2xl">Para vos, ahora</h2><Link href="/arte/oportunidades" className="text-sm muted hover:text-[var(--ink)]">Ver todas →</Link></div>
           <div className="mt-3 space-y-3">{top.map((r) => <ProgramCard key={r.program.id} r={r} compact />)}</div>
         </section>
-        <aside className="space-y-4">
+        <aside className={`space-y-4 ${c.score < 60 ? "order-first lg:order-none" : ""}`}>
           <Meter score={c.score} todo={c.todo} />
           <div className="card p-5">
             <p className="eyebrow">Tus cierres</p>

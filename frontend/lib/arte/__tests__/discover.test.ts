@@ -51,6 +51,14 @@ describe("affineVenues", () => {
   });
 });
 
+describe("affineVenues wording", () => {
+  it("says 'expuso 1 artista' and 'expusieron 2 artistas'", () => {
+    const c = ctx({ follows: ["a1", "a2"], edges: [...ctx().edges, { source: "a2", target: "g2" }] });
+    expect(affineVenues(c).find((v) => v.nodeId === "g2")!.reasons[0]).toBe("expusieron 2 artistas que seguís");
+    expect(affineVenues(ctx({ follows: ["a1"] })).find((v) => v.nodeId === "g2")!.reasons[0]).toBe("expuso 1 artista que seguís");
+  });
+});
+
 describe("affinePeople", () => {
   const people = (follows: string[]) => ctx({
     follows,

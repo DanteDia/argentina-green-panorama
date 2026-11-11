@@ -48,7 +48,7 @@ export function affineVenues(ctx: DiscoverCtx): Affine[] {
     let score = 0;
     if (follows.has(n.id)) { score += 30; reasons.push("la seguís en Instagram"); }
     const seguidos = [...(nb.get(n.id) ?? [])].filter((a) => follows.has(a)).length;
-    if (seguidos) { score += 10 * seguidos; reasons.unshift(`expuso${seguidos > 1 ? "n" : ""} ${seguidos} artista${seguidos > 1 ? "s" : ""} que seguís`); }
+    if (seguidos) { score += 10 * seguidos; reasons.unshift(seguidos > 1 ? `expusieron ${seguidos} artistas que seguís` : "expuso 1 artista que seguís"); }
     const t = sharedThemes(n);
     if (t.length) { score += 3 * t.length; reasons.push(`temas en común: ${t.join(", ")}`); }
     return { nodeId: n.id, name: n.name, kind: n.kind, reasons, score };

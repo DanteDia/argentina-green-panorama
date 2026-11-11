@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
 import GraphCanvas from "@/components/GraphCanvas";
 import type { GreenEdge, GreenNode } from "@/lib/types";
 
@@ -11,10 +12,22 @@ export function SceneMap({ nodes, edges, me }: { nodes: MapNode[]; edges: { sour
     descripcion: n.descripcion, verified: false, verification_tx: null, verification_status: "unverified",
   })) as unknown as GreenNode[];
   const ge = edges.map((e, i) => ({ id: String(i), source_id: e.source, target_id: e.target, relationship_type: "ecosystem", description: "", confidence: 1, source: "arte" })) as GreenEdge[];
+  // The shared canvas sizes itself from the window; here it lives in a card, so measure the card
+  const box = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setSize({ width: el.clientWidth, height: el.clientHeight }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
-    <div className="card mt-6 h-[70vh] overflow-hidden">
-      <GraphCanvas nodes={gn} edges={ge} selectedCluster={null} searchQuery="" highlightedNodes={[me]} clusterColors={COLORS} hideVerificationBadges
-        onNodeClick={(n) => { if (n.link) window.open(n.link, "_blank", "noopener"); }} />
+    <div ref={box} className="card mt-6 h-[70vh] overflow-hidden">
+      {size && size.width > 0 && (
+        <GraphCanvas nodes={gn} edges={ge} selectedCluster={null} searchQuery="" highlightedNodes={[me]} clusterColors={COLORS} hideVerificationBadges fitOnSettle size={size}
+          onNodeClick={(n) => { if (n.link) window.open(n.link, "_blank", "noopener"); }} />
+      )}
     </div>
   );
 }
