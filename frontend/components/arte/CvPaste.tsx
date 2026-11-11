@@ -2,7 +2,7 @@
 import { useState, useTransition } from "react";
 import { addCvItems, aiCvFromText } from "@/app/arte/(app)/perfil/actions";
 import { CV_KINDS } from "@/lib/arte/cv";
-import type { CvDraftItem } from "@/lib/arte/cv-parse";
+import { MAX_CHARS, type CvDraftItem } from "@/lib/arte/cv-parse";
 
 const LABEL = Object.fromEntries(CV_KINDS);
 
@@ -39,7 +39,7 @@ export function CvPaste() {
       </ul>
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button type="button" className="btn btn-primary" disabled={pending || !on.some(Boolean)} onClick={add}>{pending ? "Guardando…" : `Agregar ${on.filter(Boolean).length} al CV`}</button>
-        <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setItems(null)}>Volver</button>
+        <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => { setItems(null); setNote(""); }}>Volver</button>
         {note && <span className="text-sm muted" role="status">{note}</span>}
       </div>
     </div>
@@ -53,6 +53,7 @@ export function CvPaste() {
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <button type="button" className="btn btn-primary" disabled={pending || !text.trim()} onClick={read}>{pending ? "Leyendo tu CV…" : "Ordenar mi CV"}</button>
         {note && <span className="text-sm muted" role="status">{note}</span>}
+        {text.length > MAX_CHARS && <span className="text-sm text-[var(--warn)]">Es muy largo: leemos la primera parte. Pegá el resto después.</span>}
       </div>
     </div>
   );
