@@ -11,12 +11,15 @@ export default async function Postulaciones() {
     .select("id, status, due_at, arte_programs(name, organizer), arte_application_items(done)").eq("user_id", user.id).order("due_at");
   const apps = (data || []) as unknown as { id: string; status: AppStatus; due_at: string | null; arte_programs: { name: string; organizer: string | null }; arte_application_items: { done: boolean }[] }[];
   const today = todayAR(new Date());
+  const porCerrar = apps.filter((a) => ["idea", "preparing"].includes(a.status) && a.due_at && a.due_at >= today).length;
   return (
     <div>
       <p className="eyebrow">Postulaciones</p>
       <h1 className="display mt-2 text-4xl">Tu seguimiento</h1>
       <p className="mt-2 muted">{apps.length ? `${apps.length} postulaciones. Todo lo que falta, en un solo lugar.` : "Todavía no empezaste ninguna. Elegí una en Oportunidades."}</p>
       {!apps.length && <Link href="/arte/oportunidades" className="btn btn-primary mt-6">Ver oportunidades</Link>}
+      {/* reminders live in the artist's own calendar: a week and two days before each closing */}
+      {porCerrar > 0 && <a href="/api/arte/calendario" className="btn btn-ghost mt-4">Agregar {porCerrar === 1 ? "mi cierre" : `mis ${porCerrar} cierres`} al calendario</a>}
       <div className="mt-8 grid gap-4 md:grid-cols-4">
         {COLS.map(([estados, titulo]) => {
           const col = apps.filter((a) => estados.includes(a.status));
