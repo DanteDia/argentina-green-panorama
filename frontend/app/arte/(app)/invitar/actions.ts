@@ -4,14 +4,14 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { contactOf, inviteKey } from "@/lib/arte/invite";
 
-const txt = (v: FormDataEntryValue | null) => (String(v ?? "").trim() || null);
+const txt = (v: FormDataEntryValue | null, max = 300) => (String(v ?? "").trim().slice(0, max) || null);
 
 export async function saveShow(form: FormData) {
   const { user, supabase } = await requireUser();
   const id = txt(form.get("id"));
   const row = {
     user_id: user.id, title: txt(form.get("title")) ?? "Mi muestra", venue: txt(form.get("venue")), address: txt(form.get("address")),
-    when_text: txt(form.get("when_text")), link: txt(form.get("link")), note: txt(form.get("note")),
+    when_text: txt(form.get("when_text")), link: txt(form.get("link"), 500), note: txt(form.get("note"), 1000),
   };
   const q = id ? supabase.from("arte_shows").update(row).eq("id", id).select("id").single() : supabase.from("arte_shows").insert(row).select("id").single();
   const { data, error } = await q;

@@ -15,12 +15,15 @@ export interface Show {
 export interface Contact { channel: "email" | "instagram" | null; email: string | null; instagram: string | null }
 export interface Candidate extends Affine { contact: Contact }
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;   // no separators: Gmail would split them into extra recipients
+const HANDLE = /^[a-z0-9._]{1,30}$/;
 
 export function contactOf(info: { email?: string | null; instagram?: string | null } | null | undefined): Contact {
-  const email = info?.email?.trim().toLowerCase() || null;
-  const instagram = info?.instagram?.trim().replace(/^@/, "").toLowerCase() || null;
-  const okEmail = email && EMAIL.test(email) ? email : null;
+  const email = info?.email?.trim().toLowerCase() || "";
+  const handle = (info?.instagram ?? "").trim().toLowerCase()
+    .replace(/^(https?:\/\/)?(www\.)?instagram\.com\//, "").replace(/^@/, "").replace(/[/?#].*$/, "");
+  const okEmail = EMAIL.test(email) ? email : null;
+  const instagram = HANDLE.test(handle) ? handle : null;
   return { channel: okEmail ? "email" : instagram ? "instagram" : null, email: okEmail, instagram };
 }
 

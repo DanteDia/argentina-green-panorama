@@ -11,8 +11,12 @@ export interface Sent { id: string; name: string; email: string | null; instagra
 function Send({ show, guest, from }: { show: Show; guest: Guest; from: { name: string; link: string | null } }) {
   const [pending, start] = useTransition();
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState(false);
   const { subject, body } = inviteText(show, guest.name, from.name, from.link);
-  const done = () => start(() => markInvited(show.id, { nodeId: guest.nodeId, name: guest.name, email: guest.contact.email, instagram: guest.contact.instagram }));
+  const done = () => start(async () => {
+    try { setError(false); await markInvited(show.id, { nodeId: guest.nodeId, name: guest.name, email: guest.contact.email, instagram: guest.contact.instagram }); }
+    catch { setError(true); }
+  });
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
       {guest.contact.channel === "email" ? (
@@ -25,6 +29,7 @@ function Send({ show, guest, from }: { show: Show; guest: Guest; from: { name: s
         }}>{copied ? "Copiado: pegalo en el DM" : "Copiar y abrir DM"}</button>
       )}
       <button type="button" className="btn btn-ghost !py-1.5" disabled={pending} onClick={done}>{pending ? "Guardando…" : "Ya la mandé"}</button>
+      {error && <span className="text-sm text-[var(--accent)]">No se pudo guardar, probá de nuevo.</span>}
     </div>
   );
 }
@@ -86,7 +91,7 @@ export function InviteList({ show, guests, sent, from }: { show: Show; guests: G
             {sent.map((s) => (
               <li key={s.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <span>{s.name || s.email || `@${s.instagram}`}<span className="muted">{s.email ? ` · ${s.email}` : s.instagram ? ` · @${s.instagram}` : ""}</span></span>
-                <button type="button" className="text-xs underline muted" onClick={() => start(() => unmarkInvited(s.id))}>Deshacer</button>
+                <button type="button" className="text-xs underline muted" onClick={() => start(async () => { await unmarkInvited(s.id).catch(() => {}); })}>Deshacer</button>
               </li>
             ))}
           </ul>

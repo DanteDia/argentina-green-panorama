@@ -49,7 +49,7 @@ export default async function Invitar({ searchParams }: { searchParams: Promise<
     .map(({ nodeId, name, kind, reasons, contact }) => ({ nodeId, name, kind, reasons, contact }));
 
   const h = await headers();
-  const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
+  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
   const link = profile.website ?? (profile.portfolio_public && profile.slug ? `${origin}/arte/a/${profile.slug}` : null);
 
   return (

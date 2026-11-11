@@ -14,6 +14,12 @@ describe("contactOf", () => {
     expect(contactOf({ email: "not-an-email" })).toEqual({ channel: null, email: null, instagram: null });
     expect(contactOf(null)).toEqual({ channel: null, email: null, instagram: null });
   });
+
+  it("rejects addresses Gmail would split into two recipients, and junk handles", () => {
+    expect(contactOf({ email: "a,b@x.com" }).email).toBeNull();
+    expect(contactOf({ instagram: "https://www.instagram.com/Galeria.Uno/" }).instagram).toBe("galeria.uno");
+    expect(contactOf({ instagram: "no es un handle" })).toEqual({ channel: null, email: null, instagram: null });
+  });
 });
 
 describe("inviteText", () => {

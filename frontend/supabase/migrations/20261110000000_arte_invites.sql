@@ -27,7 +27,9 @@ create table if not exists arte_invites (
 
 alter table arte_shows enable row level security;
 alter table arte_invites enable row level security;
+drop policy if exists "arte_shows own rows" on arte_shows;
 create policy "arte_shows own rows" on arte_shows for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+drop policy if exists "arte_invites own rows" on arte_invites;
 -- an invite must belong to the user AND point at one of the user's own shows
 create policy "arte_invites own rows" on arte_invites for all using (user_id = auth.uid())
   with check (user_id = auth.uid() and exists (select 1 from arte_shows s where s.id = show_id and s.user_id = auth.uid()));
