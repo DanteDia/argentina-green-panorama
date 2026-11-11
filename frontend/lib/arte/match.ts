@@ -11,6 +11,8 @@ export interface MatchContext {
   appliedProgramIds: Set<string>;
   similarArtistNodeIds: Set<string>;
   now: Date;
+  /** Names of spaces the artist follows or is linked to in the scene map (the CV's are read from `cv`). */
+  sceneNames?: Set<string>;
   /** Share of calls that contain each word (see wordShare); rankPrograms fills it in. */
   share?: Map<string, number>;
 }
@@ -34,6 +36,19 @@ const artistWords = (ctx: MatchContext) => palabras([ctx.profile.mediums.join(" 
 
 /** True while the artist hasn't said enough about their work for theme matching: recommendations are generic until then. */
 export const needsStatement = (ctx: MatchContext) => artistWords(ctx).size < 4;
+
+const plain = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9ñ]+/g, " ").trim();
+// On their own these name no space: "Fundación" must not match every foundation
+const GENERIC = new Set("arte artes galeria fundacion museo centro cultural espacio instituto universidad residencia premio programa".split(" "));
+
+/** The organiser, when it is a space from the artist's CV, follows or scene map: its name appears whole in the organiser line. */
+function knownOrganizer(ctx: MatchContext, organizer: string | null): string | null {
+  if (!organizer) return null;
+  const org = ` ${plain(organizer)} `;
+  const names = [...ctx.cv.map((c) => c.org), ...(ctx.sceneNames ?? [])].filter((n): n is string => !!n);
+  const hit = names.some((n) => { const k = plain(n); return k.length >= 5 && !GENERIC.has(k) && org.includes(` ${k} `); });
+  return hit ? organizer : null;
+}
 
 export function effortDays(prog: Program): number {
   const r = prog.requirements || {};
@@ -87,8 +102,11 @@ export function scoreProgram(ctx: MatchContext, prog: Program): { score: number;
   if (tr === "A") reasons.push("Programa de referencia internacional");
   else if (tr === "B") reasons.push("Referencia en la escena argentina");
 
-  // strategic · alumni similarity
-  if (prog.alumni_node_ids?.some((id) => ctx.similarArtistNodeIds.has(id))) {
+  // strategic · your scene (10, counted once): a space you already know runs it, or artists close to you went through it
+  const known = knownOrganizer(ctx, prog.organizer);
+  if (known) {
+    score += 10; reasons.push(`La organiza ${known}, que ya es parte de tu escena`);
+  } else if (prog.alumni_node_ids?.some((id) => ctx.similarArtistNodeIds.has(id))) {
     score += 10; reasons.push("Artistas afines a vos pasaron por acá");
   }
 
