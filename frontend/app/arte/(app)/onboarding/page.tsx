@@ -5,7 +5,9 @@ import type { DraftProfile } from "@/lib/arte/import-map";
 import { CV_KINDS } from "@/lib/arte/cv";
 import { applyDraft } from "./actions";
 
-const PASOS = ["Leyendo tu Instagram", "Leyendo tu web", "Buscándote en el mapa de la escena", "Armando tu borrador"];
+const FOLLOWS_LATER = "No pudimos leer a quién seguís ahora. Podés reintentarlo después desde Descubrir.";
+const MAX_WORKS = 12;   // what applyDraft imports
+const PASOS = ["Leyendo tu Instagram y tus últimas publicaciones", "Leyendo tu web", "Buscándote en el mapa de la escena", "Armando tu borrador"];
 
 export default function Onboarding() {
   const router = useRouter();
@@ -18,6 +20,7 @@ export default function Onboarding() {
   const [worksOn, setWorksOn] = useState<boolean[]>([]);
   const [pending, start] = useTransition();
   const [error, setError] = useState("");
+  const [follows, setFollows] = useState("");
 
   async function importar(e: React.FormEvent) {
     e.preventDefault();
@@ -29,6 +32,14 @@ export default function Onboarding() {
       if (!r.ok) throw new Error((d as unknown as { error: string }).error);
       if (nombre && !d.profile.name) d.profile.name = nombre;
       setDraft(d); setCvOn(d.cv.map(() => true)); setWorksOn(d.works.map((_, i) => i < 8));
+      // Slow part, in the background while the artist reviews the draft: who they follow seeds Descubrir and Invitar
+      if (d.igPk) {
+        setFollows("Leyendo a quién seguís en Instagram para armar tu escena…");
+        fetch("/api/arte/import/follows", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pk: d.igPk }), keepalive: true })
+          .then((x) => x.json()).then((f: { total?: number; inMap?: number; skipped?: boolean; error?: string }) =>
+            setFollows(f.error ? FOLLOWS_LATER : f.total && !f.skipped ? `Leímos ${f.total} cuentas que seguís: ${f.inMap ?? 0} están en el mapa de la escena.` : ""))
+          .catch(() => setFollows(FOLLOWS_LATER));
+      }
     } catch (err) { setError(String(err instanceof Error ? err.message : err)); }
     finally { clearInterval(tick); setPaso(-1); }
   }
@@ -36,7 +47,10 @@ export default function Onboarding() {
   function confirmar() {
     if (!draft) return;
     const elegido: DraftProfile = { ...draft, cv: draft.cv.filter((_, i) => cvOn[i]), works: draft.works.filter((_, i) => worksOn[i]) };
-    start(async () => { await applyDraft(elegido); router.push("/arte/hoy"); });
+    start(async () => {
+      try { setError(""); await applyDraft(elegido); router.push("/arte/hoy"); }
+      catch { setError("No pudimos guardar tu perfil. Tu borrador sigue acá: probá de nuevo."); }   // keep the draft on screen
+    });
   }
 
   if (!draft) return (
@@ -62,6 +76,7 @@ export default function Onboarding() {
       <h1 className="display mt-2 text-4xl">Esto es lo que encontramos</h1>
       {draft.sources.length > 0 && <p className="mt-2 text-sm muted">Fuentes: {draft.sources.join(" · ")}</p>}
       {draft.warnings.map((w) => <p key={w} className="mt-2 text-sm text-[var(--warn)]">{w}</p>)}
+      {follows && <p className="mt-2 text-sm muted" role="status">{follows}</p>}
 
       <section className="card mt-6 grid gap-3 p-5 md:grid-cols-2">
         {([["name", "Nombre"], ["birth_year", "Año de nacimiento"], ["base_city", "Ciudad"], ["website", "Web"], ["instagram", "Instagram"], ["email_public", "Email de contacto"]] as const).map(([k, l]) => (
@@ -91,13 +106,13 @@ export default function Onboarding() {
 
       {draft.works.length > 0 && (
         <section className="card mt-4 p-5">
-          <h2 className="display text-xl">Imágenes de tu web</h2>
-          <p className="text-sm muted">Elegí cuáles son obras: las importamos y después completás la ficha.</p>
+          <h2 className="display text-xl">Tus imágenes</h2>
+          <p className="text-sm muted">De tu Instagram y tu web. Elegí cuáles son obras (hasta 12): las importamos con el texto de la publicación y después ajustás la ficha.</p>
           <div className="mt-3 grid grid-cols-3 gap-2 md:grid-cols-6">
             {draft.works.map((w, i) => (
-              <button key={i} type="button" onClick={() => setWorksOn(worksOn.map((v, j) => (j === i ? !v : v)))} className={`relative aspect-square overflow-hidden rounded-lg border-2 ${worksOn[i] ? "border-[var(--ink)]" : "border-transparent opacity-50"}`}>
+              <button key={i} type="button" disabled={!worksOn[i] && worksOn.filter(Boolean).length >= MAX_WORKS} onClick={() => setWorksOn(worksOn.map((v, j) => (j === i ? !v : v)))} className={`relative aspect-square overflow-hidden rounded-lg border-2 ${worksOn[i] ? "border-[var(--ink)]" : "border-transparent opacity-50"}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={w.image_url} alt="" className="h-full w-full object-cover" />
+                <img src={w.image_url} alt={w.title} title={w.title} referrerPolicy="no-referrer" className="h-full w-full object-cover" />
               </button>
             ))}
           </div>
@@ -108,6 +123,7 @@ export default function Onboarding() {
         <button className="btn btn-primary" onClick={confirmar} disabled={pending || !draft.profile.name}>{pending ? "Guardando…" : "Confirmar y entrar"}</button>
         <button className="btn btn-ghost" onClick={() => setDraft(null)}>Volver</button>
       </div>
+      {error && <p className="mt-3 text-sm text-[var(--accent)]" role="alert">{error}</p>}
     </div>
   );
 }

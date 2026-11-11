@@ -70,6 +70,17 @@ describe("arte_imports rate-limit claim", () => {
   });
 });
 
+describe("arte follows rate-limit claim", () => {
+  it("grants one slot for concurrent requests and does not block the profile import", async () => {
+    const { client } = await userClient(`follows-${Date.now()}@example.invalid`);
+    const results = await Promise.all(Array.from({ length: 8 }, () => client.rpc("claim_arte_follows")));
+    expect(results.map((r) => r.error)).toEqual(Array(8).fill(null));
+    expect(results.filter((r) => r.data === true)).toHaveLength(1);
+    expect((await client.rpc("claim_arte_import")).data).toBe(true);
+    expect((await client.rpc("claim_arte_follows")).data).toBe(false);
+  });
+});
+
 describe("arte invitations", () => {
   it("shows and their invite list are private, and a guest is recorded once per show", async () => {
     const a = await userClient(`inv-a-${Date.now()}@example.invalid`);
