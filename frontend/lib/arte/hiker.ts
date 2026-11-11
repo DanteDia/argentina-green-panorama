@@ -25,21 +25,22 @@ export async function fetchIgProfile(handle: string): Promise<IgProfile | { erro
   return d;
 }
 
-/** Accounts the artist follows (seed for Discovery). Two requests per page; capped. */
-export async function fetchIgFollowing(userId: string, max = 600): Promise<{ username: string; full_name?: string }[]> {
+/** Accounts the artist follows (seed for Discovery). Two requests per page; capped. `complete` is false when the API
+ *  failed or time ran out before the last page, so the caller can tell a short list from a cut one. */
+export async function fetchIgFollowing(userId: string, deadline: number, max = 600): Promise<{ list: { username: string; full_name?: string }[]; complete: boolean }> {
   const out: { username: string; full_name?: string }[] = [];
   let cursor = "";
-  const deadline = Date.now() + 90_000;   // the route has 120 s: stop paging in time to store what was read
-  for (let i = 0; i < 20 && out.length < max && Date.now() < deadline; i++) {
+  for (let i = 0; i < 20 && out.length < max; i++) {
+    if (Date.now() > deadline) return { list: out, complete: false };
     const params: Record<string, string> = { user_id: userId, force: "on" };
     if (cursor) params.end_cursor = cursor;
     const d = await hiker<[{ username: string; full_name?: string }[], string | null]>("/gql/user/following/chunk", params);
-    if ("error" in d || !Array.isArray(d)) break;
+    if ("error" in d || !Array.isArray(d)) return { list: out, complete: false };
     out.push(...(d[0] || []).map((u) => ({ username: u.username, full_name: u.full_name })));
     if (!d[1]) break;
     cursor = d[1];
   }
-  return out.slice(0, max);
+  return { list: out.slice(0, max), complete: true };
 }
 
 /** The artist's most recent posts (one paid request): candidate works for the onboarding draft. */

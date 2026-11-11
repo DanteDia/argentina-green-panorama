@@ -47,7 +47,10 @@ export default function Onboarding() {
   function confirmar() {
     if (!draft) return;
     const elegido: DraftProfile = { ...draft, cv: draft.cv.filter((_, i) => cvOn[i]), works: draft.works.filter((_, i) => worksOn[i]) };
-    start(async () => { await applyDraft(elegido); router.push("/arte/hoy"); });
+    start(async () => {
+      try { setError(""); await applyDraft(elegido); router.push("/arte/hoy"); }
+      catch { setError("No pudimos guardar tu perfil. Tu borrador sigue acá: probá de nuevo."); }   // keep the draft on screen
+    });
   }
 
   if (!draft) return (
@@ -120,6 +123,7 @@ export default function Onboarding() {
         <button className="btn btn-primary" onClick={confirmar} disabled={pending || !draft.profile.name}>{pending ? "Guardando…" : "Confirmar y entrar"}</button>
         <button className="btn btn-ghost" onClick={() => setDraft(null)}>Volver</button>
       </div>
+      {error && <p className="mt-3 text-sm text-[var(--accent)]" role="alert">{error}</p>}
     </div>
   );
 }

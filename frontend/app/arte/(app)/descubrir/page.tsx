@@ -34,6 +34,9 @@ export default async function Descubrir() {
   const ctx = await loadDiscover(supabase, user.id, studio.profile, studio.cv);
   const artists = affineArtists(ctx).slice(0, 24);
   const venues = affineVenues(ctx).slice(0, 16);
+  // every stored follow, matched to the scene graph or not: an artist whose follows are simply not in the graph is not asked again as if nothing was read
+  const { count } = await supabase.from("arte_follows").select("handle", { count: "exact", head: true }).eq("user_id", user.id);
+  const storedFollows = count ?? 0;
   const vacio = !ctx.follows.length && !studio.profile.node_id && !studio.profile.themes.length;
 
   return (
@@ -42,14 +45,15 @@ export default async function Descubrir() {
       <h1 className="display mt-2 text-4xl">Tu escena</h1>
       <p className="mt-2 muted">Artistas y espacios cercanos a tu práctica, a partir de a quién seguís, dónde expusiste y de qué trata tu obra.</p>
       {vacio && <p className="card mt-6 p-5 text-sm">Cargá tu Instagram y los temas de tu obra en tu <Link href="/arte/perfil" className="underline">perfil</Link> para ver recomendaciones.</p>}
-      {!ctx.follows.length && studio.profile.instagram && (
+      {!storedFollows && studio.profile.instagram && (
         <div className="card mt-6 flex flex-wrap items-center justify-between gap-3 p-5 text-sm">
           <span>Todavía no sabemos a quién seguís. Con eso encontramos los espacios y artistas más cercanos a vos.</span><FollowsButton />
         </div>
       )}
       {venues.length > 0 && <section className="mt-8"><h2 className="display text-2xl">Espacios para acercarte</h2><Lista items={venues} rows={ctx.rows} /></section>}
       {artists.length > 0 && <section className="mt-10"><h2 className="display text-2xl">Artistas afines</h2><Lista items={artists} rows={ctx.rows} /></section>}
-      <p className="mt-10 text-sm muted">¿Querés verlo como red? <Link href="/arte/mapa" className="underline">Abrí el mapa</Link>.</p>
+      {storedFollows > 0 && studio.profile.instagram && <div className="mt-10 text-sm"><FollowsButton again /></div>}
+      <p className="mt-4 text-sm muted">¿Querés verlo como red? <Link href="/arte/mapa" className="underline">Abrí el mapa</Link>.</p>
     </div>
   );
 }
