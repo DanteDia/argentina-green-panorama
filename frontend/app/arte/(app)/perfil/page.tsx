@@ -1,4 +1,4 @@
-import { countryOptions } from "@/lib/arte/countries";
+import { countryCode, countryOptions } from "@/lib/arte/countries";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio } from "@/lib/arte/data";
 import { completeness } from "@/lib/arte/completeness";
@@ -12,7 +12,7 @@ function Pais({ label, name, def }: { label: string; name: string; def?: string 
   return (
     <label className="block text-sm">
       <span className="text-[var(--ink-2)]">{label}</span>
-      <select className="input mt-1" name={name} defaultValue={(def || "AR").toUpperCase()}>
+      <select className="input mt-1" name={name} defaultValue={countryCode(def) || "AR"}>
         {countryOptions(def).map(([code, country]) => <option key={code} value={code}>{country}</option>)}
       </select>
     </label>
