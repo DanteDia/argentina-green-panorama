@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fichaFromCaption, followRows, igPosts, mapImport, type GraphNodeImport } from "../import-map";
+import { fichaFromCaption, followRows, igPosts, mapImport, newDraftWorks, workOrigin, type GraphNodeImport } from "../import-map";
 
 const nodo: GraphNodeImport = {
   id: "n1", nombre: "Dante Arola", descripcion: "Dante Arola (Buenos Aires, 1993) vive y trabaja en Buenos Aires. Investiga el umbral entre materia y dato.",
@@ -104,3 +104,16 @@ describe("fichaFromCaption", () => {
   });
 });
 
+describe("re-importing", () => {
+  const post = { title: "A", image_url: "https://cdn/1.jpg?sig=1", source: "instagram.com/p/abc" };
+  const site = { title: "B", image_url: "https://site.com/b.jpg", source: "https://site.com/" };
+  it("identifies a work by its Instagram post or its image address, not by a signed CDN url that changes", () => {
+    expect(workOrigin(post)).toBe("ig:abc");
+    expect(workOrigin({ ...post, image_url: "https://cdn/1.jpg?sig=2" })).toBe("ig:abc");
+    expect(workOrigin(site)).toBe("url:https://site.com/b.jpg");
+  });
+  it("offers only what was not imported before", () => {
+    expect(newDraftWorks([post, site], ["ig:abc", "manual", null])).toEqual([site]);
+    expect(newDraftWorks([post, site], [])).toEqual([post, site]);
+  });
+});

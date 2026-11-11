@@ -5,7 +5,7 @@ import { slugify, upsertProfile } from "@/lib/arte/data";
 import { findGraphNode } from "@/lib/arte/graph-match";
 import { mergeProfile } from "@/lib/arte/guards";
 import { safeFetch } from "@/lib/arte/safe-fetch";
-import { cut, type DraftProfile } from "@/lib/arte/import-map";
+import { cut, newDraftWorks, workOrigin, type DraftProfile } from "@/lib/arte/import-map";
 import type { ArteProfile } from "@/lib/arte/types";
 
 const CV_SOURCES = new Set(["graph", "import"]);
@@ -33,9 +33,11 @@ export async function applyDraft(d: DraftProfile) {
   const nuevos = d.cv.filter((c) => !have.has(`${c.kind}|${c.title}`));
   if (nuevos.length) await supabase.from("arte_cv_items").insert(nuevos.map((c) => ({ user_id: user.id, kind: c.kind, title: c.title, org: c.org, year: c.year, source: CV_SOURCES.has(c.source) ? c.source : "import", confirmed: true })));
 
-  const { count } = await supabase.from("arte_works").select("id", { count: "exact", head: true }).eq("user_id", user.id);
+  const { data: mine } = await supabase.from("arte_works").select("source").eq("user_id", user.id);
+  const count = mine?.length ?? 0;
+  const fresh = newDraftWorks(d.works, (mine || []).map((w) => w.source));   // importing again never duplicates a work
   // downloads run together (each is capped at 15 s); rows are inserted in the order the artist saw them
-  const got = await Promise.all(d.works.slice(0, 12).map(async (w) => {
+  const got = await Promise.all(fresh.slice(0, 12).map(async (w) => {
     const r = await safeFetch(w.image_url, { maxBytes: 10 * 1024 * 1024, timeoutMs: 15000 });
     if (!r || !r.contentType.startsWith("image/")) return null;
     const path = `${user.id}/works/${crypto.randomUUID()}.${r.contentType.split("/")[1]?.split(";")[0] || "jpg"}`;
@@ -45,7 +47,7 @@ export async function applyDraft(d: DraftProfile) {
   const rows = got.filter((x) => x !== null).map(({ w, path }, i) => ({
     user_id: user.id, title: cut(w.title || "Obra sin título", 200), description: (w.description && cut(w.description, 1500)) || null,
     year: /^\d{4}$/.test(w.year ?? "") ? w.year : null, technique: (typeof w.technique === "string" && cut(w.technique, 200)) || null,
-    dimensions: (typeof w.dimensions === "string" && cut(w.dimensions, 100)) || null, images: [path], sort: (count ?? 0) + i, source: "import",
+    dimensions: (typeof w.dimensions === "string" && cut(w.dimensions, 100)) || null, images: [path], sort: count + i, source: workOrigin(w),
   }));
   if (rows.length) {
     const { error } = await supabase.from("arte_works").insert(rows);

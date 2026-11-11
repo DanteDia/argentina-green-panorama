@@ -51,7 +51,7 @@ export function inviteText(show: Show, guestName: string, artistName: string, ar
     show.note ?? "",
     show.link ?? "",
     "",
-    "Me encantaría que vengas.",
+    isPerson ? "Me encantaría que vengas." : "Me encantaría que vengan.",
     "",
     artistName,
     artistLink ?? "",

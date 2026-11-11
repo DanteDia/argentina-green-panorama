@@ -40,6 +40,8 @@ describe("inviteText", () => {
   it("greets an institution by its full name, a person by first name", () => {
     expect(inviteText(show, "Acéfala Galería", "Ana", null, false).body.startsWith("Hola, equipo de Acéfala Galería:")).toBe(true);
     expect(inviteText(show, "Lucía Pérez", "Ana", null, true).body.startsWith("Hola Lucía,")).toBe(true);
+    expect(inviteText(show, "Acéfala Galería", "Ana", null, false).body).toContain("Me encantaría que vengan.");
+    expect(inviteText(show, "Lucía Pérez", "Ana", null, true).body).toContain("Me encantaría que vengas.");
   });
 
   it("skips missing fields without leaving empty lines or separators", () => {
