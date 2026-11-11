@@ -15,21 +15,26 @@ export async function loadPrograms(supabase: SupabaseClient): Promise<Program[]>
   return (data as Program[]) || [];
 }
 
+// Kinds of node that can run a call. People, media and the artist's own programmes are not organisers.
+const SPACES = ["galeria", "museo", "institucion", "fundacion", "centro_cultural", "espacio", "escuela", "feria"];
+
 /** The artist's place in the scene map: artists who share their galleries/venues/programs (two hops through shared
  *  targets), and the names of the spaces they are linked to or follow. */
 export async function sceneOf(supabase: SupabaseClient, userId: string, nodeId: string | null): Promise<{ similar: Set<string>; names: Set<string> }> {
   const [{ data: mine }, { data: follows }] = await Promise.all([
     nodeId ? supabase.from("edges").select("target_id").eq("source_id", nodeId).limit(200) : Promise.resolve({ data: [] as { target_id: string }[] }),
-    supabase.from("arte_follows").select("node_id").eq("user_id", userId).not("node_id", "is", null).limit(600),
+    // the join spares a list of hundreds of ids in the URL
+    supabase.from("arte_follows").select("nodes(nombre, categoria)").eq("user_id", userId).not("node_id", "is", null).order("node_id").limit(600),
   ]);
-  const targets = (mine || []).map((e) => e.target_id);
-  const known = [...new Set([...targets, ...(follows || []).map((f) => f.node_id as string)])].slice(0, 600);
-  const [{ data: peers }, { data: nodes }] = await Promise.all([
+  const targets = (mine || []).map((e) => e.target_id);   // at most 200: the size the rest of this module sends in one .in()
+  const [{ data: peers }, { data: linked }] = await Promise.all([
     targets.length && nodeId ? supabase.from("edges").select("source_id").in("target_id", targets).neq("source_id", nodeId).limit(2000) : Promise.resolve({ data: [] as { source_id: string }[] }),
-    // artists are people, not organisers: only spaces can run a call
-    known.length ? supabase.from("nodes").select("nombre").in("id", known).neq("categoria", "artista").limit(600) : Promise.resolve({ data: [] as { nombre: string }[] }),
+    targets.length ? supabase.from("nodes").select("nombre, categoria").in("id", targets) : Promise.resolve({ data: [] as { nombre: string; categoria: string }[] }),
   ]);
-  return { similar: new Set((peers || []).map((e) => e.source_id)), names: new Set((nodes || []).map((n) => n.nombre).filter(Boolean)) };
+  type N = { nombre: string; categoria: string };
+  const followed = ((follows || []) as unknown as { nodes: N | N[] | null }[]).flatMap((f) => f.nodes ?? []);
+  const names = [...followed, ...((linked || []) as N[])].filter((n) => n.nombre && SPACES.includes(n.categoria)).map((n) => n.nombre);
+  return { similar: new Set((peers || []).map((e) => e.source_id)), names: new Set(names) };
 }
 
 export async function buildMatchContext(supabase: SupabaseClient, userId: string, studio: Studio, now = new Date()): Promise<MatchContext> {

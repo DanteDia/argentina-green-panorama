@@ -37,17 +37,21 @@ const artistWords = (ctx: MatchContext) => palabras([ctx.profile.mediums.join(" 
 /** True while the artist hasn't said enough about their work for theme matching: recommendations are generic until then. */
 export const needsStatement = (ctx: MatchContext) => artistWords(ctx).size < 4;
 
-const plain = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9ñ]+/g, " ").trim();
-// On their own these name no space: "Fundación" must not match every foundation
-const GENERIC = new Set("arte artes galeria fundacion museo centro cultural espacio instituto universidad residencia premio programa".split(" "));
+// What is left of a space's name once the words every space shares are gone: "Acéfala Galería" -> "acefala",
+// "Centro Cultural" -> "" (names nothing), "La Nación" -> "nacion".
+const FILLER = new Set(("arte artes galeria fundacion museo centro cultural espacio instituto universidad residencia premio programa asociacion "
+  + "de del la el los las y e en the of for and").split(" "));
+const spaceKey = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w && !FILLER.has(w)).join(" ");
 
-/** The organiser, when it is a space from the artist's CV, follows or scene map: its name appears whole in the organiser line. */
+/**
+ * The part of the organiser line that is a space from the artist's confirmed CV, follows or scene map, or null.
+ * The line is split into its organisers ("UNTREF / MUNTREF + Instituto Francés") and one of them must BE that space:
+ * a name merely contained in a longer one is someone else ("La Nación" is not "Secretaría de Cultura de la Nación").
+ */
 function knownOrganizer(ctx: MatchContext, organizer: string | null): string | null {
   if (!organizer) return null;
-  const org = ` ${plain(organizer)} `;
-  const names = [...ctx.cv.map((c) => c.org), ...(ctx.sceneNames ?? [])].filter((n): n is string => !!n);
-  const hit = names.some((n) => { const k = plain(n); return k.length >= 5 && !GENERIC.has(k) && org.includes(` ${k} `); });
-  return hit ? organizer : null;
+  const mine = new Set([...ctx.cv.filter((c) => c.confirmed).map((c) => c.org), ...(ctx.sceneNames ?? [])].map((n) => spaceKey(n || "")).filter((k) => k.length >= 4));
+  return organizer.split(/[/+,;()—–]|\s-\s/).map((part) => part.trim()).find((part) => mine.has(spaceKey(part))) ?? null;
 }
 
 export function effortDays(prog: Program): number {

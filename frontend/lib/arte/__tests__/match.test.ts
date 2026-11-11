@@ -83,6 +83,30 @@ describe("ranking", () => {
       expect(r.reasons.join(" ")).toMatch(/Acéfala Galería.*tu escena/);
     });
 
+    it("names only the organiser the artist knows, not the whole line", () => {
+      const braque = programa({ id: "b", organizer: "UNTREF / MUNTREF + Instituto Francés de Argentina" });
+      expect(scoreProgram(ctx({ sceneNames: new Set(["MUNTREF"]) }), braque).reasons.join(" ")).toContain("La organiza MUNTREF, que ya");
+    });
+
+    it("an unconfirmed CV line does not count", () => {
+      const cv = [{ id: "1", user_id: "u", kind: "group" as const, year: "2026", title: "x", org: "Acéfala Galería", city: null, country: null, link: null, source: "import" as const, confirmed: false }];
+      expect(scoreProgram(ctx({ cv }), manglar).score).toBe(base);
+    });
+
+    it("a name contained in a longer organiser is someone else", () => {
+      const cases: [string, string][] = [
+        ["La Nación", "Palais de Glace — Secretaría de Cultura de la Nación"],
+        ["Centro Cultural", "Centro Cultural Recoleta"],
+        ["Museo de Arte Moderno", "Museo de Arte Moderno de Bogotá"],
+        ["Buenos Aires", "Azcuy + Museo de Arte Moderno de Buenos Aires"],
+        ["Guggenheim", "John Simon Guggenheim Memorial Foundation"],
+      ];
+      for (const [known, organizer] of cases) {
+        const p = programa({ id: "x", organizer });
+        expect(scoreProgram(ctx({ sceneNames: new Set([known]) }), p).score, `${known} / ${organizer}`).toBe(scoreProgram(ctx(), p).score);
+      }
+    });
+
     it("a space they follow or are linked to in the scene map counts too, however the organiser line is written", () => {
       const braque = programa({ id: "b", organizer: "UNTREF / MUNTREF + Instituto Francés de Argentina" });
       expect(scoreProgram(ctx({ sceneNames: new Set(["MUNTREF"]) }), braque).score).toBe(scoreProgram(ctx(), braque).score + 10);
