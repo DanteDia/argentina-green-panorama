@@ -9,6 +9,7 @@ const ITEMS = [
   ["/arte/postulaciones", "Postulaciones"],
   ["/arte/perfil", "Perfil"],
   ["/arte/descubrir", "Descubrir"],
+  ["/arte/invitar", "Invitar"],
   ["/arte/mapa", "Mapa"],
 ] as const;
 
