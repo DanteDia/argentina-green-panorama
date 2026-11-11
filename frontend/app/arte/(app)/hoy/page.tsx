@@ -36,7 +36,7 @@ export default async function Hoy() {
           <div className="mt-3 space-y-3">{top.map((r) => <ProgramCard key={r.program.id} r={r} compact />)}</div>
         </section>
         <aside className="space-y-4">
-          <Meter score={c.score} missing={c.missing} />
+          <Meter score={c.score} todo={c.todo} />
           <div className="card p-5">
             <p className="eyebrow">Tus cierres</p>
             {(apps.data || []).length === 0 ? <p className="mt-2 text-sm muted">Todavía no empezaste ninguna postulación.</p> : (

@@ -15,7 +15,7 @@ export function ProfileTabs() {
   );
 }
 
-export function Meter({ score, missing }: { score: number; missing: string[] }) {
+export function Meter({ score, todo }: { score: number; todo: { label: string; href: string }[] }) {
   return (
     <div className="card p-5">
       <div className="flex items-baseline justify-between">
@@ -23,7 +23,17 @@ export function Meter({ score, missing }: { score: number; missing: string[] }) 
         <p className="display text-3xl">{score}%</p>
       </div>
       <div className="mt-3 h-1.5 rounded-full bg-[var(--paper-2)]"><div className="h-1.5 rounded-full bg-[var(--ink)]" style={{ width: `${score}%` }} /></div>
-      {missing.length > 0 && <p className="mt-3 text-sm text-[var(--ink-2)]">Siguiente: <span className="font-medium">{missing[0]}</span>{missing.length > 1 && <span className="muted"> · y {missing.length - 1} más</span>}</p>}
+      {todo.length > 0 && (
+        <p className="mt-3 text-sm text-[var(--ink-2)]">Siguiente: <Link href={todo[0].href} className="font-medium underline decoration-[var(--line)] underline-offset-4 hover:decoration-[var(--ink)]">{todo[0].label} →</Link></p>
+      )}
+      {todo.length > 1 && (
+        <details className="mt-2 text-sm">
+          <summary className="cursor-pointer muted">y {todo.length - 1} más</summary>
+          <ul className="mt-2 space-y-1">
+            {todo.slice(1).map((t) => <li key={t.label}><Link href={t.href} className="hover:underline">→ {t.label}</Link></li>)}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

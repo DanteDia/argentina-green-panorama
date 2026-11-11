@@ -37,4 +37,17 @@ describe("completeness", () => {
     const r = completeness({ ...base, name: "X" }, [obra(1)], [], { bio_short: { es: "Hola" } });
     expect(r.missing).toContain("bio corta en inglés");
   });
+
+  it("every missing item links to the place where you complete it", () => {
+    const r = completeness(base, [obra(1, { technique: null })], [], {});
+    expect(r.todo.map((t) => t.label)).toEqual(r.missing);
+    const href = (re: RegExp) => r.todo.find((t) => re.test(t.label))!.href;
+    expect(href(/^obras/)).toBe("/arte/perfil/obras");
+    expect(href(/fichas/)).toBe("/arte/perfil/obras");
+    expect(href(/^statement$/)).toBe("/arte/perfil#textos");
+    expect(href(/^bio corta$/)).toBe("/arte/perfil#textos");
+    expect(href(/^CV/)).toBe("/arte/perfil/cv");
+    expect(href(/^nombre$/)).toBe("/arte/perfil#datos");
+    expect(href(/disciplinas/)).toBe("/arte/perfil#datos");
+  });
 });
