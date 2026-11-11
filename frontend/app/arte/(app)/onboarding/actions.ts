@@ -34,14 +34,18 @@ export async function applyDraft(d: DraftProfile) {
   if (nuevos.length) await supabase.from("arte_cv_items").insert(nuevos.map((c) => ({ user_id: user.id, kind: c.kind, title: c.title, org: c.org, year: c.year, source: CV_SOURCES.has(c.source) ? c.source : "import", confirmed: true })));
 
   const { count } = await supabase.from("arte_works").select("id", { count: "exact", head: true }).eq("user_id", user.id);
-  let sort = count ?? 0;
-  for (const w of d.works.slice(0, 12)) {
+  // downloads run together (each is capped at 15 s); rows are inserted in the order the artist saw them
+  const got = await Promise.all(d.works.slice(0, 12).map(async (w) => {
     const r = await safeFetch(w.image_url, { maxBytes: 25 * 1024 * 1024, timeoutMs: 15000 });
-    if (!r || !r.contentType.startsWith("image/")) continue;
+    if (!r || !r.contentType.startsWith("image/")) return null;
     const path = `${user.id}/works/${crypto.randomUUID()}.${r.contentType.split("/")[1]?.split(";")[0] || "jpg"}`;
     const up = await supabase.storage.from("arte-private").upload(path, r.body, { contentType: r.contentType });
-    if (up.error) continue;
-    await supabase.from("arte_works").insert({ user_id: user.id, title: (w.title || "Obra sin título").slice(0, 200), images: [path], sort: sort++, source: "import" });
-  }
+    return up.error ? null : { w, path };
+  }));
+  const rows = got.filter((x) => x !== null).map(({ w, path }, i) => ({
+    user_id: user.id, title: (w.title || "Obra sin título").slice(0, 200), description: w.description?.slice(0, 1500) || null,
+    year: /^\d{4}$/.test(w.year ?? "") ? w.year : null, images: [path], sort: (count ?? 0) + i, source: "import",
+  }));
+  if (rows.length) await supabase.from("arte_works").insert(rows);
   revalidatePath("/arte", "layout");
 }

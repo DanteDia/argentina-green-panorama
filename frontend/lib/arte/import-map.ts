@@ -60,6 +60,16 @@ export function igPosts(items: unknown[]): IgPost[] {
   return out;
 }
 
+/** Rows for arte_follows: one per account. The API repeats accounts across pages, and a repeated key fails the whole upsert. */
+export function followRows(userId: string, follows: { username: string; full_name?: string }[], nodeByHandle: Map<string, string>) {
+  const seen = new Map<string, { user_id: string; handle: string; full_name: string | null; node_id: string | null }>();
+  for (const f of follows) {
+    const handle = f.username.toLowerCase();
+    if (!seen.has(handle)) seen.set(handle, { user_id: userId, handle, full_name: f.full_name ?? null, node_id: nodeByHandle.get(handle) ?? null });
+  }
+  return [...seen.values()];
+}
+
 /** A caption's first line as a work title: no leading emoji, no hashtags, not a paragraph. */
 function titleFromCaption(caption: string): string {
   const line = (caption.split("\n").find((l) => /\p{L}/u.test(l)) ?? "").replace(/#\S+/g, "").replace(/^[^\p{L}\p{N}"“¿¡]+/u, "").trim();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { igPosts, mapImport, type GraphNodeImport } from "../import-map";
+import { followRows, igPosts, mapImport, type GraphNodeImport } from "../import-map";
 
 const nodo: GraphNodeImport = {
   id: "n1", nombre: "Dante Arola", descripcion: "Dante Arola (Buenos Aires, 1993) vive y trabaja en Buenos Aires. Investiga el umbral entre materia y dato.",
@@ -67,3 +67,14 @@ describe("igPosts", () => {
     expect(posts).toEqual([{ code: "a", caption: "Hola", image: "mid", year: "2026" }, { code: "b", caption: "", image: "c1", year: null }]);
   });
 });
+
+describe("followRows", () => {
+  it("stores each followed account once (the API repeats accounts across pages, and one repeat used to lose the whole batch)", () => {
+    const rows = followRows("u1", [{ username: "Galeria.Uno", full_name: "Uno" }, { username: "galeria.uno" }, { username: "otra" }], new Map([["galeria.uno", "n1"]]));
+    expect(rows).toEqual([
+      { user_id: "u1", handle: "galeria.uno", full_name: "Uno", node_id: "n1" },
+      { user_id: "u1", handle: "otra", full_name: null, node_id: null },
+    ]);
+  });
+});
+

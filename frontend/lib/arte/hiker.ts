@@ -1,5 +1,5 @@
 import "server-only";
-import type { IgProfile } from "./import-map";
+import { igPosts, type IgPost, type IgProfile } from "./import-map";
 
 const BASE = "https://api.hikerapi.com";
 
@@ -39,4 +39,10 @@ export async function fetchIgFollowing(userId: string, max = 600): Promise<{ use
     cursor = d[1];
   }
   return out.slice(0, max);
+}
+
+/** The artist's most recent posts (one paid request): candidate works for the onboarding draft. */
+export async function fetchIgPosts(userId: string, max = 18): Promise<IgPost[]> {
+  const d = await hiker<{ response?: { items?: unknown[] } }>("/g2/user/medias", { user_id: userId });
+  return "error" in d ? [] : igPosts(d.response?.items ?? []).slice(0, max);
 }
