@@ -125,3 +125,19 @@ export async function addCvItems(items: CvDraftItem[]): Promise<number> {
   revalidatePath("/arte/perfil/cv");
   return rows.length;
 }
+
+/** Bulk upload: one work per image already uploaded to the artist's own folder. Titles come from the browser, so they are capped. */
+export async function addWorks(items: { path: string; title: string; year: string | null }[]): Promise<number> {
+  const { user, supabase } = await requireUser();
+  const mine = new Set(ownPaths(items.map((i) => String(i.path)), user.id));
+  const rows = items.filter((i) => mine.has(i.path)).slice(0, 30).map((i, k) => ({
+    user_id: user.id, title: String(i.title || "Obra sin título").slice(0, 200), year: /^(19|20)\d{2}$/.test(i.year ?? "") ? i.year : null,
+    images: [i.path], sort: (Date.now() + k) % 1e9,
+  }));
+  if (rows.length) {
+    const { error } = await supabase.from("arte_works").insert(rows);
+    if (error) throw new Error(error.message);
+  }
+  revalidatePath("/arte/perfil/obras");
+  return rows.length;
+}

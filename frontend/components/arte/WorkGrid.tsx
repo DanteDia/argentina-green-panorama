@@ -2,6 +2,7 @@
 import { useState, useTransition } from "react";
 import { deleteWork } from "@/app/arte/(app)/perfil/actions";
 import { WorkForm } from "./WorkForm";
+import { BulkWorks } from "./BulkWorks";
 import type { ArteWork } from "@/lib/arte/types";
 
 export function WorkGrid({ userId, works, previews }: { userId: string; works: ArteWork[]; previews: Record<string, string> }) {
@@ -10,11 +11,11 @@ export function WorkGrid({ userId, works, previews }: { userId: string; works: A
   const [pending, start] = useTransition();
   return (
     <div className="mt-6 space-y-6">
-      {editando === "nueva" ? (
-        <WorkForm userId={userId} onDone={() => setEditando(null)} />
-      ) : (
-        <button className="btn btn-primary" onClick={() => setEditando("nueva")}>+ Nueva obra</button>
-      )}
+      {editando === "nueva" && <WorkForm userId={userId} onDone={() => setEditando(null)} />}
+      <div className="flex flex-wrap items-center gap-3">
+        {editando !== "nueva" && <button className="btn btn-primary" onClick={() => setEditando("nueva")}>+ Nueva obra</button>}
+        <BulkWorks userId={userId} />
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {works.map((w) =>
           editando === w.id ? (
