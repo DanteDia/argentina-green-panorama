@@ -31,5 +31,6 @@ export async function POST(request: NextRequest) {
   // an artist who comes back (from Obras: "Traela de ahí") is only offered what they have not imported yet
   const { data: mine } = await supabase.from("arte_works").select("source").eq("user_id", auth.user.id);
   draft.works = newDraftWorks(draft.works, (mine || []).map((w) => w.source));
+  draft.returning = (mine || []).length > 0;
   return NextResponse.json(draft);
 }

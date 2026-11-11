@@ -1,12 +1,12 @@
 import Link from "next/link";
 
 const PILARES = [
-  { t: "Tu perfil se arma solo", d: "Pegás tu Instagram y tu web: traemos tus obras, tu trayectoria y a quién seguís. Pegás tu CV como lo tengas y lo ordenamos. El primer borrador de tu statement y tus bios lo escribimos nosotros." },
+  { t: "Tu perfil se arma solo", d: "Pegás tu Instagram y tu web: traemos tus obras, lo que ya se sabe de tu trayectoria y a quién seguís. Pegás tu CV como lo tengas y lo ordenamos. El primer borrador de tu statement y tus bios lo escribimos nosotros." },
   { t: "Convocatorias que te convienen", d: "Becas, residencias, premios y open calls de Argentina y del mundo: cuáles están abiertas hoy, cuáles conviene agendar y por qué cada una te sirve (o no)." },
   { t: "Dossiers listos en minutos", d: "Cargás tu obra, tu bio y tu CV una sola vez. Para cada convocatoria armamos la carta, elegimos las obras y te damos el PDF." },
   { t: "Nada se te pasa", d: "Plan de temporada, checklist por postulación con cada paso a un clic, y tus cierres de la semana apenas entrás." },
   { t: "Tu lugar en la escena", d: "Galerías, curadores y artistas afines a tu obra, sobre un mapa vivo de 300 galerías, 300 museos y 3.000 artistas." },
-  { t: "Invitá a tu muestra", d: "Te sugerimos a quién invitar de tu escena y dejamos cada invitación lista en tu mail o tu Instagram. Vos solo tocás enviar." },
+  { t: "Invitá a tu muestra", d: "Te sugerimos a quién invitar de tu escena y dejamos cada invitación escrita para tu mail o tu Instagram. La mandás vos." },
 ];
 
 export default function ArteLanding() {
