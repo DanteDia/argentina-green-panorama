@@ -76,20 +76,36 @@ database before the next programs sync against it (production: applied 2026-11-1
 The reading is a heuristic over listing text. Known misses: a waived fee for one group read as free for all; a grant
 described in German or French read as a fee; virtual programmes are skipped by title only.
 
-### Weekly run
+### Scheduled run (on the VPS)
 
-`escena-arte/semanal.sh` runs `fuentes.py` and `artealdia_calls.py` and then syncs programs to production; it is
-installed as the LaunchAgent `com.arte.convocatorias-semanal` on the owner's Mac (Mondays 09:17, or at the next wake;
-the plist is kept in `escena-arte/` and copied to `~/Library/LaunchAgents/`).
-It writes `escena-arte/logs/semanal-YYYY-MM-DD.log`. If `fuentes.py` exits with an error, or the calls with a deadline
-ahead drop by more than half, it restores `arte.db` and does not sync. It does not run `programas_curados.py` (hand-verified: run it
-after editing the list) nor `convocatorias_ig.py` (paid requests).
+The programs pipeline runs on the owner's VPS, not on a laptop: `personal-vps:/root/projects/escena-arte`, with its own
+copy of `arte.db` (the live one for programs), a Python venv in `.venv/`, and the production database URL in
+`/root/secrets/escena-arte.env` (root-only; never print it). Root's crontab runs `semanal.sh` on Mondays and Thursdays
+at 12:17 UTC (09:17 in Buenos Aires).
+
+`semanal.sh` reads Arte al Día and the listing sites (`fuentes.py`), then syncs programs to production. It writes
+`logs/semanal-YYYY-MM-DD.log`. If a reading exits with an error, or the calls with a deadline ahead drop by more than
+half, it restores `arte.db` and does not sync. It prunes its page cache after 75 days.
+
+| Task | Scheduled? | How it runs |
+| --- | --- | --- |
+| Listing sites + Arte al Día + sync | Yes, Mon and Thu | `semanal.sh` from cron |
+| Curated list (`programas_curados.py`) | No: hand-verified | Edit on the Mac, then `./deploy_vps.sh curados` |
+| Instagram open calls (`convocatorias_ig.py`) | No: paid requests, and the VPS has no `HIKERAPI_KEY` | `semanal.sh ig` once the key is in the secrets file |
+| City "Oportunidades" PDFs (`programas.py`) | No: no stable URL to fetch | Drop the PDF in `raw/` on the VPS and run `programas.py` there |
+| Scene graph and events (`--solo grafo`, `--solo eventos`) | No | Crawlers are run by hand on the Mac, whose `arte.db` holds the graph |
+
+The Mac keeps the code and an older `arte.db`. A marker file there (`PROGRAMAS_EN_VPS`) makes `sync_supabase.py`
+refuse to sync programs to a remote database, because a stale copy would delete the VPS's rows in production.
+Code changes go up with `./deploy_vps.sh` (rsync; it never copies the database).
 
 ```bash
-./semanal.sh --sin-sync                                   # read sources only
-launchctl list | grep convocatorias                       # is it installed?
-launchctl bootout gui/$(id -u)/com.arte.convocatorias-semanal   # stop it
+ssh personal-vps 'tail -20 /root/projects/escena-arte/logs/semanal-$(date +%F).log'   # last run
+ssh personal-vps '/root/projects/escena-arte/semanal.sh --sin-sync'                    # read sources only
+ssh personal-vps 'crontab -l | grep -A1 "# arte"'                                      # the schedule
 ```
+
+Nothing notifies anyone when a run fails: the log and the cards' "verificado" date are the only signals.
 
 ### The usual window (`window_text`)
 
