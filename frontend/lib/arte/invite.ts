@@ -18,28 +18,33 @@ export interface Candidate extends Affine { contact: Contact }
 const EMAIL = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;   // no separators: Gmail would split them into extra recipients
 const HANDLE = /^[a-z0-9._]{1,30}$/;
 
-export function contactOf(info: { email?: string | null; instagram?: string | null } | null | undefined): Contact {
-  const email = info?.email?.trim().toLowerCase() || "";
-  const handle = (info?.instagram ?? "").trim().toLowerCase()
-    .replace(/^(https?:\/\/)?(www\.)?instagram\.com\//, "").replace(/^@/, "").replace(/[/?#].*$/, "");
+export function contactOf(info: { email?: unknown; instagram?: unknown } | null | undefined): Contact {
+  const str = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase() : "");
+  const email = str(info?.email);
+  const handle = str(info?.instagram).replace(/^(https?:\/\/)?((www|m)\.)?instagram\.com\//, "").replace(/^@/, "");
   const okEmail = EMAIL.test(email) ? email : null;
-  const instagram = HANDLE.test(handle) ? handle : null;
+  // a bare handle only: "p/XYZ" (a post) or anything with a path is not an account
+  const instagram = HANDLE.test(handle.replace(/\/$/, "")) ? handle.replace(/\/$/, "") : null;
   return { channel: okEmail ? "email" : instagram ? "instagram" : null, email: okEmail, instagram };
 }
 
 /** Stable identity of an invitee: graph node, else email, else Instagram handle. */
 export function inviteKey(x: { nodeId?: string | null; email?: string | null; instagram?: string | null }): string {
   if (x.nodeId) return `node:${x.nodeId}`;
-  if (x.email) return `email:${x.email.trim().toLowerCase()}`;
-  return `ig:${(x.instagram ?? "").trim().replace(/^@/, "").toLowerCase()}`;
+  if (x.email?.trim()) return `email:${x.email.trim().toLowerCase()}`;
+  const ig = (x.instagram ?? "").trim().replace(/^@/, "").toLowerCase();
+  if (!ig) throw new Error("invite needs a node, an email or an Instagram handle");
+  return `ig:${ig}`;
 }
 
-export function inviteText(show: Show, guestName: string, artistName: string, artistLink: string | null): { subject: string; body: string } {
-  const first = guestName.trim().split(/\s+/)[0];
+/** isPerson=false (galleries, museums…) greets the team by the full name instead of a first name. */
+export function inviteText(show: Show, guestName: string, artistName: string, artistLink: string | null, isPerson = true): { subject: string; body: string } {
+  const name = guestName.trim();
+  const greeting = !name ? "Hola," : isPerson ? `Hola ${name.split(/\s+/)[0]},` : `Hola, equipo de ${name}:`;
   const subject = `Te invito a ${show.title}${show.when_text ? `, ${show.when_text}` : ""}`;
   const where = [show.when_text, show.address].filter(Boolean).join(" · ");
   const lines = [
-    first ? `Hola ${first},` : "Hola,",
+    greeting,
     "",
     `Te quiero invitar a ${show.title}${show.venue ? `, en ${show.venue}` : ""}.`,
     where,
@@ -71,6 +76,8 @@ export function inviteCandidates(
 ): Candidate[] {
   return groups.flat()
     .map((a) => ({ ...a, contact: contactOf(rows.get(a.nodeId)?.contact_info) }))
-    .filter((c) => c.contact.channel && !invited.has(inviteKey({ nodeId: c.nodeId })))
+    // also skip people first invited by hand under the same email or handle
+    .filter((c) => c.contact.channel && ![inviteKey({ nodeId: c.nodeId }), c.contact.email && inviteKey({ email: c.contact.email }),
+      c.contact.instagram && inviteKey({ instagram: c.contact.instagram })].some((k) => k && invited.has(k)))
     .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 }

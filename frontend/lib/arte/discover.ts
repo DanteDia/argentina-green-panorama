@@ -66,11 +66,11 @@ export function affinePeople(ctx: DiscoverCtx): Affine[] {
     let score = 0;
     const around = [...(nb.get(n.id) ?? [])];
     for (const v of around.filter((v) => mine.has(v) && VENUES.has(byId.get(v)?.kind ?? "")).slice(0, 2)) {
-      const x = byId.get(v)!; score += 20; reasons.push(`vinculada a ${KIND_LABEL[x.kind]} ${x.name}`);
+      const x = byId.get(v)!; score += 20; reasons.push(`vínculo con ${KIND_LABEL[x.kind]} ${x.name}`);
     }
     const artists = around.filter((a) => follows.has(a) && byId.get(a)?.kind === "artista").length;
-    if (artists) { score += 8 * artists; reasons.push(`conectada con ${artists} artista${artists > 1 ? "s" : ""} que seguís`); }
-    if (follows.has(n.id) && (score > 0 || FOLLOW_IS_ENOUGH.has(n.kind))) { score += 25; reasons.unshift("la seguís en Instagram"); }
+    if (artists) { score += 8 * artists; reasons.push(`conexión con ${artists} artista${artists > 1 ? "s" : ""} que seguís`); }
+    if (follows.has(n.id) && (score > 0 || FOLLOW_IS_ENOUGH.has(n.kind))) { score += 25; reasons.unshift("seguís a esta persona en Instagram"); }
     return { nodeId: n.id, name: n.name, kind: n.kind, reasons, score };
   }));
 }

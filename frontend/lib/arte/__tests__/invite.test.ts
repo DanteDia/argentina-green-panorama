@@ -19,6 +19,9 @@ describe("contactOf", () => {
     expect(contactOf({ email: "a,b@x.com" }).email).toBeNull();
     expect(contactOf({ instagram: "https://www.instagram.com/Galeria.Uno/" }).instagram).toBe("galeria.uno");
     expect(contactOf({ instagram: "no es un handle" })).toEqual({ channel: null, email: null, instagram: null });
+    expect(contactOf({ instagram: "https://m.instagram.com/galeria.uno" }).instagram).toBe("galeria.uno");
+    expect(contactOf({ instagram: "instagram.com/p/XYZ" }).instagram).toBeNull();
+    expect(contactOf({ email: ["a@b.com"] as unknown as string, instagram: 3 as unknown as string })).toEqual({ channel: null, email: null, instagram: null });
   });
 });
 
@@ -32,6 +35,11 @@ describe("inviteText", () => {
     expect(body).toContain("Es mi primera individual.");
     expect(body).toContain("https://acefala.example/muestra");
     expect(body.trim().endsWith("Dante Arola\nhttps://dantearola.com")).toBe(true);
+  });
+
+  it("greets an institution by its full name, a person by first name", () => {
+    expect(inviteText(show, "Acéfala Galería", "Ana", null, false).body.startsWith("Hola, equipo de Acéfala Galería:")).toBe(true);
+    expect(inviteText(show, "Lucía Pérez", "Ana", null, true).body.startsWith("Hola Lucía,")).toBe(true);
   });
 
   it("skips missing fields without leaving empty lines or separators", () => {
@@ -71,6 +79,15 @@ describe("inviteCandidates", () => {
     expect(out[0].contact.channel).toBe("email");
     const sent = inviteCandidates([[a("a1", "artista", 20)], [a("g1", "galeria", 30)]], rows, new Set([inviteKey({ nodeId: "g1" })]));
     expect(sent.map((c) => c.nodeId)).toEqual(["a1"]);
+  });
+
+  it("hides a graph guest already invited by hand under their email or handle", () => {
+    const out = inviteCandidates([[a("g1", "galeria", 30), a("a1", "artista", 20)]], rows, new Set([inviteKey({ email: "G1@x.com" }), inviteKey({ instagram: "@a1" })]));
+    expect(out).toEqual([]);
+  });
+
+  it("refuses to key a guest with no contact at all", () => {
+    expect(() => inviteKey({})).toThrow();
   });
 
   it("keys manual guests by email so the same person isn't invited twice", () => {

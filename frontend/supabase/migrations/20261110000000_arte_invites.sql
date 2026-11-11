@@ -11,6 +11,7 @@ create table if not exists arte_shows (
   note text,
   created_at timestamptz default now()
 );
+create index if not exists idx_arte_shows_user on arte_shows (user_id);
 
 create table if not exists arte_invites (
   id uuid primary key default gen_random_uuid(),

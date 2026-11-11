@@ -65,8 +65,8 @@ describe("affinePeople", () => {
   it("suggests collectors you follow and people tied to your spaces or to artists you follow", () => {
     const r = affinePeople(people(["c1", "p2", "a1"]));
     expect(r.map((x) => x.nodeId).sort()).toEqual(["c1", "p1", "p3"]);
-    expect(r.find((x) => x.nodeId === "p1")!.reasons).toContain("vinculada a galería Acéfala");
-    expect(r.find((x) => x.nodeId === "p3")!.reasons).toContain("conectada con 1 artista que seguís");
+    expect(r.find((x) => x.nodeId === "p1")!.reasons).toContain("vínculo con galería Acéfala");
+    expect(r.find((x) => x.nodeId === "p3")!.reasons).toContain("conexión con 1 artista que seguís");
   });
 
   it("never suggests a generic person only because you follow them", () => {
