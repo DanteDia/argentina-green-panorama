@@ -47,7 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const worksPerPage = d.limits.pages_max && 3 + works.length > d.limits.pages_max ? 2 : 1;
 
   const pdf = await renderToBuffer(DossierDocument({
-    name: studio.profile.name, city: studio.profile.base_city, contact: [studio.profile.email_public, studio.profile.website].filter(Boolean).join(" · "),
+    name: studio.profile.name, city: studio.profile.base_city, contact: [studio.profile.email_public, studio.profile.website, studio.profile.instagram && `@${studio.profile.instagram}`].filter(Boolean).join(" · "),
     program, letter: d.sections.letter, bio: d.sections.bio, statement: d.sections.statement, cv: d.sections.cv, works, template, worksPerPage,
   }));
   return new NextResponse(new Uint8Array(pdf), {

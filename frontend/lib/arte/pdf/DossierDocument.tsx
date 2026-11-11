@@ -28,6 +28,12 @@ export function DossierDocument(d: PdfData) {
   const st = styles(d.template);
   const footer = <View style={st.footer} fixed><Text>{d.name} · {d.program.name}</Text><Text render={({ pageNumber, totalPages }) => `${pageNumber} / ${totalPages}`} /></View>;
   const grupos = CV_KINDS.map(([k, l]) => [l, d.cv.filter((c) => c.kind === k)] as const).filter(([, xs]) => xs.length);
+  const textos = (
+    <View>
+      {d.statement ? <View><Text style={st.h2}>Statement</Text>{paras(d.statement, st)}</View> : null}
+      {d.bio ? <View style={{ marginTop: d.statement ? 20 : 0 }}><Text style={st.h2}>Biografía</Text>{paras(d.bio, st)}</View> : null}
+    </View>
+  );
   const pages: PdfWork[][] = [];
   for (let i = 0; i < d.works.length; i += d.worksPerPage) pages.push(d.works.slice(i, i + d.worksPerPage));
 
@@ -38,15 +44,11 @@ export function DossierDocument(d: PdfData) {
         <Text style={st.h1}>{d.name}</Text>
         <Text style={[st.muted, { marginTop: 6 }]}>{[d.city, d.contact].filter(Boolean).join(" · ")}</Text>
         {d.letter ? <View style={{ marginTop: 36 }}>{paras(d.letter, st)}</View> : null}
+        {/* without a letter the first page would be a name on an empty sheet: the texts open the dossier instead */}
+        {!d.letter && (d.statement || d.bio) ? <View style={{ marginTop: 36 }}>{textos}</View> : null}
         {footer}
       </Page>
-      {(d.statement || d.bio) && (
-        <Page size="A4" style={st.page}>
-          {d.statement ? <View><Text style={st.h2}>Statement</Text>{paras(d.statement, st)}</View> : null}
-          {d.bio ? <View style={{ marginTop: 20 }}><Text style={st.h2}>Biografía</Text>{paras(d.bio, st)}</View> : null}
-          {footer}
-        </Page>
-      )}
+      {d.letter && (d.statement || d.bio) ? <Page size="A4" style={st.page}>{textos}{footer}</Page> : null}
       {grupos.length > 0 && (
         <Page size="A4" style={st.page}>
           <Text style={st.h2}>CV</Text>
