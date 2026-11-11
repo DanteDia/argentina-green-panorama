@@ -23,7 +23,7 @@ Verifiable Industries — protocol for AI-discovered, on-chain-verified industry
 ## Tech Stack
 - **Frontend:** Next.js 16, React 19, Tailwind 4, react-force-graph-2d
 - **Backend:** Python FastAPI, OpenRouter API (key in backend/.env)
-- **Database:** Supabase (PostgreSQL)
+- **Database:** Supabase (PostgreSQL), project `iedjqmfbjegvlklslbtm` — provisioned through the **Vercel Marketplace** integration on the `darolas-projects` team (Vercel account aroladante). It is NOT in any standalone Supabase account: the Supabase CLI/MCP can't see it. See "Production database access" below.
 - **Blockchain:** GenLayer Studionet — contract at `0x57C566b552e528d86b230de35dbd847476f829c4`
 - **Deploy:** Vercel (frontend at green-panorama-ar.vercel.app)
 
@@ -60,6 +60,21 @@ Verifiable Industries — protocol for AI-discovered, on-chain-verified industry
 - `PITCH.md` — demo flow, full pitch, data model
 - `STRATEGY.md` — business, partnerships, monetization, action items
 - `MILESTONES.md` — chronological build log
+
+## Production database access
+- The Vercel project behind industriesverified.com is **`green-panorama-ar`** (`green-panorama` is the older green-panorama.vercel.app).
+- Vercel injects the Supabase credentials into that project (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `POSTGRES_URL_NON_POOLING`, …). Open the database from the Vercel dashboard: project → Storage → the Supabase store → "Open in Supabase" (SQL editor).
+- The Vercel MCP connector gets 403 on env vars and integrations; the Vercel CLI logged in as the owner can read them.
+- Apply a migration to production (run by the owner; never print or commit the URL):
+  ```bash
+  cd /tmp && rm -rf ivprod && mkdir ivprod && cd ivprod \
+    && vercel link --yes --scope darolas-projects --project green-panorama-ar \
+    && vercel env pull .env.prod --environment=production --yes \
+    && psql "$(grep '^POSTGRES_URL_NON_POOLING=' .env.prod | cut -d= -f2- | tr -d '"')" -v ON_ERROR_STOP=1 \
+         -f /Users/Macbook/artme/industriesverified/frontend/supabase/migrations/<file>.sql; \
+    cd /tmp && rm -rf ivprod
+  ```
+- Migrations in `frontend/supabase/migrations/` are written to be re-runnable; production does not run them automatically on deploy.
 
 ## Environment Variables
 - `backend/.env`: OPENROUTER_API_KEY, SUPABASE_URL, SUPABASE_KEY, SERPER_API_KEY (Google search for BD contacts)
