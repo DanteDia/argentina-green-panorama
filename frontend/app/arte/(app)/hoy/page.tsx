@@ -54,7 +54,7 @@ export default async function Hoy() {
                 ))}
               </ul>
             )}
-            {(apps.data || []).some((a) => a.due_at && a.due_at >= today) && <a href="/api/arte/calendario" className="mt-3 inline-block text-xs underline">Agregarlos a mi calendario (con avisos)</a>}
+            {(apps.data || []).some((a) => a.due_at && a.due_at >= today) && <a href="/api/arte/calendario" className="mt-3 inline-block text-xs underline">Agregarlos a mi calendario, con aviso una semana antes</a>}
           </div>
         </aside>
       </div>
