@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { affineArtists, affinePeople, affineVenues, yourVenues, type DiscoverCtx } from "../discover";
+import { affineArtists, affinePeople, affineVenues, sceneBlurb, yourVenues, type DiscoverCtx } from "../discover";
 import { perfil } from "./fixtures";
 
 const ctx = (o: Partial<DiscoverCtx> = {}): DiscoverCtx => ({
@@ -81,3 +81,19 @@ describe("yourVenues", () => {
     expect(r[0].reasons).toContain("ya trabajaste con esta galería");
   });
 });
+
+describe("sceneBlurb", () => {
+  it("prefers the person's own Instagram bio over scraped page text", () => {
+    expect(sceneBlurb("Menu Obra Bio Contacto", { ig_bio: "Artista visual\nBuenos Aires" })).toBe("Artista visual · Buenos Aires");
+  });
+  it("drops text that is site navigation, not a description", () => {
+    expect(sceneBlurb("bio – Mene Savasta Ir al contenido Bio / english version Mene Savasta works in sound art", null)).toBeNull();
+    expect(sceneBlurb("INMEDIACION | Nicolás Pontón ⟶ ⟶ Todo ARTEINFORMADO Exposiciones Premios", {})).toBeNull();
+    expect(sceneBlurb("Valeries Factory Artistas Exhibiciones Ferias Contacto Samantha Ferro Obra Biografía Statement", {})).toBeNull();
+  });
+  it("keeps a real sentence", () => {
+    const t = "Cursó estudios de Curaduría en la Universidad Nacional de las Artes y dirige La Escuelita.";
+    expect(sceneBlurb(t, {})).toBe(t);
+  });
+});
+

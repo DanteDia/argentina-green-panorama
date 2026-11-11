@@ -17,7 +17,14 @@ export interface Ranked { program: Program; score: number; reasons: string[]; ef
 // Weights (tunable): fit 40 (discipline 15, digital 10, themes 15) · strategic 40 (type for stage 15, tier 15, alumni 10) · timing 20
 const NO_VISUAL = /literatura|novela|poes[ií]a|m[uú]sica|danza|teatro|esc[eé]nic|dramaturg|coreograf|cine documental|guion/i;
 const DIGITAL = /digital|tecnolog|new media|nuevos medios|interactiv|c[oó]digo|software|algor|dato|data|\bia\b|inteligencia artificial|virtual|net\.?art|electr[oó]nic|bioarte|sonoro|instalaci/i;
-const STOP = new Set("para como sobre entre desde hasta donde cuando porque esta este estos estas tiene tienen artistas artista obra obras convocatoria programa abierta abierto arte artes visual visuales the and for with from that this".split(" "));
+// Words that say nothing about a practice: every call and every bio has them, in Spanish or English
+const STOP = new Set(("para como sobre entre desde hasta donde cuando porque esta este estos estas tiene tienen artistas artista obra obras convocatoria "
+  + "programa programas abierta abierto arte artes visual visuales the and for with from that this "
+  + "artist artists project projects proyecto proyectos trabajo trabajos practica practice world mundo international internacional nacional national "
+  + "argentina argentino argentinos buenos aires latin america latinoamerica platform plataforma development desarrollo event events evento eventos "
+  + "important importante across around through their there these those which while where about based years tambien traves mediante "
+  + "contemporary contemporaneo contemporanea residency residencia open call calls application applications deadline artistic artistica artistico "
+  + "connecting connect hosted program space espacio gallery galeria galleries research investigacion community comunidad support apoyo").split(" "));
 
 const palabras = (s: string) => new Set((s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").match(/[a-zñ]{5,}/g) || []).filter((w) => !STOP.has(w)));
 

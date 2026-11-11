@@ -76,3 +76,17 @@ describe("ranking", () => {
     expect(pesado).toBeGreaterThan(simple);
   });
 });
+
+describe("match reasons", () => {
+  it("never calls generic words (artists, project, Argentina, Buenos Aires) a connection with your work", () => {
+    const c = ctx({ profile: perfil({ mediums: [], themes: [] }), statement: "I am an artist based in Buenos Aires, Argentina. My projects connect artists across the world through an important platform and development events." });
+    const r = scoreProgram(c, programa({ name: "Residency for artists from Argentina", description: "A platform connecting artists and projects across the world, hosted in Buenos Aires. An important event for development." }));
+    expect(r.reasons.join(" ")).not.toMatch(/Conecta con tu obra/);
+  });
+
+  it("names the real overlap between your statement and the call", () => {
+    const r = scoreProgram(ctx(), programa({ description: "Convocatoria sobre identidad y verificación en la era de la máquina." }));
+    expect(r.reasons.join(" ")).toMatch(/Conecta con tu obra: .*identidad/);
+  });
+});
+

@@ -81,3 +81,13 @@ export function yourVenues(ctx: DiscoverCtx): Affine[] {
   return done([...mine].map((id) => byId.get(id)).filter((n): n is GNode => !!n && VENUES.has(n.kind))
     .map((n) => ({ nodeId: n.id, name: n.name, kind: n.kind, reasons: [`ya trabajaste con ${n.kind === "museo" || n.kind === "programa" ? "este" : "esta"} ${KIND_LABEL[n.kind]}`], score: 60 })));
 }
+
+const NAV = /ir al contenido|skip to content|⟶|arteinformado|\bmen[uú]\b|english version|\bcontacto\b.*\b(obra|bio|statement)\b|\b(exhibiciones|exposiciones)\b.*\b(ferias|premios|contacto)\b|\|/i;
+
+/** One line about a person or space for a card: their own Instagram bio first; scraped page text only when it reads as a sentence. */
+export function sceneBlurb(descripcion: string | null, contact: { ig_bio?: string } | null | undefined): string | null {
+  const bio = contact?.ig_bio?.split("\n").map((l) => l.replace(/^[^\p{L}\p{N}@#]+/u, "").trim()).filter(Boolean).join(" · ");
+  if (bio) return bio;
+  const d = descripcion?.trim();
+  return d && !NAV.test(d) ? d : null;
+}

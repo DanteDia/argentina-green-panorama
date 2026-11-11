@@ -3,19 +3,20 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/arte/supabase-server";
 import { loadStudio } from "@/lib/arte/data";
 import { loadDiscover } from "@/lib/arte/discover-data";
-import { affineArtists, affineVenues, type Affine } from "@/lib/arte/discover";
+import { affineArtists, affineVenues, sceneBlurb, type Affine } from "@/lib/arte/discover";
 
 const KIND: Record<string, string> = { galeria: "Galería", museo: "Museo", institucion: "Institución", fundacion: "Fundación", programa: "Programa", artista: "Artista" };
 
-function Lista({ items, rows }: { items: Affine[]; rows: Map<string, { link: string | null; descripcion: string | null }> }) {
+function Lista({ items, rows }: { items: Affine[]; rows: Map<string, { link: string | null; descripcion: string | null; contact_info?: { ig_bio?: string } | null }> }) {
   return (
     <ul className="mt-3 grid gap-3 md:grid-cols-2">
       {items.map((a) => {
         const r = rows.get(a.nodeId);
+        const blurb = sceneBlurb(r?.descripcion ?? null, r?.contact_info);
         const body = (
           <>
             <div className="flex items-baseline justify-between gap-3"><span className="display text-lg leading-snug">{a.name}</span><span className="shrink-0 text-xs muted">{KIND[a.kind] ?? a.kind}</span></div>
-            {r?.descripcion && <p className="mt-1 line-clamp-2 text-sm text-[var(--ink-2)]">{r.descripcion}</p>}
+            {blurb && <p className="mt-1 line-clamp-2 text-sm text-[var(--ink-2)]">{blurb}</p>}
             <ul className="mt-2 space-y-0.5 text-sm">{a.reasons.slice(0, 3).map((x) => <li key={x} className="flex gap-2"><span className="text-[var(--accent)]">→</span>{x}</li>)}</ul>
           </>
         );
