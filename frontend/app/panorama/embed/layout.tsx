@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "Green Panorama | Verifiable Industries",
+  title: "Green Panorama | IndustriesVerified",
   robots: { index: false, follow: false },
 };
 

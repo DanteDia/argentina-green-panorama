@@ -54,6 +54,10 @@
 .arte .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: .15rem .6rem; font-size: 12px; border: 1px solid var(--line); color: var(--ink-2); background: rgba(255, 255, 255, 0.55); }
 .arte .pill-accent { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
 .arte .muted { color: var(--ink-3); }
+  /* the top bar scrolls sideways on a phone: its edges fade so the hidden sections read as "more this way" */
+  .arte .arte-nav { scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 14px, #000 calc(100% - 28px), transparent); }
+  .arte .arte-nav::-webkit-scrollbar { display: none; }
+  @media (min-width: 1024px) { .arte .arte-nav { -webkit-mask-image: none; mask-image: none; } }
   /* phones: an opaque card instead of a blur on dozens of cards over a fixed background */
   @media (max-width: 767px) {
     .arte .card { background: rgba(250, 252, 250, 0.94); -webkit-backdrop-filter: none; backdrop-filter: none; }

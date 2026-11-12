@@ -65,7 +65,7 @@ export default function GraphCanvas({
   clusterColors,
   edgeColors,
   darkMode = false,
-  hideVerificationBadges = false,
+  hideVerificationBadges = true,   // GenLayer badges off on the site since 2026-11-12
   fitOnSettle = false,
   size,
   isMobile = false,
@@ -188,8 +188,8 @@ export default function GraphCanvas({
       const isNonParticipant = !node.isParticipant;
       ctx.beginPath();
       ctx.arc(node.x!, node.y!, size, 0, 2 * Math.PI);
-      ctx.fillStyle = node.isGrey ? "#4b5563" : color;
-      ctx.globalAlpha = node.isGrey ? 0.5 : isNonParticipant ? 0.35 : (isHovered ? 1 : 0.85);
+      ctx.fillStyle = node.isGrey && !hideVerificationBadges ? "#4b5563" : color;
+      ctx.globalAlpha = node.isGrey && !hideVerificationBadges ? 0.5 : isNonParticipant ? 0.35 : (isHovered ? 1 : 0.85);
       ctx.fill();
       ctx.globalAlpha = 1;
 

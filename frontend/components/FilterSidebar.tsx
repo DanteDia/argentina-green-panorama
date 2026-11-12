@@ -97,7 +97,7 @@ export default function FilterSidebar({
   hideActivityFeed = false,
   edgeTypesPresent,
   industries,
-  hideVerification = false,
+  hideVerification = true,   // GenLayer verification off on the site since 2026-11-12
 }: FilterSidebarProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const t = setTimeout(() => setMounted(true), 50); return () => clearTimeout(t); }, []);
@@ -238,7 +238,7 @@ export default function FilterSidebar({
         <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-3">
           {labels.stats}
         </h3>
-        <div className="grid grid-cols-3 gap-2">
+        <div className={`grid gap-2 ${hideVerification ? "grid-cols-2" : "grid-cols-3"}`}>
           <div className="text-center">
             <div className="text-xl font-bold text-[#1a1a1a]">{nodeCount}</div>
             <div className="text-xs text-zinc-500">{labels.nodes}</div>
@@ -247,10 +247,12 @@ export default function FilterSidebar({
             <div className="text-xl font-bold text-[#1a1a1a]">{edgeCount}</div>
             <div className="text-xs text-zinc-500">{labels.connections}</div>
           </div>
-          <div className="text-center">
-            <div className="text-xl font-bold text-[#3a9d6e]">{verifiedCount}</div>
-            <div className="text-xs text-zinc-500">{labels.verified}</div>
-          </div>
+          {!hideVerification && (
+            <div className="text-center">
+              <div className="text-xl font-bold text-[#3a9d6e]">{verifiedCount}</div>
+              <div className="text-xs text-zinc-500">{labels.verified}</div>
+            </div>
+          )}
         </div>
 
         {onBatchVerify && !hideVerification && (
