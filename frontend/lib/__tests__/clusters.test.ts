@@ -47,7 +47,7 @@ describe("the live map on the landing", () => {
 describe("landing copy", () => {
   // the owner's decision (2026-11-12): no on-chain or GenLayer claims on the landing
   const files = ["components/landing/HeroSection.tsx", "components/landing/HowItWorksSection.tsx", "components/landing/StatsSection.tsx",
-    "components/landing/FooterSection.tsx", "app/page.tsx", "app/layout.tsx", "lib/clusters.ts"];
+    "components/landing/FooterSection.tsx", "app/page.tsx", "app/layout.tsx", "lib/clusters.ts", "components/landing/PrototypeSection.tsx"];
   it.each(files)("%s makes no on-chain, blockchain-verification or GenLayer claim", (f) => {
     const text = readFileSync(path.resolve(__dirname, "../..", f), "utf8");
     expect(text).not.toMatch(/on-chain|genlayer|blockchain[- ]verif|verificaci[oó]n blockchain|consensus|consenso/i);

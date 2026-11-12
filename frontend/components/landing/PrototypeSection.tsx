@@ -58,7 +58,10 @@ export default function PrototypeSection({
         setEdges(data.edges);
         setActiveEdgeTypes(new Set(edgeTypesToShow(data.edges.map((e) => e.relationship_type), edgeFilter)));
       })
-      .catch(console.error)
+      .catch((e) => {
+        console.error(e);
+        if (current) { setNodes([]); setEdges([]); }   // never the previous cluster's map under this cluster's title
+      })
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
     // edgeFilter belongs to the chosen cluster, which scopeKey already identifies
@@ -408,6 +411,7 @@ export default function PrototypeSection({
               title={industries ? undefined : active?.name}
               subtitle={industries ? undefined : mapTitle}
               industries={scope}
+              hideVerification={!industries}
             />
           </div>
 

@@ -30,7 +30,8 @@ function PanoramaEmbedInner() {
 
   return (
     <div style={{ ...style, height: "100vh", overflow: "hidden" }}>
-      <PrototypeSection lang={lang} industries={industries} />
+      {/* a partner's embed is Green Panorama unless the snippet names other industries: never the landing's toggle */}
+      <PrototypeSection lang={lang} industries={industries ?? ["green"]} />
     </div>
   );
 }

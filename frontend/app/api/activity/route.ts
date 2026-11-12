@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
       .select("source_id, target_id, relationship_type, source, created_at")
       .gte("created_at", since)
       .order("created_at", { ascending: false })
-      .limit(industries.length ? 80 : 10);   // scoped: read more, keep the ten whose two ends are in the cluster
+      .limit(industries.length ? 30 : 10);   // scoped: read more, keep the ten whose two ends are in the cluster (60 ids keep the URL short)
 
     if (newEdges && newEdges.length > 0) {
       // Resolve node IDs to names

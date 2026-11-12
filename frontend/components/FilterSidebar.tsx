@@ -282,9 +282,11 @@ export default function FilterSidebar({
           <span className="text-xs text-zinc-600">{labels.agentStatus}</span>
         </div>
 
-        <div className="mt-2 text-xs text-zinc-600">
-          {labels.poweredBy}
-        </div>
+        {!hideVerification && (
+          <div className="mt-2 text-xs text-zinc-600">
+            {labels.poweredBy}
+          </div>
+        )}
       </div>
     </div>
   );

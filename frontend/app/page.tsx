@@ -65,7 +65,7 @@ export default function Home() {
 
       <HeroSection lang={lang} />
       {/* Clusters: every industry and event of the one map, rendered from lib/clusters.ts */}
-      <section id="clusters" className="bg-[#f5f3eb] py-20">
+      <section id="clusters" className="bg-[#f5f3eb] py-20 scroll-mt-20">
         <div className="max-w-5xl mx-auto px-6">
           <p className="text-xs uppercase tracking-[0.2em] text-[#1a6b4a]/60 font-medium mb-3">{bt.eyebrow}</p>
           <h2 className="font-serif text-3xl md:text-4xl text-[#1a1a1a] mb-10">{bt.title}</h2>
