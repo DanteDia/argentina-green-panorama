@@ -55,7 +55,7 @@ export default async function Oportunidades({ searchParams }: { searchParams: Pr
           {!ranked.length && <p className="card p-6 muted">No hay oportunidades con esos filtros.</p>}
         </div>
         {cierres.length > 0 && (
-          <aside aria-label="Cierres próximos" className="card-deep p-5 lg:sticky lg:top-24 lg:w-72 lg:shrink-0">
+          <aside aria-label="Cierres próximos" className="card-deep order-first p-5 lg:order-none lg:sticky lg:top-24 lg:w-72 lg:shrink-0">
             <h2 className="display text-xl">Cierres próximos</h2>
             <ul className="mt-3">
               {cierres.map((p) => (
