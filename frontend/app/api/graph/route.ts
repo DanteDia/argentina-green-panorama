@@ -6,12 +6,12 @@ import { scopeGraph } from "@/lib/graph-scope";
 // PostgREST returns at most 1,000 rows per request: read a table in pages, in parallel once its size is known.
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function readAll(table: string, scope: (q: any) => any): Promise<Row[]> {
+async function readAll(table: string, scope: (q: any) => any, columns = "*"): Promise<Row[]> {
   const PAGE = 1000;
   const { count, error } = await scope(supabase!.from(table).select("id", { count: "exact", head: true }));
   if (error) throw error;
   const pages = await Promise.all(Array.from({ length: Math.ceil((count ?? 0) / PAGE) }, (_, i) =>
-    scope(supabase!.from(table).select("*")).order("created_at", { ascending: true }).order("id").range(i * PAGE, i * PAGE + PAGE - 1)));
+    scope(supabase!.from(table).select(columns)).order("created_at", { ascending: true }).order("id").range(i * PAGE, i * PAGE + PAGE - 1)));
   const failed = pages.find((r: { error?: unknown }) => r.error);
   if (failed) throw failed.error;
   return pages.flatMap((r: { data?: unknown[] }) => (r.data || []) as Row[]);
@@ -31,9 +31,10 @@ export async function GET(request: NextRequest) {
     try {
       const scoped = industries && industries.length > 0;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const all = await readAll("nodes", (q: any) => (scoped ? q.overlaps("industries", industries) : q));
+      const nodesP = readAll("nodes", (q: any) => (scoped ? q.overlaps("industries", industries) : q));
       // every edge is read and scoped in JS: filtering with .in(...) on thousands of UUIDs overflows the URL
-      const allEdges = await readAll("edges", (q) => q);
+      // only what the map shows: the edge's description is an Instagram caption on many art-scene links, cut to 200 below
+      const [all, allEdges] = await Promise.all([nodesP, readAll("edges", (q) => q, "id, source_id, target_id, relationship_type, description, confidence, source, created_at")]);
       if (all) {
         const { nodes, edges } = scopeGraph(all as Array<{ id: string } & Row>, allEdges as Array<{ source_id: string; target_id: string } & Row>, max);
         return NextResponse.json({
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
             source_id: e.source_id,
             target_id: e.target_id,
             relationship_type: e.relationship_type,
-            description: e.description || "",
+            description: String(e.description || "").slice(0, 200),
             confidence: e.confidence || 1.0,
             source: e.source || "manual",
           })),
