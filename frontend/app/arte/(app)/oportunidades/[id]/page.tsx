@@ -46,7 +46,7 @@ export default async function Oportunidad({ params }: { params: Promise<{ id: st
         <h2 className="display text-xl">Por qué te la recomendamos</h2>
         {s.reasons.length > 0 && <ul className="mt-2 space-y-1 text-sm">{s.reasons.map((r) => <li key={r}>→ {r}</li>)}</ul>}
         {thin ? <StatementNotice className="mt-2 text-[var(--ink-2)]" /> : s.reasons.length === 0 && <p className="mt-2 text-sm muted">Podés aplicar, pero no encontramos una conexión particular con tu obra.</p>}
-        {!el.ok && <p className="mt-3 text-sm text-[var(--accent)]">No sos elegible: {el.reasons.join(" · ")}</p>}
+        {!el.ok && <p className="mt-3 text-sm text-[var(--warn)]">No sos elegible: {el.reasons.join(" · ")}</p>}
         {el.ok && el.reasons.length > 0 && <p className="mt-3 text-sm text-[var(--warn)]">{el.reasons.join(" · ")}</p>}
       </section>
 

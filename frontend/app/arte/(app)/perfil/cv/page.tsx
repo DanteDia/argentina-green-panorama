@@ -40,7 +40,7 @@ export default async function Cv() {
                   <li key={c.id} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
                     <span><span className="muted mr-3 tabular-nums">{c.year || "—"}</span><span className="font-medium">{c.title}</span>{c.org && c.org !== c.title && <span className="muted">, {c.org}</span>}{c.city && <span className="muted">, {c.city}</span>}
                       {c.source !== "manual" && <span className="pill ml-2">{c.source === "graph" ? "de la escena" : c.source === "application" ? "de una postulación" : "importado"}</span>}</span>
-                    <form action={deleteCvItem.bind(null, c.id)}><button className="muted hover:text-[var(--accent)]" aria-label="Borrar">×</button></form>
+                    <form action={deleteCvItem.bind(null, c.id)}><button className="muted hover:text-[var(--warn)]" aria-label="Borrar">×</button></form>
                   </li>
                 ))}
               </ul>

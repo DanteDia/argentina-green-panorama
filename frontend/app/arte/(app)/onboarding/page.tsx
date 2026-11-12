@@ -66,7 +66,7 @@ export default function Onboarding() {
         <button type="button" className="btn btn-ghost ml-2" onClick={() => setDraft({ profile: { name: nombre }, texts: {}, cv: [], works: [], graphNodeId: null, warnings: [], sources: [] })}>Prefiero cargarlo a mano</button>
       </form>
       {paso >= 0 && <ol className="mt-8 space-y-2 text-sm">{PASOS.map((p, i) => <li key={p} className={i <= paso ? "" : "muted"}>{i < paso ? "✓" : i === paso ? "…" : "·"} {p}</li>)}</ol>}
-      {error && <p className="mt-4 text-sm text-[var(--accent)]">{error}</p>}
+      {error && <p className="mt-4 text-sm text-[var(--warn)]">{error}</p>}
     </div>
   );
 
@@ -126,7 +126,7 @@ export default function Onboarding() {
         <button className="btn btn-primary" onClick={confirmar} disabled={pending || !draft.profile.name}>{pending ? "Guardando…" : "Confirmar y entrar"}</button>
         <button className="btn btn-ghost" onClick={() => setDraft(null)}>Volver</button>
       </div>
-      {error && <p className="mt-3 text-sm text-[var(--accent)]" role="alert">{error}</p>}
+      {error && <p className="mt-3 text-sm text-[var(--warn)]" role="alert">{error}</p>}
     </div>
   );
 }

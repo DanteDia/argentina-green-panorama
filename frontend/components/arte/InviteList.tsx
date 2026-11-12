@@ -29,7 +29,7 @@ function Send({ show, guest, from }: { show: Show; guest: Guest; from: { name: s
           {copied === "ok" ? "Copiado: pegalo en el DM" : "Copiar y abrir DM"}</a>
       )}
       <button type="button" className="btn btn-ghost !py-1.5" disabled={pending} onClick={done}>{pending ? "Guardando…" : "Ya la mandé"}</button>
-      {error && <span className="text-sm text-[var(--accent)]">No se pudo guardar, probá de nuevo.</span>}
+      {error && <span className="text-sm text-[var(--warn)]">No se pudo guardar, probá de nuevo.</span>}
       {copied === "fail" && <pre className="w-full whitespace-pre-wrap font-[inherit] text-sm text-[var(--ink-2)]">No se pudo copiar; copiá este texto:{"\n\n"}{body}</pre>}
     </div>
   );
@@ -71,7 +71,7 @@ function Undo({ id }: { id: string }) {
   const [error, setError] = useState(false);
   return (
     <span className="flex items-center gap-2">
-      {error && <span className="text-xs text-[var(--accent)]">No se pudo</span>}
+      {error && <span className="text-xs text-[var(--warn)]">No se pudo</span>}
       <button type="button" className="text-xs underline muted" disabled={pending}
         onClick={() => start(async () => { try { setError(false); await unmarkInvited(id); } catch { setError(true); } })}>{pending ? "…" : "Deshacer"}</button>
     </span>

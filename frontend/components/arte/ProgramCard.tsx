@@ -3,8 +3,8 @@ import type { Ranked } from "@/lib/arte/match";
 import { COST_LABEL } from "@/lib/arte/types";
 
 const TONO: Record<string, string> = {
-  abierta: "bg-[#e3ecdf] text-[var(--ok)]", "cierra hoy": "bg-[var(--accent-soft)] text-[var(--accent)]",
-  próxima: "bg-[#efe6d0] text-[var(--warn)]", recurrente: "bg-[var(--paper-2)] text-[var(--ink-2)]", cerrada: "bg-[var(--paper-2)] text-[var(--ink-3)]",
+  abierta: "bg-[var(--accent-soft)] text-[var(--ok)]", "cierra hoy": "bg-[var(--warn-soft)] text-[var(--warn)]",
+  próxima: "bg-[var(--warn-soft)] text-[var(--warn)]", recurrente: "bg-[var(--paper-2)] text-[var(--ink-2)]", cerrada: "bg-[var(--paper-2)] text-[var(--ink-3)]",
 };
 
 export function ProgramCard({ r, compact = false }: { r: Ranked; compact?: boolean }) {
@@ -29,7 +29,7 @@ export function ProgramCard({ r, compact = false }: { r: Ranked; compact?: boole
           <p className="text-[10px] uppercase tracking-wider muted">afinidad</p>
         </div>
       </div>
-      <p className={`mt-3 text-sm ${urgente ? "text-[var(--accent)] font-medium" : "text-[var(--ink-2)]"}`}>{r.state.text}</p>
+      <p className={`mt-3 text-sm ${urgente ? "text-[var(--warn)] font-medium" : "text-[var(--ink-2)]"}`}>{r.state.text}</p>
       {!compact && p.benefit && <p className="mt-1 line-clamp-2 text-sm text-[var(--ink-2)]">{p.benefit}</p>}
       <ul className="mt-3 space-y-1 text-sm">
         {r.reasons.slice(0, compact ? 2 : 3).map((x) => <li key={x} className="flex gap-2"><span className="text-[var(--accent)]">→</span><span>{x}</span></li>)}

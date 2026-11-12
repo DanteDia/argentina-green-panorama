@@ -59,6 +59,14 @@ export function nextWindow(text: string | null, today: string, lastClose?: strin
 /** The day an application is due: only an announced closing date still ahead, never a past edition's or an estimate. */
 export const dueDate = (p: Pick<Program, "closes_at">, today: string): string | null => (p.closes_at && p.closes_at >= today ? p.closes_at : null);
 
+/** The calls an artist can send today that close soonest: an announced closing date ahead, and already open. */
+export function upcomingDeadlines<P extends Pick<Program, "closes_at" | "opens_at">>(programs: P[], today: string, n: number): P[] {
+  return programs
+    .filter((p) => dueDate(p, today) && !(p.opens_at && p.opens_at > today))
+    .sort((a, b) => a.closes_at!.localeCompare(b.closes_at!))
+    .slice(0, n);
+}
+
 /** A recurring call near its usual window, or null when the window is unknown or still far. Never says it is open. */
 function nearWindow(p: Program, today: string, last: string | null): ProgramState | null {
   const w = nextWindow(p.window_text, today, last);
