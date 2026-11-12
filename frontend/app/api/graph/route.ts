@@ -10,11 +10,17 @@ async function readAll(table: string, scope: (q: any) => any, columns = "*"): Pr
   const PAGE = 1000;
   const { count, error } = await scope(supabase!.from(table).select("id", { count: "exact", head: true }));
   if (error) throw error;
-  const pages = await Promise.all(Array.from({ length: Math.ceil((count ?? 0) / PAGE) }, (_, i) =>
-    scope(supabase!.from(table).select(columns)).order("created_at", { ascending: true }).order("id").range(i * PAGE, i * PAGE + PAGE - 1)));
-  const failed = pages.find((r: { error?: unknown }) => r.error);
-  if (failed) throw failed.error;
-  return pages.flatMap((r: { data?: unknown[] }) => (r.data || []) as Row[]);
+  const page = async (i: number): Promise<Row[]> => {
+    for (let attempt = 0; ; attempt++) {   // a cold start can drop a request: one retry before giving up
+      const r = await scope(supabase!.from(table).select(columns)).order("created_at", { ascending: true }).order("id").range(i * PAGE, i * PAGE + PAGE - 1);
+      if (!r.error) return (r.data || []) as Row[];
+      if (attempt >= 1) throw r.error;
+    }
+  };
+  const out: Row[][] = [];
+  const n = Math.ceil((count ?? 0) / PAGE);
+  for (let i = 0; i < n; i += 6) out.push(...(await Promise.all(Array.from({ length: Math.min(6, n - i) }, (_, k) => page(i + k)))));   // six at a time
+  return out.flat();
 }
 
 export const dynamic = "force-dynamic";
