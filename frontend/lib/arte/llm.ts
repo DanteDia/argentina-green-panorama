@@ -2,8 +2,11 @@
 // to OpenRouter (OPENROUTER_API_KEY) as before. Returns null when there is no key or the call fails, so every caller has
 // a non-AI fallback.
 //
+import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 
+// The request below is written for Claude Opus 5.5 (effort, server-side fallback, no temperature): a model named here
+// has to accept the same parameters, or every draft comes back null with a 400 in the logs.
 const CLAUDE_MODEL = process.env.ARTE_CLAUDE_MODEL || "claude-opus-5-5";
 
 // Model ids get retired: the previous hard-coded one (google/gemini-2.0-flash-001) stopped existing and every draft
@@ -34,9 +37,10 @@ async function claude(prompt: string, opts: { system?: string; maxTokens?: numbe
     if (!text || r.stop_reason !== "end_turn") {
       console.error(`[arte/llm] ${r.model}: stop_reason=${r.stop_reason}, ${text ? "text cut short" : "no text"}`);
     }
-    return text;
+    // whatever text comes with a declined request is the refusal or a fragment, not a draft
+    return r.stop_reason === "refusal" ? null : text;
   } catch (e) {
-    console.error(e instanceof Anthropic.APIError ? `[arte/llm] Claude ${e.status}: ${e.message}` : `[arte/llm] request failed: ${e instanceof Error ? e.message : e}`);
+    console.error(e instanceof Anthropic.APIError ? `[arte/llm] Claude ${e.status ?? "no response"}: ${e.message}` : `[arte/llm] request failed: ${e instanceof Error ? e.message : e}`);
     return null;
   }
 }

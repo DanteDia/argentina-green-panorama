@@ -14,7 +14,9 @@ export function DossierEditor({ applicationId, initial, works, maxWorks }: { app
 
   const save = () => start(async () => { await saveDossier(applicationId, d); setSaved(JSON.stringify(d)); setNote("Guardado"); });
   const regen = () => start(async () => {
-    const r = await regenerateLetter(applicationId);
+    // the action can be cut by the platform's time limit: say so instead of breaking the page
+    const r = await regenerateLetter(applicationId).catch(() => null);
+    if (!r) { setNote(AI_ERROR.unavailable); return; }
     // at the daily AI cap a letter the artist already has is never replaced by the template
     if (r.capped && d.letter.trim()) { setNote(AI_ERROR.limit); return; }
     setD((x) => ({ ...x, letter: r.text }));

@@ -6,7 +6,7 @@ runs on the VPS, and its `arte.db` there is the only live working copy ("Schedul
 
 ```bash
 # on the VPS. semanal.sh loads the secrets file itself; a script run by hand needs it loaded first, or the sync
-# goes to a local database and the Instagram scripts have no key:
+# goes to a local database and the Instagram and Claude steps have no key:
 ssh personal-vps 'cd /root/projects/escena-arte && set -a && . /root/secrets/escena-arte.env && set +a \
   && .venv/bin/python3 sync_supabase.py --solo eventos'      # or grafo, programas; no --solo syncs all three
 # on a dev machine, against local Supabase (frontend/supabase, ports 544xx):
@@ -29,17 +29,19 @@ below); on any other machine they only feed that machine's local database:
 
 ```bash
 cd /root/projects/escena-arte      # on the VPS; use .venv/bin/python3 there
-python3 programas.py            # City of Buenos Aires monthly "Oportunidades" PDFs placed in raw/
-python3 programas_curados.py    # curated list L + OVERRIDES; rewrites every curated row
+python3 programas_curados.py    # curated list L + OVERRIDES; rewrites every curated row (by hand, after editing the list)
 python3 artealdia_calls.py      # Arte al Día news
 python3 fuentes.py              # listing sites with real deadlines (below)
-python3 convocatorias_ig.py     # open calls announced on Instagram; must run after programas_curados.py
+python3 verificar_curados.py    # Claude re-reads the curated programmes' pages; must run after programas_curados.py
+python3 oportunidades_pdf.py    # finds the city's monthly "Oportunidades" PDF and loads it with programas.py
+python3 convocatorias_ig.py     # open calls announced on Instagram; must run after programas_curados.py. Either
+                                # order with verificar_curados.py works: a deadline announced on Instagram is protected
 python3 sync_supabase.py --solo programas
 ```
 
 | Source | Script | What is kept |
 | --- | --- | --- |
-| Curated list | `programas_curados.py` | Reference programs, each with its official page and usual window (`ventana`). `OVERRIDES` holds dates read by hand from the official page or post. |
+| Curated list | `programas_curados.py` | Reference programs, each with its official page and usual window (`ventana`). `OVERRIDES` holds dates read by hand from the official page or post. Since 2026-11-11 `verificar_curados.py` re-reads the dates from the official pages on every run ("Steps that use Claude"). |
 | Res Artis open calls | `fuentes.py resartis` | Residencies whose "Fees and support" field says the artist is paid, pays nothing, or pays a low fee (see "What a residency costs"). |
 | Artist Communities Alliance | `fuentes.py aca` | Open calls whose listing says "Open to artists based anywhere in the world", ticks a visual discipline, and states a stipend, a zero fee or a low fee in its own number fields. |
 | Rivet | `fuentes.py rivet` | Calls with a deadline, housing and "residen…" in the text (the site also lists prizes and magazines), tagged "With Funding" or "Free / No Costs", or with a low program fee. |
@@ -91,6 +93,10 @@ HikerAPI key (`HIKERAPI_KEY`) and the Anthropic key (`ANTHROPIC_API_KEY`, see "S
 runs `semanal.sh ig` on Mondays and `semanal.sh` on Thursdays, both at 12:17 UTC (09:17 in Buenos Aires), and
 `vigia.sh` three hours later on both days.
 
+The pipeline's code lives in its own private repository, `DanteDia/escena-arte` (since 2026-11-11). It still reaches
+the VPS by rsync from a checkout (`./deploy_vps.sh`), not by a pull on the server, so what runs there is whatever was
+last deployed: deploy from `main`.
+
 | Task | Scheduled? | How it runs |
 | --- | --- | --- |
 | Listing sites + Arte al Día, sync programs | Yes, Mon and Thu | `semanal.sh` from cron |
@@ -123,9 +129,9 @@ Telegram) that says which of these happened:
 
 A step that uses Claude is an extra: when `verificar_curados.py` or `oportunidades_pdf.py` exits with an error (a
 rejected key, no credit, the API down), or the check of new accounts ran without Claude, the run goes on, syncs, and
-then sends a warning naming the step. After a
-synced run it also sends two kinds of notice (severity `info`): the deadlines that changed in the curated list, and,
-from the 15th, that the month's "Oportunidades" PDF has not appeared.
+then sends a warning naming the step. After a synced run, `semanal.sh` also sends two kinds of notice (severity
+`info`): the deadlines that changed in the curated list, and, from the 15th, that the month's "Oportunidades" PDF has
+not appeared.
 
 ### Steps that use Claude
 
@@ -148,7 +154,8 @@ All three call the Anthropic API through the official SDK (`ia.py`; model `claud
   pay for pages whose text changed. After five answers lost in a row the step stops with an error.
 - **City PDF** (`oportunidades_pdf.py`). It first tries the addresses past editions had
   (`static.buenosaires.gob.ar/sites/default/files/<upload month>/Oportunidades … .pdf`), which costs nothing. Only if
-  this month's edition is still missing on the 10th does Claude search the city's site for it. A file is downloaded
+  this month's edition is still missing from the 10th on does Claude search the city's site for it (the notice
+  about a missing edition starts on the 15th, and next month's edition is looked for from the 20th). A file is downloaded
   only from `buenosaires.gob.ar` and loaded only when its first two pages name that month and year. An edition counts
   as loaded when its file is in `raw/` and its entries are in `arte.db`; a file left behind by a restored run is
   loaded again.
@@ -183,7 +190,8 @@ Known limits:
   from the venues it was pinned on (`web.NO_IG`; the directory's own node keeps it, `DUENOS`) and the handles read by
   hand as someone else's (`IG_MAL`), with the artist links learned from that account's posts. Venue-to-venue links
   (`colabora_con`) from those posts are not removed, and a wrong handle in neither list is read as the venue's own.
-- Events are only the announcements that link at least one artist already in the map or named in the caption.
+- Events are only the announcements that link at least one artist: one already in the map, or one the run added
+  from that post.
 - If cron itself stops running, or the server is down, nothing alerts: `semanal.sh` and `vigia.sh` both live there.
 - The dated copies live on the same disk as the database.
 - Only the VPS folder can write to a remote database: `sync_supabase.py` refuses unless the file
@@ -196,8 +204,9 @@ Known limits:
 ```bash
 ssh personal-vps 'cd /root/projects/escena-arte/logs && tail -20 "$(ls -t semanal-*.log | head -1)"'   # last run
 ssh personal-vps '/root/projects/escena-arte/semanal.sh'              # Thursday's run now (listing sites, sync programs)
-ssh personal-vps '/root/projects/escena-arte/semanal.sh ig'           # Monday's run now (adds Instagram; paid requests)
-ssh personal-vps '/root/projects/escena-arte/semanal.sh --sin-sync'   # read sources only
+ssh personal-vps '/root/projects/escena-arte/semanal.sh ig'           # Monday's run now (adds Instagram; paid HikerAPI requests)
+ssh personal-vps '/root/projects/escena-arte/semanal.sh --sin-sync'   # read sources only, no sync
+# every one of these also runs the Claude steps, which are paid when a page changed or a new account appears
 ssh personal-vps 'crontab -l | grep escena-arte'                      # the schedule
 ```
 
@@ -227,9 +236,6 @@ the script trusts that:
 - `sync_supabase.py` cleans the headlines into program names (deletion of rows that left the pipeline: see the
   rules above).
 
-The pipeline's code lives in its own private repository, `DanteDia/escena-arte` (since 2026-11-11). It still reaches
-the VPS by rsync from a checkout (`./deploy_vps.sh`), not by a pull on the server, so what runs there is whatever was
-last deployed: deploy from `main`.
 
 ## Syncing production
 

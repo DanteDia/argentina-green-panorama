@@ -4,7 +4,7 @@ import { complete } from "../llm";
 // the SDK is replaced by a stub that records the request and answers what each test sets
 const claude = vi.hoisted(() => ({ create: vi.fn(), options: {} as Record<string, unknown> }));
 vi.mock("@anthropic-ai/sdk", () => {
-  class APIError extends Error { status: number; constructor(status: number, message: string) { super(message); this.status = status; } }
+  class APIError extends Error { status: number | undefined; constructor(status: number | undefined, message: string) { super(message); this.status = status; } }
   class Anthropic { static APIError = APIError; beta = { messages: { create: claude.create } }; constructor(o: Record<string, unknown>) { claude.options = o; } }
   return { default: Anthropic };
 });
@@ -27,6 +27,10 @@ describe("complete with an Anthropic key", () => {
     // this model always thinks before answering and that is billed against max_tokens: leave room on top of the text budget
     expect(req.max_tokens).toBeGreaterThanOrEqual(700 + 1500);
     expect(req.temperature).toBeUndefined();   // rejected by this model
+    // the model's default effort is higher: without "low" a long draft does not fit the time limit
+    expect(req.output_config).toEqual({ effort: "low" });
+    expect(req.fallbacks).toBe("default");
+    expect(req.betas).toContain("server-side-fallback-2026-07-01");
     expect(fetchSpy).not.toHaveBeenCalled();
     // a draft runs inside a serverless function with a time limit: one attempt, bounded
     expect(claude.options.maxRetries).toBe(0);
@@ -48,6 +52,22 @@ describe("complete with an Anthropic key", () => {
     claude.create.mockResolvedValue({ model: "claude-opus-5-5", stop_reason: "refusal", content: [] });
     expect(await complete("x")).toBeNull();
     expect(log.mock.calls.join(" ")).toMatch(/refusal/);
+  });
+
+  it("never hands a declined answer to the artist as their draft, even when it carries text", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "k");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    claude.create.mockResolvedValue({ model: "claude-opus-5-5", stop_reason: "refusal", content: [{ type: "text", text: "No puedo ayudar con eso." }] });
+    expect(await complete("x")).toBeNull();
+  });
+
+  it("logs a request that got no response (a timeout has no status)", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "k");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    claude.create.mockRejectedValue(new (Anthropic.APIError as unknown as new (s: number | undefined, m: string) => Error)(undefined, "Request timed out."));
+    expect(await complete("x")).toBeNull();
+    expect(log.mock.calls.join(" ")).toMatch(/Claude no response: Request timed out/);
   });
 });
 

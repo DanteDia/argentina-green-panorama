@@ -5,6 +5,9 @@ import { deleteCvItem, upsertCvItem } from "../actions";
 import { CV_KINDS as KINDS } from "@/lib/arte/cv";
 import { CvPaste } from "@/components/arte/CvPaste";
 
+// the AI drafts started from this page are server actions that wait up to 45 s for the model (lib/arte/llm.ts)
+export const maxDuration = 60;
+
 export default async function Cv() {
   const { user, supabase } = await requireUser();
   const { cv } = await loadStudio(supabase, user.id);

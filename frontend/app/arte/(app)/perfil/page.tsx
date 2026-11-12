@@ -7,6 +7,9 @@ import { TextEditor } from "@/components/arte/TextEditor";
 import { TagFields } from "@/components/arte/TagFields";
 import { saveProfile } from "./actions";
 
+// the AI drafts started from this page are server actions that wait up to 45 s for the model (lib/arte/llm.ts)
+export const maxDuration = 60;
+
 /** Country as a name; the value saved is the ISO code that calls use for eligibility. */
 function Pais({ label, name, def }: { label: string; name: string; def?: string | null }) {
   return (
