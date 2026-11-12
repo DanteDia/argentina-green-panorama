@@ -4,8 +4,9 @@ import seedData from "@/lib/seed_data.json";
 import { scopeGraph } from "@/lib/graph-scope";
 
 // PostgREST returns at most 1,000 rows per request: read a table in pages, in parallel once its size is known.
+type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function readAll(table: string, scope: (q: any) => any): Promise<Array<Record<string, any>>> {
+async function readAll(table: string, scope: (q: any) => any): Promise<Row[]> {
   const PAGE = 1000;
   const { count, error } = await scope(supabase!.from(table).select("id", { count: "exact", head: true }));
   if (error) throw error;
@@ -13,7 +14,7 @@ async function readAll(table: string, scope: (q: any) => any): Promise<Array<Rec
     scope(supabase!.from(table).select("*")).order("created_at", { ascending: true }).order("id").range(i * PAGE, i * PAGE + PAGE - 1)));
   const failed = pages.find((r: { error?: unknown }) => r.error);
   if (failed) throw failed.error;
-  return pages.flatMap((r: { data?: unknown[] }) => (r.data || []) as Array<Record<string, any>>);
+  return pages.flatMap((r: { data?: unknown[] }) => (r.data || []) as Row[]);
 }
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
       // every edge is read and scoped in JS: filtering with .in(...) on thousands of UUIDs overflows the URL
       const allEdges = await readAll("edges", (q) => q);
       if (all) {
-        const { nodes, edges } = scopeGraph(all as Array<{ id: string } & Record<string, any>>, allEdges as Array<{ source_id: string; target_id: string } & Record<string, any>>, max);
+        const { nodes, edges } = scopeGraph(all as Array<{ id: string } & Row>, allEdges as Array<{ source_id: string; target_id: string } & Row>, max);
         return NextResponse.json({
           nodes: nodes.map((n) => ({
             id: n.id,
