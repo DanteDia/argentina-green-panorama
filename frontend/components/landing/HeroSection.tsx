@@ -9,8 +9,8 @@ const HeroGlobe = dynamic(() => import("./HeroGraph"), { ssr: false });
 interface HeroSectionProps { lang?: "es" | "en"; }
 
 const t = {
-  es: { badge: "Prototipo en Vivo — Argentina", headline1: "Industrias,", headline2: "Verificadas.", subtitle: "Mapas de cada industria impulsados por IA. Cada actor, cada relacion, cada flujo de dinero — verificado on-chain.", cta: "Explorar Green Panorama", how: "Como Funciona", actors: "Actores mapeados", connections: "Conexiones", agents: "Agentes IA" },
-  en: { badge: "Live Prototype — Argentina", headline1: "Industries,", headline2: "Verified.", subtitle: "AI-powered maps of every industry. Every actor, every relationship, every money flow — verified on-chain.", cta: "Explore Green Panorama", how: "How It Works", actors: "Actors mapped", connections: "Connections", agents: "AI agents" },
+  es: { badge: "Prototipo en Vivo — Argentina", headline1: "Industrias,", headline2: "Verificadas.", subtitle: "Mapas de cada industria impulsados por IA. Cada actor, cada relación, cada flujo de dinero, con su fuente.", cta: "Explorar los mapas", how: "Como Funciona", actors: "Actores mapeados", connections: "Conexiones", agents: "Agentes IA" },
+  en: { badge: "Live Prototype — Argentina", headline1: "Industries,", headline2: "Verified.", subtitle: "AI-powered maps of every industry. Every actor, every relationship, every money flow, traced to its source.", cta: "Explore the maps", how: "How It Works", actors: "Actors mapped", connections: "Connections", agents: "AI agents" },
 };
 
 export default function HeroSection({ lang = "en" }: HeroSectionProps) {
@@ -23,8 +23,9 @@ export default function HeroSection({ lang = "en" }: HeroSectionProps) {
     fetchStats().then(setStats).catch(() => {});
   }, []);
 
+  // the clusters section lists every industry and event; Green Panorama's live map follows it
   const scrollToPrototype = () => {
-    document.getElementById("prototype")?.scrollIntoView({ behavior: "smooth" });
+    document.getElementById("clusters")?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (

@@ -28,7 +28,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "Verifiable Industries — Every Industry. Every Actor. Verified.",
   description:
-    "AI-powered, blockchain-verified maps of every industry. Explore actors, relationships, and money flows — verified on-chain through GenLayer consensus.",
+    "AI-powered maps of every industry. Explore actors, relationships and money flows, each traced to its source.",
 };
 
 export default function RootLayout({

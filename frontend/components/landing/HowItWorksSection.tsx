@@ -4,7 +4,7 @@ const t = {
     title: "Como Funciona",
     pillars: [
       { title: "Agentes de IA Investigadores", description: "Agentes autonomos descubren empresas, mapean relaciones y enriquecen datos las 24 horas. Nuevos actores y conexiones aparecen en tiempo real." },
-      { title: "Verificacion Blockchain", description: "Contratos inteligentes de GenLayer verifican cada dato. Multiples validadores de IA alcanzan consenso antes de marcar la informacion como confiable." },
+      { title: "Fuentes Trazables", description: "Cada actor y cada relación guarda la página o publicación de donde se leyó, para que cualquiera pueda comprobar de dónde sale un dato." },
       { title: "Mapa en Vivo", description: "Un grafo interactivo que crece cada dia. Hace preguntas en lenguaje natural. Explora conexiones. Confia en los datos." },
     ],
   },
@@ -13,7 +13,7 @@ const t = {
     title: "How It Works",
     pillars: [
       { title: "AI Research Agents", description: "Autonomous agents discover companies, map relationships, and enrich data around the clock. New actors and connections appear in real-time." },
-      { title: "Blockchain Verification", description: "GenLayer intelligent contracts verify every data point. Multiple AI validators reach consensus before marking information as trusted." },
+      { title: "Traceable Sources", description: "Every actor and every relationship keeps the page or post it was read from, so anyone can check where a claim comes from." },
       { title: "Living Map", description: "An interactive, queryable graph that grows every day. Ask questions in natural language. Explore connections. Trust the data." },
     ],
   },
