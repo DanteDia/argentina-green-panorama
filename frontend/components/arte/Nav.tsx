@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 const ITEMS = [
   ["/arte/hoy", "Hoy"],
@@ -15,8 +16,13 @@ const ITEMS = [
 
 export function Nav() {
   const path = usePathname();
+  const ref = useRef<HTMLElement>(null);
+  // on a phone the bar scrolls sideways: bring the current section into view, so the bar opens where the artist is
+  useEffect(() => {
+    ref.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [path]);
   return (
-    <nav className="flex min-w-0 gap-1 overflow-x-auto px-1 py-1" aria-label="Secciones">
+    <nav ref={ref} className="arte-nav flex min-w-0 gap-1 overflow-x-auto px-1 py-1" aria-label="Secciones">
       {ITEMS.map(([href, label]) => {
         const on = path === href || path.startsWith(href + "/");
         return (
