@@ -5,6 +5,7 @@ import { loadStudio } from "@/lib/arte/data";
 import { buildMatchContext, loadPrograms } from "@/lib/arte/context";
 import { matchesSearch, needsStatement, rankPrograms } from "@/lib/arte/match";
 import { ProgramCard } from "@/components/arte/ProgramCard";
+import { formatDay, todayAR, upcomingDeadlines } from "@/lib/arte/dates";
 
 const ESTADOS = [["", "Todas"], ["abierta", "Abiertas"], ["próxima", "Próximas"], ["recurrente", "Para agendar"]] as const;
 const TIPOS = ["Beca", "Residencia", "Premio", "Convocatoria", "Formación"];
@@ -20,6 +21,9 @@ export default async function Oportunidades({ searchParams }: { searchParams: Pr
   const part = (c: number, one: string, many: string) => (c ? `${c} ${c === 1 ? one : many}` : "");
   const resumen = [part(n(["abierta", "cierra hoy"]), "abierta ahora", "abiertas ahora"), part(n(["próxima"]), "por abrir", "por abrir"), part(n(["recurrente"]), "para agendar", "para agendar")].filter(Boolean).join(" · ");
   const total = ranked.length;
+  // what closes next among the 40 calls that fit this artist best, whatever filter is on (the soonest of all 400
+  // included a graphic-novel prize for a visual artist)
+  const cierres = upcomingDeadlines(ranked.slice(0, 40).map((r) => r.program), todayAR(ctx.now), 6);
   if (sp.estado) ranked = ranked.filter((r) => (sp.estado === "abierta" ? ["abierta", "cierra hoy"].includes(r.state.label) : r.state.label === sp.estado));
   if (sp.tipo) ranked = ranked.filter((r) => (r.program.type || "").toLowerCase().startsWith(sp.tipo!.toLowerCase().slice(0, 5)));
   if (sp.digital) ranked = ranked.filter((r) => r.program.digital_focus);
@@ -28,7 +32,7 @@ export default async function Oportunidades({ searchParams }: { searchParams: Pr
   const href = (k: string, v: string) => { const n = new URLSearchParams(sp as Record<string, string>); if (v) n.set(k, v); else n.delete(k); return `?${n}`; };
 
   return (
-    <div className="max-w-5xl">
+    <div>
       <p className="eyebrow">Oportunidades</p>
       <h1 className="display mt-2 text-4xl">A qué te conviene postularte</h1>
       <p className="mt-2 muted">{resumen ? `${resumen}. Ordenadas por afinidad con tu perfil; solo ves aquellas a las que podés aplicar.` : "Todavía no hay oportunidades para tu perfil."}{ranked.length !== total && ` Con estos filtros: ${ranked.length}.`}</p>
@@ -43,10 +47,27 @@ export default async function Oportunidades({ searchParams }: { searchParams: Pr
         <form className="ml-auto">{(["estado", "tipo", "digital", "costo"] as const).map((k) => sp[k] && <input key={k} type="hidden" name={k} value={sp[k]} />)}<input name="q" defaultValue={sp.q} placeholder="Buscar: país, espacio…" className="input !w-48 !py-1.5" aria-label="Buscar" /></form>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        {ranked.slice(0, 80).map((r) => <ProgramCard key={r.program.id} r={r} />)}
+      <div className="mt-6 flex flex-col gap-5 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1">
+          <div className="grid gap-4 md:grid-cols-2">
+            {ranked.slice(0, 80).map((r) => <ProgramCard key={r.program.id} r={r} />)}
+          </div>
+          {!ranked.length && <p className="card p-6 muted">No hay oportunidades con esos filtros.</p>}
+        </div>
+        {cierres.length > 0 && (
+          <aside aria-label="Cierres próximos" className="card-deep order-first p-5 lg:order-none lg:sticky lg:top-24 lg:w-72 lg:shrink-0">
+            <h2 className="display text-xl">Cierres próximos</h2>
+            <ul className="mt-3">
+              {cierres.map((p) => (
+                <li key={p.id} className="flex items-baseline gap-3 border-t border-white/20 py-2.5 text-sm">
+                  <span className="day w-14 shrink-0">{formatDay(p.closes_at!)}</span>
+                  <Link href={`/arte/oportunidades/${encodeURIComponent(p.id)}`}>{p.name}</Link>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        )}
       </div>
-      {!ranked.length && <p className="card mt-6 p-6 muted">No hay oportunidades con esos filtros.</p>}
     </div>
   );
 }

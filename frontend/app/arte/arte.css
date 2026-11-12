@@ -1,30 +1,65 @@
-/* Arte cluster tokens: IndustriesVerified's warm paper brand, tuned calmer for artists. */
+/* Arte cluster tokens. Direction C, "Esmerilado" (chosen by the owner on 2026-11-12): the landing's green on a sage
+   ground with the map's network behind it, frosted glass cards, a floating top bar. Everything in the tool reads these. */
 .arte {
-  --paper: #f5f3eb;
-  --paper-2: #ece8dc;
-  --card: #fbfaf6;
-  --ink: #1a1a1a;
-  --ink-2: #4a4740;
-  --ink-3: #8a857a;
-  --line: #ddd8ca;
-  --accent: #b4532a; /* terracotta: one accent, used sparingly */
-  --accent-soft: #f3e1d6;
-  --ok: #3f6b4a;
-  --warn: #a8741a;
+  --paper: #dfe9e1;
+  --paper-2: #cfdcd3;
+  --card: rgba(255, 255, 255, 0.68);
+  --ink: #17231c;
+  --ink-2: #3b4a41;
+  --ink-3: #4d5c52;
+  --line: rgba(23, 92, 65, 0.18);
+  --accent: #175c41; /* the landing's green, one step deeper so white text on it passes contrast */
+  --accent-soft: #d5ecdd;
+  --ok: #175c41;
+  --warn: #8a5208; /* urgency and "not yet": the only warm colour */
+  --warn-soft: #f1e6c8;
+  --glass-line: rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 12px 34px rgba(23, 92, 65, 0.1);
+  position: relative;
+  isolation: isolate;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
+/* the scene as a network, and a soft light from the top: behind everything, never scrolling, never clickable */
+.arte::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 38% at 50% -6%, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0) 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 900' preserveAspectRatio='xMidYMid slice'%3E%3Cg stroke='%231a6b4a' stroke-width='1.2' opacity='.17' fill='none'%3E%3Cpath d='M120 180 L360 90 L610 210 L880 120 L1130 230'/%3E%3Cpath d='M360 90 L420 380 L610 210 L760 470 L880 120'/%3E%3Cpath d='M120 180 L240 520 L420 380 L560 690 L760 470 L1010 640 L1130 230'/%3E%3Cpath d='M240 520 L330 800 L560 690 L820 830 L1010 640 L1200 800'/%3E%3C/g%3E%3Cg fill='%231a6b4a' opacity='.27'%3E%3Ccircle cx='120' cy='180' r='7'/%3E%3Ccircle cx='360' cy='90' r='10'/%3E%3Ccircle cx='610' cy='210' r='8'/%3E%3Ccircle cx='880' cy='120' r='12'/%3E%3Ccircle cx='1130' cy='230' r='7'/%3E%3Ccircle cx='420' cy='380' r='9'/%3E%3Ccircle cx='760' cy='470' r='11'/%3E%3Ccircle cx='240' cy='520' r='8'/%3E%3Ccircle cx='560' cy='690' r='10'/%3E%3Ccircle cx='1010' cy='640' r='9'/%3E%3Ccircle cx='330' cy='800' r='7'/%3E%3Ccircle cx='820' cy='830' r='8'/%3E%3Ccircle cx='1200' cy='800' r='6'/%3E%3C/g%3E%3C/svg%3E") center / cover no-repeat;
+}
+/* in a layer, so Tailwind utilities on an element (a selected pill, a state chip) override these defaults */
+@layer components {
 .arte .display { font-family: var(--font-serif), Georgia, serif; letter-spacing: -0.01em; }
-.arte .eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
-.arte .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.arte .eyebrow { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.arte .card { background: var(--card); border: 1px solid var(--glass-line); border-radius: 20px; box-shadow: var(--glass-shadow); -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3); }
+/* the one dark panel: what closes next */
+.arte .card-deep { background: rgba(23, 92, 65, 0.9); color: #f1f7f2; border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 20px; box-shadow: 0 16px 40px rgba(23, 92, 65, 0.25); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+.arte .card-deep .day { color: #c9f0d8; font-weight: 600; }
+.arte .card-deep a { color: inherit; }
+.arte .card-deep a:hover { text-decoration: underline; }
+/* the floating bar every page of the tool hangs from */
+.arte .topbar { background: rgba(255, 255, 255, 0.66); border: 1px solid var(--glass-line); border-radius: 28px; box-shadow: 0 10px 30px rgba(23, 92, 65, 0.12); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); }
 .arte .btn { display: inline-flex; align-items: center; gap: .5rem; border-radius: 999px; padding: .6rem 1.1rem; font-size: 14px; font-weight: 500; transition: background .15s, color .15s; }
-.arte .btn-primary { background: var(--ink); color: var(--paper); }
-.arte .btn-primary:hover { background: #000; }
-.arte .btn-ghost { border: 1px solid var(--line); color: var(--ink); }
-.arte .btn-ghost:hover { background: var(--paper-2); }
-.arte .input { width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .65rem .8rem; font-size: 14px; }
-.arte .input:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
-.arte .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: .15rem .6rem; font-size: 12px; border: 1px solid var(--line); color: var(--ink-2); }
+.arte .btn-primary { background: var(--accent); color: #fff; }
+.arte .btn-primary:hover { background: #0e3d2b; }
+.arte .btn-ghost { border: 1px solid rgba(23, 35, 28, 0.2); color: var(--ink); background: rgba(255, 255, 255, 0.45); }
+.arte .btn-ghost:hover { background: rgba(255, 255, 255, 0.8); }
+.arte .input { width: 100%; background: rgba(255, 255, 255, 0.86); border: 1px solid var(--line); border-radius: 12px; padding: .65rem .8rem; font-size: 14px; }
+.arte .input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.arte .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: .15rem .6rem; font-size: 12px; border: 1px solid var(--line); color: var(--ink-2); background: rgba(255, 255, 255, 0.55); }
 .arte .pill-accent { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
 .arte .muted { color: var(--ink-3); }
+  /* phones: an opaque card instead of a blur on dozens of cards over a fixed background */
+  @media (max-width: 767px) {
+    .arte .card { background: rgba(250, 252, 250, 0.94); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .arte .card, .arte .topbar { background: #f4f8f5; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .arte .card-deep { background: #175c41; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

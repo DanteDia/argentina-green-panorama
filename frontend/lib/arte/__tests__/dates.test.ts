@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dueDate, nextWindow, programState, todayAR } from "../dates";
+import { dueDate, nextWindow, programState, todayAR, upcomingDeadlines } from "../dates";
 import { programa } from "./fixtures";
 
 // 2026-11-15 10:00 in Buenos Aires (UTC-3) = 13:00 UTC
@@ -144,6 +144,22 @@ describe("nextWindow", () => {
     expect(nextWindow("anual; ~ene–mar", "2027-02-10", "2027-02-01")).toMatchObject({ opens: "2028-01-01", closes: "2028-03-28" });
     // also when the window is long enough to end more than 180 days after that closing
     expect(nextWindow("anual; ~mar–nov", "2026-06-01", "2026-03-15")).toMatchObject({ opens: "2027-03-01" });
+  });
+});
+
+describe("upcomingDeadlines", () => {
+  it("lists the calls an artist can still send, soonest first: open today, not yet-to-open, not past, not undated", () => {
+    const list = [
+      programa({ id: "utdt", name: "UTDT", closes_at: "2026-12-08" }),
+      programa({ id: "sur", name: "Bienal Sur", closes_at: "2026-11-30" }),
+      programa({ id: "yaddo", name: "Yaddo", opens_at: "2026-11-20", closes_at: "2026-12-20" }),   // opens later: nothing to send yet
+      programa({ id: "klemm", name: "Klemm", closes_at: "2026-09-04" }),                           // closed
+      programa({ id: "manta", name: "Manta", closes_at: null }),
+      programa({ id: "hoy", name: "Cierra hoy", closes_at: "2026-11-15" }),
+    ];
+    expect(upcomingDeadlines(list, "2026-11-15", 5).map((p) => p.id)).toEqual(["hoy", "sur", "utdt"]);
+    expect(upcomingDeadlines(list, "2026-11-15", 2).map((p) => p.id)).toEqual(["hoy", "sur"]);
+    expect(upcomingDeadlines(list, "2026-11-21", 5).map((p) => p.id)).toEqual(["sur", "utdt", "yaddo"]);   // once it has opened
   });
 });
 

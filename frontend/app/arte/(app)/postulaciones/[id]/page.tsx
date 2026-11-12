@@ -40,7 +40,7 @@ export default async function Postulacion({ params }: { params: Promise<{ id: st
       </div>
 
       <section className="mt-6"><h2 className="eyebrow">Notas</h2><div className="mt-2"><Notes id={id} initial={app.notes || ""} /></div></section>
-      <form action={deleteApplication.bind(null, id)} className="mt-8"><button className="text-sm muted hover:text-[var(--accent)]">Eliminar esta postulación</button></form>
+      <form action={deleteApplication.bind(null, id)} className="mt-8"><button className="text-sm muted hover:text-[var(--warn)]">Eliminar esta postulación</button></form>
     </div>
   );
 }

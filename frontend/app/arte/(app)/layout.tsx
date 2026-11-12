@@ -5,13 +5,15 @@ import { Nav } from "@/components/arte/Nav";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, profile } = await requireUser();
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[220px_1fr]">
-      <aside className="border-b md:border-b-0 md:border-r border-[var(--line)] px-5 py-5 md:min-h-screen">
-        <Link href="/arte/hoy" className="display text-xl">Arte</Link>
-        <p className="mt-1 text-xs muted truncate">{profile?.name || user.email}</p>
-        <Nav />
-      </aside>
-      <main className="px-5 py-6 md:px-10 md:py-10">{children}</main>
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-30 mx-auto max-w-6xl px-3 pt-3 md:px-6">
+        <div className="topbar flex items-center gap-2 py-1.5 pl-5 pr-2">
+          <Link href="/arte/hoy" className="display shrink-0 text-xl">Arte</Link>
+          <Nav />
+          <p className="ml-auto hidden max-w-[11rem] shrink-0 truncate pr-3 text-xs muted lg:block">{profile?.name || user.email}</p>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-5 py-6 md:px-8 md:py-8">{children}</main>
     </div>
   );
 }

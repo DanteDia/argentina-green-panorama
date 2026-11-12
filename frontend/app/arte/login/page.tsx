@@ -35,7 +35,7 @@ export default function Login() {
           <button className="btn btn-primary w-full justify-center" disabled={estado === "enviando"}>
             {estado === "enviando" ? "Enviando…" : "Enviarme el link"}
           </button>
-          {estado === "error" && <p className="text-sm text-[var(--accent)]">No pudimos enviar el link: {error}</p>}
+          {estado === "error" && <p className="text-sm text-[var(--warn)]">No pudimos enviar el link: {error}</p>}
         </form>
       )}
     </main>

@@ -36,7 +36,7 @@ export default async function Postulaciones() {
                       <p className="display leading-snug">{a.arte_programs?.name}</p>
                       <p className="mt-1 text-xs muted">{a.arte_programs?.organizer}</p>
                       <div className="mt-3 flex items-center justify-between text-xs">
-                        <span className={vence ? "font-medium text-[var(--accent)]" : "muted"}>{a.due_at ? `Cierra ${formatDay(a.due_at)}` : "Fecha a confirmar"}</span>
+                        <span className={vence ? "font-medium text-[var(--warn)]" : "muted"}>{a.due_at ? `Cierra ${formatDay(a.due_at)}` : "Fecha a confirmar"}</span>
                         {items.length > 0 && <span className="muted">{hechos}/{items.length}</span>}
                       </div>
                       {items.length > 0 && <div className="mt-2 h-1 rounded-full bg-[var(--paper-2)]"><div className="h-1 rounded-full bg-[var(--ink)]" style={{ width: `${(hechos / items.length) * 100}%` }} /></div>}
