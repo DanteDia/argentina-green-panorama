@@ -1,10 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import seedData from "@/lib/seed_data.json";
+import { scopeGraph } from "@/lib/graph-scope";
+
+// PostgREST returns at most 1,000 rows per request: read a table in pages, in parallel once its size is known.
+type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function readAll(table: string, scope: (q: any) => any, columns = "*"): Promise<Row[]> {
+  const PAGE = 1000;
+  const { count, error } = await scope(supabase!.from(table).select("id", { count: "exact", head: true }));
+  if (error) throw error;
+  const page = async (i: number): Promise<Row[]> => {
+    for (let attempt = 0; ; attempt++) {   // a cold start can drop a request: one retry before giving up
+      const r = await scope(supabase!.from(table).select(columns)).order("created_at", { ascending: true }).order("id").range(i * PAGE, i * PAGE + PAGE - 1);
+      if (!r.error) return (r.data || []) as Row[];
+      if (attempt >= 1) throw r.error;
+    }
+  };
+  const out: Row[][] = [];
+  const n = Math.ceil((count ?? 0) / PAGE);
+  for (let i = 0; i < n; i += 6) out.push(...(await Promise.all(Array.from({ length: Math.min(6, n - i) }, (_, k) => page(i + k)))));   // six at a time
+  return out.flat();
+}
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  // ?max=N keeps the N most connected nodes of a big cluster (lib/clusters.ts sets it per cluster)
+  // whole numbers 1-1000 only, and 1,000 when none is given: the whole database (6,600 nodes, 16,000 edges) is over the
+  // 4.5 MB a function may return, and every distinct value is a cache miss that costs ~25 database reads
+  const asked = Math.trunc(Number(request.nextUrl.searchParams.get("max")));
+  const max = asked >= 1 ? Math.min(asked, 1000) : 1000;
+  // ?types= draws (and ranks by) only these relationship types, so a node is not kept for links the map hides
+  const types = (request.nextUrl.searchParams.get("types") || "").split(",").map((t) => t.trim()).filter(Boolean);
   const industriesParam = request.nextUrl.searchParams.get("industries");
   const industries = industriesParam
     ? industriesParam.split(",").map((s) => s.trim()).filter(Boolean)
@@ -12,50 +40,15 @@ export async function GET(request: NextRequest) {
 
   if (supabase) {
     try {
-      let nodeQuery = supabase
-        .from("nodes")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .limit(2000);
-
-      if (industries && industries.length > 0) {
-        // Prefer array-overlap on `industries` when the column exists;
-        // fall back to equality on the legacy singular `industry` so the
-        // filter keeps working before the backfill migration lands.
-        const probe = await supabase.from("nodes").select("industries").limit(1);
-        const hasIndustriesColumn = !probe.error;
-
-        if (hasIndustriesColumn) {
-          nodeQuery = nodeQuery.overlaps("industries", industries);
-        } else {
-          nodeQuery = nodeQuery.in("industry", industries);
-        }
-      }
-
-      const { data: nodes, error: nodesErr } = await nodeQuery;
-
-      if (!nodesErr && nodes) {
-        // Always fetch all edges once — filtering via `.in(...)` with hundreds
-        // of UUIDs blows past PostgREST's URL limit and silently 414s.
-        // Scope in JS when an industries filter was applied.
-        const { data: allEdges, error: edgesErr } = await supabase
-          .from("edges")
-          .select("*")
-          .order("created_at", { ascending: true })
-          .limit(5000);
-
-        if (edgesErr) {
-          throw edgesErr;
-        }
-
-        let edges: Array<Record<string, unknown>> = allEdges || [];
-        if (industries && industries.length > 0) {
-          const nodeIdSet = new Set(nodes.map((n) => n.id));
-          edges = edges.filter(
-            (e) => nodeIdSet.has(e.source_id) && nodeIdSet.has(e.target_id)
-          );
-        }
-
+      const scoped = industries && industries.length > 0;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const nodesP = readAll("nodes", (q: any) => (scoped ? q.overlaps("industries", industries) : q));
+      // every edge is read and scoped in JS: filtering with .in(...) on thousands of UUIDs overflows the URL
+      // only what the map shows: the edge's description is an Instagram caption on many art-scene links, cut to 200 below
+      const [all, allEdges] = await Promise.all([nodesP, readAll("edges", (q) => q, "id, source_id, target_id, relationship_type, description, confidence, source, created_at")]);
+      if (all) {
+        const drawn = types.length ? allEdges.filter((e) => types.includes(String(e.relationship_type))) : allEdges;
+        const { nodes, edges } = scopeGraph(all as Array<{ id: string } & Row>, drawn as Array<{ source_id: string; target_id: string } & Row>, max);
         return NextResponse.json({
           nodes: nodes.map((n) => ({
             id: n.id,
@@ -83,11 +76,11 @@ export async function GET(request: NextRequest) {
             source_id: e.source_id,
             target_id: e.target_id,
             relationship_type: e.relationship_type,
-            description: e.description || "",
+            description: String(e.description || "").slice(0, 200),
             confidence: e.confidence || 1.0,
             source: e.source || "manual",
           })),
-        });
+        }, { headers: { "Cache-Control": "public, s-maxage=600, stale-while-revalidate=3600" } });   // the maps change weekly
       }
     } catch {
       // Fall through to seed data

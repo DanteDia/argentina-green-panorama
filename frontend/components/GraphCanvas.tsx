@@ -142,13 +142,22 @@ export default function GraphCanvas({
   }, [nodes, edges, selectedCluster, searchQuery, verificationStates, highlightedNodes, activeEdgeTypes]);
 
   // Node size based on connections + followers
+  // links per node, counted once: the art scene has 3,000 links, and counting them per node on every frame stalled it
+  const degree = useMemo(() => {
+    const d = new Map<string, number>();
+    for (const e of edges) {
+      d.set(e.source_id, (d.get(e.source_id) ?? 0) + 1);
+      d.set(e.target_id, (d.get(e.target_id) ?? 0) + 1);
+    }
+    return d;
+  }, [edges]);
+
   const getNodeSize = useCallback(
     (node: ForceNode) => {
-      const connections = edges.filter(
-        (e) => e.source_id === node.id || e.target_id === node.id
-      ).length;
+      const connections = degree.get(node.id) ?? 0;
       const followerBonus = node.followers ? Math.log10(node.followers + 1) : 0;
-      let size = Math.max(5, connections * 1.5 + followerBonus + 3);
+      // grows with the square root of its links and stops at 28: a gallery with 200 links was 300px and covered the map
+      let size = Math.min(28, Math.max(5, 3 * Math.sqrt(connections) + followerBonus + 3));
       // Sponsor tier bonus
       if (node.sponsorTier === "diamond") size *= 1.4;
       else if (node.sponsorTier === "titanium" || node.sponsorTier === "platinum") size *= 1.2;
@@ -156,7 +165,7 @@ export default function GraphCanvas({
       if (!node.isParticipant) size *= 0.55;
       return size;
     },
-    [edges]
+    [degree]
   );
 
   const paintNode = useCallback(

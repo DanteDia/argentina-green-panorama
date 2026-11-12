@@ -29,6 +29,7 @@ interface FilterSidebarProps {
   hideActivityFeed?: boolean;
   industries?: string[];   // passed on to the activity feed: the cluster this map is showing
   hideVerification?: boolean;
+  edgeTypesPresent?: Set<string>;   // the legend lists only these relationship types
 }
 
 const EDGE_TYPE_LABELS = {
@@ -94,6 +95,7 @@ export default function FilterSidebar({
   edgeColors,
   edgeLabelsOverride,
   hideActivityFeed = false,
+  edgeTypesPresent,
   industries,
   hideVerification = true,   // GenLayer verification off on the site since 2026-11-12
 }: FilterSidebarProps) {
@@ -196,7 +198,7 @@ export default function FilterSidebar({
             {labels.relationships}
           </h3>
           <div className="space-y-0.5">
-            {Object.entries(edgeColors ?? EDGE_COLORS).map(([type, color]) => (
+            {Object.entries(edgeColors ?? EDGE_COLORS).filter(([type]) => !edgeTypesPresent || edgeTypesPresent.has(type)).map(([type, color]) => (
               <button
                 key={type}
                 onClick={() => onToggleEdgeType(type)}

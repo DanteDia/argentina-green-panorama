@@ -51,7 +51,7 @@ export default function PrototypeSection({
 
   useEffect(() => {
     let current = true;   // a slow answer for the cluster the visitor already left must not replace the new one
-    fetchGraph(scopeKey ? scopeKey.split(",") : undefined)
+    fetchGraph(scopeKey ? scopeKey.split(",") : undefined, industries ? undefined : active?.maxNodes, industries ? undefined : active?.edgeFilter)
       .then((data) => {
         if (!current) return;
         setNodes(data.nodes);
@@ -410,6 +410,7 @@ export default function PrototypeSection({
               title={industries ? undefined : active?.name}
               subtitle={industries ? undefined : mapTitle}
               industries={scope}
+              edgeTypesPresent={new Set(edges.map((e) => e.relationship_type))}
             />
           </div>
 
