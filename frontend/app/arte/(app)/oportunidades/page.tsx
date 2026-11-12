@@ -21,8 +21,9 @@ export default async function Oportunidades({ searchParams }: { searchParams: Pr
   const part = (c: number, one: string, many: string) => (c ? `${c} ${c === 1 ? one : many}` : "");
   const resumen = [part(n(["abierta", "cierra hoy"]), "abierta ahora", "abiertas ahora"), part(n(["próxima"]), "por abrir", "por abrir"), part(n(["recurrente"]), "para agendar", "para agendar")].filter(Boolean).join(" · ");
   const total = ranked.length;
-  // what closes next among everything this artist can apply to, whatever filter is on
-  const cierres = upcomingDeadlines(ranked.map((r) => r.program), todayAR(ctx.now), 6);
+  // what closes next among the 40 calls that fit this artist best, whatever filter is on (the soonest of all 400
+  // included a graphic-novel prize for a visual artist)
+  const cierres = upcomingDeadlines(ranked.slice(0, 40).map((r) => r.program), todayAR(ctx.now), 6);
   if (sp.estado) ranked = ranked.filter((r) => (sp.estado === "abierta" ? ["abierta", "cierra hoy"].includes(r.state.label) : r.state.label === sp.estado));
   if (sp.tipo) ranked = ranked.filter((r) => (r.program.type || "").toLowerCase().startsWith(sp.tipo!.toLowerCase().slice(0, 5)));
   if (sp.digital) ranked = ranked.filter((r) => r.program.digital_focus);
