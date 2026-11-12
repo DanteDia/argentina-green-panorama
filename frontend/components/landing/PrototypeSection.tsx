@@ -320,7 +320,7 @@ export default function PrototypeSection({
     <section
       id="prototype"
       ref={sectionRef}
-      className="relative min-h-screen overflow-hidden bg-[#f5f3eb]"
+      className="relative min-h-screen overflow-hidden bg-[#f5f3eb] scroll-mt-12"
     >
       {loading ? (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -405,6 +405,8 @@ export default function PrototypeSection({
               }}
               activeEdgeTypes={activeEdgeTypes}
               onToggleEdgeType={edgeFilter ? handleToggleEdgeType : undefined}
+              title={industries ? undefined : active?.name}
+              subtitle={industries ? undefined : mapTitle}
               industries={scope}
             />
           </div>
