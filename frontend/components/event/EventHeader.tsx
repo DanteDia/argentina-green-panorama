@@ -38,12 +38,8 @@ export default function EventHeader({ eventName, eventDates, eventLocation, isMo
           <>
             <span className="text-white/50 text-xs">Powered by</span>
             <span className="text-white font-semibold text-xs">IndustriesVerified</span>
-            <span className="text-white/30">|</span>
           </>
         )}
-        <span className="text-emerald-400 text-xs">
-          {isMobile ? "GenLayer" : "Verified by GenLayer"}
-        </span>
       </div>
     </div>
   );

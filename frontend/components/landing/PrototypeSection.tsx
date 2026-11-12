@@ -399,7 +399,6 @@ export default function PrototypeSection({
               verifiedCount={verifiedCount}
               lang={lang}
               onLangToggle={() => {}}
-              onBatchVerify={handleBatchVerify}
               isBatchVerifying={isBatchVerifying}
               nodes={nodes}
               onSearchSelect={(node) => {
@@ -411,7 +410,6 @@ export default function PrototypeSection({
               title={industries ? undefined : active?.name}
               subtitle={industries ? undefined : mapTitle}
               industries={scope}
-              hideVerification={!industries}
             />
           </div>
 
