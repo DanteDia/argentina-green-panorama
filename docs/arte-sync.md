@@ -99,7 +99,7 @@ runs `semanal.sh ig` on Mondays and `semanal.sh` on Thursdays, both at 12:17 UTC
 | Dates of the curated list (`verificar_curados.py`) | Yes, Mon and Thu | Claude reads each programme's official pages and the row takes the opening day and deadline they state |
 | Entries of the curated list (`programas_curados.py`): which programmes, their address, benefit, usual window | No: chosen by hand | Edit it in a checkout of the pipeline repo, then `./deploy_vps.sh curados` |
 | City "Oportunidades" PDF (`oportunidades_pdf.py`, loaded by `programas.py`) | Yes, Mon and Thu | Looks for last month's and this month's edition (from the 20th, next month's) until each is loaded |
-| Did today's run end? (`vigia.sh`) | Yes, Mon and Thu, three hours after the run starts | Alerts when the day's log is missing, or its last run neither ended nor reported its own failure |
+| Did today's run end? (`vigia.sh`) | Yes, Mon and Thu, three hours after the run starts | Alerts when the day's log is missing, when its last run neither ended nor reported its own failure, or when that run's own alert was not delivered |
 | The crawlers that built the map (arteBA, Cancillería, Meridiano, Wikidata, venue websites, press, bios, artist profiles) | No: one-off passes, some of them paid | By hand on the VPS when the map needs widening, with the secrets loaded and no run in progress, then `calidad.py`; the next Monday run syncs the result |
 
 `semanal.sh` prints nothing: the result is in `logs/semanal-YYYY-MM-DD.log` (date in Buenos Aires time; same-day runs
@@ -122,34 +122,42 @@ Telegram) that says which of these happened:
 - **Another run was still going**: the new one does not start. If nobody launched one by hand, it is hung.
 
 A step that uses Claude is an extra: when `verificar_curados.py` or `oportunidades_pdf.py` exits with an error (a
-rejected key, no credit, the API down) the run goes on, syncs, and then sends a warning naming the step. After a
+rejected key, no credit, the API down), or the check of new accounts ran without Claude, the run goes on, syncs, and
+then sends a warning naming the step. After a
 synced run it also sends two kinds of notice (severity `info`): the deadlines that changed in the curated list, and,
 from the 15th, that the month's "Oportunidades" PDF has not appeared.
 
 ### Steps that use Claude
 
 All three call the Anthropic API through the official SDK (`ia.py`; model `claude-opus-5-5`, or the one named in
-`ARTE_MODELO`), and each run prints its token use and an estimated cost in the log.
+`ARTE_MODELO`), and each run prints its token use and an estimated cost in the log. What was already asked is kept in
+`raw/ia.db`, apart from `arte.db`, so a failed run that restores the database does not pay for the same answers again.
 
 - **Curated dates** (`verificar_curados.py`). For each curated programme it fetches the official page and up to four
   links of the same site that look like the call page, and asks what they state about the current or next call. The
-  answer is used only when the sentence it quotes is literally on a fetched page. It is dropped when a date does not
-  parse or is years away, when the call is restricted to people an artist living in Argentina cannot be, or when it
-  belongs to another programme of the same organiser. A deadline read by hand (`OVERRIDES` in `programas_curados.py`)
-  is never replaced by an older edition or by a page without dates, and a past deadline is kept when the page only
-  announces the next call. The row's description becomes "Leído en la página: …" with the quoted sentence. A page
-  that did not change since the last reading is not sent again (table `ia_curados` in `arte.db`); its last answer is
-  re-applied, which also restores the dates after a by-hand run of `programas_curados.py`. A full first reading of
-  the 65 programmes cost about USD 3 on 2026-11-11; later runs only pay for pages that changed.
+  answer is used only when the sentence it quotes is literally on a fetched page and contains the deadline's day
+  number. It is dropped when a date does not parse or is years away, when the call is restricted to people an artist
+  living in Argentina cannot be, or when it belongs to another programme of the same organiser. A deadline read by
+  hand (`OVERRIDES` in `programas_curados.py`) or announced on Instagram (`convocatorias_ig.py`) is never replaced by
+  an older edition or by a page without dates, and a hand-written note stays while its date does. A past deadline is
+  kept when the page only announces the next call; a future date that only the regexes of `programas_curados.py`
+  picked is dropped when the reading finds no date. The row's description becomes "Leído en la página: …" with the
+  quoted sentence. A page that did not change since the last reading is not sent again (`ia_curados` in
+  `raw/ia.db`); its last answer is re-applied, which also restores the dates after a by-hand run of
+  `programas_curados.py`. A full first reading of the 65 programmes cost about USD 3 on 2026-11-11; later runs only
+  pay for pages whose text changed. After five answers lost in a row the step stops with an error.
 - **City PDF** (`oportunidades_pdf.py`). It first tries the addresses past editions had
   (`static.buenosaires.gob.ar/sites/default/files/<upload month>/Oportunidades … .pdf`), which costs nothing. Only if
   this month's edition is still missing on the 10th does Claude search the city's site for it. A file is downloaded
-  only from `buenosaires.gob.ar` and loaded only when its first two pages name that month and year.
+  only from `buenosaires.gob.ar` and loaded only when its first two pages name that month and year. An edition counts
+  as loaded when its file is in `raw/` and its entries are in `arte.db`; a file left behind by a restored run is
+  loaded again.
 - **New artists** (`revisar` in `enrich.py`, weekly pass only). The accounts the pass meets for the first time are
   sent in batches with the caption they appeared in. An account already in the map under another name is linked
-  without asking; one judged not to be an artist is not asked about again for 90 days (table `ia_cuentas`). The log
-  lists who was approved and who was discarded. Without Claude (no key, an error) the pass does what it did before:
-  a caption that names someone adds them, a tag alone adds nobody. On 2026-11-11 it approved 97 of 403 new accounts.
+  without asking; an account judged in the last 90 days is not asked about again (`ia_cuentas` in `raw/ia.db`). The
+  log lists who was approved and who was discarded. Without Claude (no key, an error) the pass does what it did
+  before, a caption that names someone adds them and a tag alone adds nobody, and the run ends with a warning. On
+  2026-11-11 it approved 97 of 403 new accounts.
 
 The first run of each day also keeps a dated copy of the database, `logs/arte-YYYY-MM-DD.db`, deleted after 35 days by
 a later passing run, which also deletes cache files older than 75 days. To go back to one, with no run in progress:
