@@ -22,6 +22,7 @@ export interface Cluster {
   industries?: string[];   // the `industries` tag(s) of its nodes
   liveMap?: boolean;       // offered in the landing's live map toggle (needs `industries`, and a graph /api/graph can load whole)
   edgeFilter?: string[];   // relationship types the live map draws for this cluster; without it, every type it has
+  maxNodes?: number;       // a big cluster draws only its most connected nodes in the live map
   mapTitle: Copy;    // the live map's heading for this cluster
   since: string;     // YYYY-MM-DD it joined the map; the newest one is announced in the banner
 }
@@ -57,9 +58,11 @@ const INDUSTRIES: Cluster[] = [
     cta: { es: "Abrir Arte", en: "Open Arte" },
     stat: { es: "6.000+ actores", en: "6,000+ actors" },
     industries: ["arte"],
-    // not in the live map yet: /api/graph returns at most 1,000 nodes and reads edges unscoped, so for Arte's 6,000 actors
-    // and 13,000 links it gave the oldest 1,000 nodes (mostly media outlets) and no edges (measured 2026-11-12)
-    liveMap: false,
+    // 6,000 actors and 13,000 links: the live map draws the 500 most connected, and the relationships that shape a
+    // scene (who represents, shows, collects, awards whom), not tags in posts or press mentions
+    liveMap: true,
+    maxNodes: 500,
+    edgeFilter: ["representado_por", "expuso_en", "en_coleccion_de", "participo_en", "premiado_en", "organiza", "curo"],
     mapTitle: { es: "Escena del arte · Argentina", en: "Art scene · Argentina" },
     since: "2026-10-30",
   },

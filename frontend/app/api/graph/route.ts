@@ -1,10 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import seedData from "@/lib/seed_data.json";
+import { scopeGraph } from "@/lib/graph-scope";
+
+// PostgREST returns at most 1,000 rows per request: read a table in pages, in parallel once its size is known.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function readAll(table: string, scope: (q: any) => any): Promise<Array<Record<string, any>>> {
+  const PAGE = 1000;
+  const { count, error } = await scope(supabase!.from(table).select("id", { count: "exact", head: true }));
+  if (error) throw error;
+  const pages = await Promise.all(Array.from({ length: Math.ceil((count ?? 0) / PAGE) }, (_, i) =>
+    scope(supabase!.from(table).select("*")).order("created_at", { ascending: true }).order("id").range(i * PAGE, i * PAGE + PAGE - 1)));
+  const failed = pages.find((r: { error?: unknown }) => r.error);
+  if (failed) throw failed.error;
+  return pages.flatMap((r: { data?: unknown[] }) => (r.data || []) as Array<Record<string, any>>);
+}
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  // ?max=N keeps the N most connected nodes of a big cluster (lib/clusters.ts sets it per cluster)
+  const max = Number(request.nextUrl.searchParams.get("max")) || undefined;
   const industriesParam = request.nextUrl.searchParams.get("industries");
   const industries = industriesParam
     ? industriesParam.split(",").map((s) => s.trim()).filter(Boolean)
@@ -12,50 +28,13 @@ export async function GET(request: NextRequest) {
 
   if (supabase) {
     try {
-      let nodeQuery = supabase
-        .from("nodes")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .limit(2000);
-
-      if (industries && industries.length > 0) {
-        // Prefer array-overlap on `industries` when the column exists;
-        // fall back to equality on the legacy singular `industry` so the
-        // filter keeps working before the backfill migration lands.
-        const probe = await supabase.from("nodes").select("industries").limit(1);
-        const hasIndustriesColumn = !probe.error;
-
-        if (hasIndustriesColumn) {
-          nodeQuery = nodeQuery.overlaps("industries", industries);
-        } else {
-          nodeQuery = nodeQuery.in("industry", industries);
-        }
-      }
-
-      const { data: nodes, error: nodesErr } = await nodeQuery;
-
-      if (!nodesErr && nodes) {
-        // Always fetch all edges once — filtering via `.in(...)` with hundreds
-        // of UUIDs blows past PostgREST's URL limit and silently 414s.
-        // Scope in JS when an industries filter was applied.
-        const { data: allEdges, error: edgesErr } = await supabase
-          .from("edges")
-          .select("*")
-          .order("created_at", { ascending: true })
-          .limit(5000);
-
-        if (edgesErr) {
-          throw edgesErr;
-        }
-
-        let edges: Array<Record<string, unknown>> = allEdges || [];
-        if (industries && industries.length > 0) {
-          const nodeIdSet = new Set(nodes.map((n) => n.id));
-          edges = edges.filter(
-            (e) => nodeIdSet.has(e.source_id) && nodeIdSet.has(e.target_id)
-          );
-        }
-
+      const scoped = industries && industries.length > 0;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const all = await readAll("nodes", (q: any) => (scoped ? q.overlaps("industries", industries) : q));
+      // every edge is read and scoped in JS: filtering with .in(...) on thousands of UUIDs overflows the URL
+      const allEdges = await readAll("edges", (q) => q);
+      if (all) {
+        const { nodes, edges } = scopeGraph(all as Array<{ id: string } & Record<string, any>>, allEdges as Array<{ source_id: string; target_id: string } & Record<string, any>>, max);
         return NextResponse.json({
           nodes: nodes.map((n) => ({
             id: n.id,
@@ -87,7 +66,7 @@ export async function GET(request: NextRequest) {
             confidence: e.confidence || 1.0,
             source: e.source || "manual",
           })),
-        });
+        }, { headers: { "Cache-Control": "public, s-maxage=600, stale-while-revalidate=3600" } });   // the maps change weekly
       }
     } catch {
       // Fall through to seed data

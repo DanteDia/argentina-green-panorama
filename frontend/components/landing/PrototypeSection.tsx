@@ -51,7 +51,7 @@ export default function PrototypeSection({
 
   useEffect(() => {
     let current = true;   // a slow answer for the cluster the visitor already left must not replace the new one
-    fetchGraph(scopeKey ? scopeKey.split(",") : undefined)
+    fetchGraph(scopeKey ? scopeKey.split(",") : undefined, industries ? undefined : active?.maxNodes)
       .then((data) => {
         if (!current) return;
         setNodes(data.nodes);

@@ -114,6 +114,20 @@ export const CLUSTER_COLORS: Record<string, string> = {
   "Organismo Internacional": "#5db8b8",
   "Consultora": "#c47ea0",
   "Startup": "#7fb848",
+  // Arte (the art scene): spaces in greens and teals, people in warm tones
+  "Galerías": "#1f7a55",
+  "Museos": "#2f6f8f",
+  "Espacios independientes": "#5aa37a",
+  "Centros culturales": "#4f9aa8",
+  "Fundaciones": "#7f9a3a",
+  "Instituciones": "#6b7f99",
+  "Ferias y circuitos": "#a08a2e",
+  "Programas": "#8b7ec8",
+  "Artistas": "#d4915a",
+  "Curaduría": "#c47ea0",
+  "Coleccionistas": "#b5654a",
+  "Medios": "#9a9a8e",
+  "Personas": "#c2a27a",
 };
 
 // Edge colors by type
@@ -123,6 +137,14 @@ export const EDGE_COLORS: Record<string, string> = {
   client_of: "#d4915a",
   portfolio: "#8b7ec8",
   regulates: "#c75f5f",
+  // Arte
+  representado_por: "#1f7a55",
+  expuso_en: "#d4915a",
+  en_coleccion_de: "#2f6f8f",
+  participo_en: "#8b7ec8",
+  premiado_en: "#a08a2e",
+  organiza: "#6b7f99",
+  curo: "#c47ea0",
 };
 
 // Edge labels
@@ -132,6 +154,13 @@ export const EDGE_LABELS: Record<string, string> = {
   client_of: "Cliente",
   portfolio: "Portfolio",
   regulates: "Regula",
+  representado_por: "Representado por",
+  expuso_en: "Expuso en",
+  en_coleccion_de: "En la colección de",
+  participo_en: "Participó en",
+  premiado_en: "Premiado en",
+  organiza: "Organiza",
+  curo: "Curó",
 };
 
 export const CLUSTER_LABELS_ES: Record<string, string> = {
