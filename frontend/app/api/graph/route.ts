@@ -27,7 +27,12 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   // ?max=N keeps the N most connected nodes of a big cluster (lib/clusters.ts sets it per cluster)
-  const max = Number(request.nextUrl.searchParams.get("max")) || undefined;
+  // whole numbers 1-1000 only, and 1,000 when none is given: the whole database (6,600 nodes, 16,000 edges) is over the
+  // 4.5 MB a function may return, and every distinct value is a cache miss that costs ~25 database reads
+  const asked = Math.trunc(Number(request.nextUrl.searchParams.get("max")));
+  const max = asked >= 1 ? Math.min(asked, 1000) : 1000;
+  // ?types= draws (and ranks by) only these relationship types, so a node is not kept for links the map hides
+  const types = (request.nextUrl.searchParams.get("types") || "").split(",").map((t) => t.trim()).filter(Boolean);
   const industriesParam = request.nextUrl.searchParams.get("industries");
   const industries = industriesParam
     ? industriesParam.split(",").map((s) => s.trim()).filter(Boolean)
@@ -42,7 +47,8 @@ export async function GET(request: NextRequest) {
       // only what the map shows: the edge's description is an Instagram caption on many art-scene links, cut to 200 below
       const [all, allEdges] = await Promise.all([nodesP, readAll("edges", (q) => q, "id, source_id, target_id, relationship_type, description, confidence, source, created_at")]);
       if (all) {
-        const { nodes, edges } = scopeGraph(all as Array<{ id: string } & Row>, allEdges as Array<{ source_id: string; target_id: string } & Row>, max);
+        const drawn = types.length ? allEdges.filter((e) => types.includes(String(e.relationship_type))) : allEdges;
+        const { nodes, edges } = scopeGraph(all as Array<{ id: string } & Row>, drawn as Array<{ source_id: string; target_id: string } & Row>, max);
         return NextResponse.json({
           nodes: nodes.map((n) => ({
             id: n.id,

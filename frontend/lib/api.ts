@@ -4,11 +4,13 @@ import { GraphData, GraphStats } from "./types";
 // Falls back to external backend URL if set
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
-export async function fetchGraph(industries?: string[], max?: number): Promise<GraphData> {
+export async function fetchGraph(industries?: string[], max?: number, types?: string[]): Promise<GraphData> {
   const params = new URLSearchParams();
   if (industries && industries.length > 0) params.set("industries", industries.join(","));
   if (max) params.set("max", String(max));
-  const qs = params.size ? `?${params}` : "";
+  if (types && types.length > 0) params.set("types", types.join(","));
+  const s = params.toString();   // not params.size: Safari before 17 lacks it
+  const qs = s ? `?${s}` : "";
   const res = await fetch(`${API_URL}/api/graph${qs}`);
   if (!res.ok) throw new Error("Failed to fetch graph");
   return res.json();
