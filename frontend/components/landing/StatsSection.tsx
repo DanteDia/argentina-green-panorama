@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { fetchStats } from "@/lib/api";
+import { CLUSTERS } from "@/lib/clusters";
 
 function AnimatedCounter({ target, label, color = "text-[#1a6b4a]" }: { target: number; label: string; color?: string }) {
   const [count, setCount] = useState(0);
@@ -55,8 +56,8 @@ function AnimatedCounter({ target, label, color = "text-[#1a6b4a]" }: { target: 
 }
 
 const st = {
-  es: { badge: "Impacto en Tiempo Real", title: "Creciendo Autonomamente", actors: "Actores Descubiertos", connections: "Conexiones Mapeadas", verified: "Verificados On-Chain" },
-  en: { badge: "Real-Time Impact", title: "Growing Autonomously", actors: "Actors Discovered", connections: "Connections Mapped", verified: "Verified On-Chain" },
+  es: { badge: "Impacto en Tiempo Real", title: "Creciendo Autonomamente", actors: "Actores Descubiertos", connections: "Conexiones Mapeadas", clusters: "Industrias y Eventos" },
+  en: { badge: "Real-Time Impact", title: "Growing Autonomously", actors: "Actors Discovered", connections: "Connections Mapped", clusters: "Industries and Events" },
 };
 
 export default function StatsSection({ lang = "en" }: { lang?: "es" | "en" }) {
@@ -84,7 +85,7 @@ export default function StatsSection({ lang = "en" }: { lang?: "es" | "en" }) {
         <div className="grid grid-cols-3 gap-8">
           <AnimatedCounter target={stats.total_nodes} label={labels.actors} />
           <AnimatedCounter target={stats.total_edges} label={labels.connections} />
-          <AnimatedCounter target={stats.verified_nodes} label={labels.verified} />
+          <AnimatedCounter target={CLUSTERS.length} label={labels.clusters} />
         </div>
       </div>
     </section>

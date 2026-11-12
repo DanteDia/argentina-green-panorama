@@ -7,6 +7,9 @@ import NodeDetailPanel from "@/components/NodeDetailPanel";
 import AIChatPanel from "@/components/AIChatPanel";
 import { GreenNode, GreenEdge, NodeVerificationState } from "@/lib/types";
 import { fetchGraph } from "@/lib/api";
+import { edgeTypesToShow, mapClusters } from "@/lib/clusters";
+
+const GREEN_EDGE_TYPES = ["funds", "partners_with", "client_of", "portfolio", "regulates"];
 import { useIsMobile } from "@/hooks/useIsMobile";
 
 export default function PrototypeSection({
@@ -26,22 +29,44 @@ export default function PrototypeSection({
     Record<string, NodeVerificationState>
   >({});
   const [highlightedNodes, setHighlightedNodes] = useState<string[]>([]);
-  const [activeEdgeTypes, setActiveEdgeTypes] = useState<Set<string>>(
-    new Set(["funds", "partners_with", "client_of", "portfolio", "regulates"])
-  );
+  const [activeEdgeTypes, setActiveEdgeTypes] = useState<Set<string>>(new Set(GREEN_EDGE_TYPES));
+  // One cluster at a time. Every cluster shares the same tables, so without a scope the map mixed green companies,
+  // event sponsors and artists. A host that passes `industries` (the embed) fixes the scope and gets no toggle.
+  const choices = mapClusters();
+  const [clusterSlug, setClusterSlug] = useState(choices[0]?.slug);
+  const active = choices.find((c) => c.slug === clusterSlug) ?? choices[0];
+  const scope = industries ?? active?.industries;
+  const scopeKey = (scope || []).join(",");
+  const mapTitle = industries ? (choices.find((c) => c.industries.join(",") === scopeKey)?.mapTitle[lang] ?? "") : active?.mapTitle[lang] ?? "";
+  // a host-fixed scope (the embed) keeps the original relationship filter; a chosen cluster brings its own or none
+  const edgeFilter = industries ? GREEN_EDGE_TYPES : active?.edgeFilter;
+  const pickCluster = (slug: string) => {
+    if (slug === clusterSlug) return;
+    setLoading(true); setSelectedNode(null); setSelectedCluster(null); setSearchQuery(""); setHighlightedNodes([]);
+    setClusterSlug(slug);
+  };
   const sectionRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    fetchGraph(industries)
+    let current = true;   // a slow answer for the cluster the visitor already left must not replace the new one
+    fetchGraph(scopeKey ? scopeKey.split(",") : undefined)
       .then((data) => {
+        if (!current) return;
         setNodes(data.nodes);
         setEdges(data.edges);
+        setActiveEdgeTypes(new Set(edgeTypesToShow(data.edges.map((e) => e.relationship_type), edgeFilter)));
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [industries]);
+      .catch((e) => {
+        console.error(e);
+        if (current) { setNodes([]); setEdges([]); }   // never the previous cluster's map under this cluster's title
+      })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+    // edgeFilter belongs to the chosen cluster, which scopeKey already identifies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeKey]);
 
   const clusters = [...new Set(nodes.map((n) => n.cluster))].sort();
   const verifiedCount =
@@ -298,14 +323,14 @@ export default function PrototypeSection({
     <section
       id="prototype"
       ref={sectionRef}
-      className="relative min-h-screen overflow-hidden bg-[#f5f3eb]"
+      className="relative min-h-screen overflow-hidden bg-[#f5f3eb] scroll-mt-12"
     >
       {loading ? (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center">
             <div className="w-12 h-12 border-2 border-[#1a6b4a] border-t-transparent rounded-full animate-spin mx-auto" />
             <p className="text-[#1a6b4a] mt-4 text-sm">
-              {lang === "es" ? "Cargando ecosistema verde..." : "Loading green ecosystem..."}
+              {lang === "es" ? "Cargando el mapa..." : "Loading the map..."}
             </p>
           </div>
         </div>
@@ -328,7 +353,26 @@ export default function PrototypeSection({
               <span className="w-1.5 h-1.5 rounded-full bg-[#1a6b4a] animate-pulse" />
               Live Prototype
             </span>
-            <span className="text-sm text-zinc-500 hidden sm:inline">Green Industry &bull; Argentina</span>
+            {industries ? (
+              <span className="text-sm text-zinc-500 hidden sm:inline">{mapTitle}</span>
+            ) : (
+              <>
+                <div role="group" aria-label={lang === "es" ? "Elegir mapa" : "Choose a map"} className="flex items-center gap-1 overflow-x-auto">
+                  {choices.map((c) => (
+                    <button
+                      key={c.slug}
+                      type="button"
+                      aria-pressed={c.slug === active?.slug}
+                      onClick={() => pickCluster(c.slug)}
+                      className={`whitespace-nowrap text-xs font-medium px-3 py-1.5 rounded-full border transition ${c.slug === active?.slug ? "bg-[#1a6b4a] text-white border-[#1a6b4a]" : "bg-white/80 text-zinc-600 border-[#ddd8ce] hover:text-[#1a1a1a] hover:bg-white"}`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-sm text-zinc-500 hidden md:inline">{mapTitle}</span>
+              </>
+            )}
           </div>
 
           {/* Mobile sidebar backdrop */}
@@ -363,7 +407,11 @@ export default function PrototypeSection({
                 if (isMobile) setSidebarOpen(false);
               }}
               activeEdgeTypes={activeEdgeTypes}
-              onToggleEdgeType={handleToggleEdgeType}
+              onToggleEdgeType={edgeFilter ? handleToggleEdgeType : undefined}
+              title={industries ? undefined : active?.name}
+              subtitle={industries ? undefined : mapTitle}
+              industries={scope}
+              hideVerification={!industries}
             />
           </div>
 

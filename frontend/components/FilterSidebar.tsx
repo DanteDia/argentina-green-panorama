@@ -27,6 +27,7 @@ interface FilterSidebarProps {
   edgeColors?: Record<string, string>;
   edgeLabelsOverride?: Record<string, string>;
   hideActivityFeed?: boolean;
+  industries?: string[];   // passed on to the activity feed: the cluster this map is showing
   hideVerification?: boolean;
 }
 
@@ -93,6 +94,7 @@ export default function FilterSidebar({
   edgeColors,
   edgeLabelsOverride,
   hideActivityFeed = false,
+  industries,
   hideVerification = false,
 }: FilterSidebarProps) {
   const [mounted, setMounted] = useState(false);
@@ -221,6 +223,7 @@ export default function FilterSidebar({
       {!hideActivityFeed && (
         <ActivityFeed
           lang={lang}
+          industries={industries}
           onNodeClick={(name) => {
             const node = nodes.find((n) => n.nombre === name);
             if (node) onSearchSelect?.(node);
@@ -279,9 +282,11 @@ export default function FilterSidebar({
           <span className="text-xs text-zinc-600">{labels.agentStatus}</span>
         </div>
 
-        <div className="mt-2 text-xs text-zinc-600">
-          {labels.poweredBy}
-        </div>
+        {!hideVerification && (
+          <div className="mt-2 text-xs text-zinc-600">
+            {labels.poweredBy}
+          </div>
+        )}
       </div>
     </div>
   );
