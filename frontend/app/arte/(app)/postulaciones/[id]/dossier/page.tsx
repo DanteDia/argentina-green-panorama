@@ -7,6 +7,9 @@ import { DossierEditor } from "@/components/arte/DossierEditor";
 import type { Program } from "@/lib/arte/types";
 import type { DossierDraft } from "./actions";
 
+// the AI drafts started from this page are server actions that wait up to 45 s for the model (lib/arte/llm.ts)
+export const maxDuration = 60;
+
 export default async function DossierPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { user, supabase } = await requireUser();
