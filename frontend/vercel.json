@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/verify/cron?count=5",
-      "schedule": "0 0 * * *"
-    }
-  ]
-}

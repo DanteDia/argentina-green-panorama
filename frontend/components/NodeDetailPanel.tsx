@@ -3,7 +3,8 @@
 import { GreenNode, GreenEdge, CLUSTER_COLORS, EDGE_LABELS, NodeVerificationState } from "@/lib/types";
 
 /** Tiny dot showing per-field verification status */
-function FieldDot({ status }: { status: "verified" | "failed" | "unverified" }) {
+function FieldDot({ status, show }: { status: "verified" | "failed" | "unverified"; show: boolean }) {
+  if (!show) return null;
   if (status === "verified") return <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 ml-1.5" title="Verified on-chain" />;
   if (status === "failed") return <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500 ml-1.5" title="Verification failed" />;
   return <span className="inline-block w-1.5 h-1.5 rounded-full bg-zinc-300 ml-1.5" title="Not yet verified" />;
@@ -27,6 +28,7 @@ interface NodeDetailPanelProps {
   verificationState?: NodeVerificationState;
   onVerify?: (node: GreenNode) => void;
   onSocialAudit?: (node: GreenNode) => void;
+  showVerification?: boolean;
   isMobile?: boolean;
 }
 
@@ -141,8 +143,10 @@ export default function NodeDetailPanel({
   onVerify,
   onSocialAudit,
   isMobile = false,
+  showVerification = false,
 }: NodeDetailPanelProps) {
   const labels = t[lang];
+  // the GenLayer checks are off on the site since 2026-11-12 (owner's decision); the code stays for a later confidence score
   const clusterColor = CLUSTER_COLORS[node.cluster] || "#6b7280";
 
   const outgoing = edges.filter((e) => e.source_id === node.id);
@@ -177,7 +181,7 @@ export default function NodeDetailPanel({
               >
                 {node.cluster}
               </span>
-              <span className="text-xs text-zinc-600 flex items-center">{node.categoria}<FieldDot status={getFieldStatus(node.verification_details, "sector_relevant")} /></span>
+              <span className="text-xs text-zinc-600 flex items-center">{node.categoria}<FieldDot show={showVerification} status={getFieldStatus(node.verification_details, "sector_relevant")} /></span>
               {node.event_role && (
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
                   {node.event_sponsor_tier ? `${node.event_sponsor_tier.charAt(0).toUpperCase() + node.event_sponsor_tier.slice(1)} Sponsor` : node.event_role.charAt(0).toUpperCase() + node.event_role.slice(1)}
@@ -197,6 +201,7 @@ export default function NodeDetailPanel({
           </button>
         </div>
 
+        {showVerification && (<>
         {/* Verification badge */}
         <div className="mt-2">
           {isPending ? (
@@ -298,10 +303,12 @@ export default function NodeDetailPanel({
             </div>
           )}
         </div>
+        </>)}
       </div>
 
       {/* Content */}
       <div className="p-4 space-y-4">
+        {showVerification && (<>
         {/* Verification Results */}
         {verificationState?.result && !(verificationState.result as unknown as Record<string, unknown>).error && (
           <div className={`${isFailed ? "bg-amber-50 border-amber-800/50" : "bg-green-50 border-green-800/50"} border rounded-lg p-3 space-y-2`}>
@@ -385,13 +392,14 @@ export default function NodeDetailPanel({
             )}
           </div>
         )}
+        </>)}
 
         {/* Links */}
         {node.link && (
           <div>
             <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center">
               {labels.website}
-              <FieldDot status={getFieldStatus(node.verification_details, "exists")} />
+              <FieldDot show={showVerification} status={getFieldStatus(node.verification_details, "exists")} />
             </h3>
             <a
               href={node.link}
@@ -419,7 +427,7 @@ export default function NodeDetailPanel({
           <div>
             <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center">
               {labels.description}
-              <FieldDot status={getFieldStatus(node.verification_details, "description_accurate")} />
+              <FieldDot show={showVerification} status={getFieldStatus(node.verification_details, "description_accurate")} />
             </h3>
             <p className="text-zinc-700 text-sm">{node.descripcion}</p>
           </div>
@@ -430,7 +438,7 @@ export default function NodeDetailPanel({
           <div>
             <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center">
               {labels.funding}
-              <FieldDot status={getFieldStatus(node.verification_details, "funding_accurate")} />
+              <FieldDot show={showVerification} status={getFieldStatus(node.verification_details, "funding_accurate")} />
             </h3>
             <p className="text-zinc-700 text-sm">{node.quien_fondea}</p>
           </div>
@@ -441,7 +449,7 @@ export default function NodeDetailPanel({
           <div>
             <h3 className="text-xs font-semibold text-zinc-600 uppercase tracking-wider mb-1 flex items-center">
               {labels.partners}
-              <FieldDot status="unverified" />
+              <FieldDot show={showVerification} status="unverified" />
             </h3>
             <div className="flex flex-wrap gap-1.5">
               {node.aliados_portfolio.map((p) => (
@@ -489,7 +497,7 @@ export default function NodeDetailPanel({
                     style={{ backgroundColor: CLUSTER_COLORS[targetNode.cluster] || "#6b7280" }}
                   />
                   <span className="text-zinc-700 flex-1 truncate">{targetNode.nombre}</span>
-                  <FieldDot status={
+                  <FieldDot show={showVerification} status={
                     (node.verification_details?.relationships as Record<string, boolean> | undefined)?.[targetNode.nombre] === true ? "verified"
                     : (node.verification_details?.relationships as Record<string, boolean> | undefined)?.[targetNode.nombre] === false ? "failed"
                     : "unverified"
@@ -514,7 +522,7 @@ export default function NodeDetailPanel({
                     style={{ backgroundColor: CLUSTER_COLORS[sourceNode.cluster] || "#6b7280" }}
                   />
                   <span className="text-zinc-700 flex-1 truncate">{sourceNode.nombre}</span>
-                  <FieldDot status={
+                  <FieldDot show={showVerification} status={
                     (node.verification_details?.relationships as Record<string, boolean> | undefined)?.[sourceNode.nombre] === true ? "verified"
                     : (node.verification_details?.relationships as Record<string, boolean> | undefined)?.[sourceNode.nombre] === false ? "failed"
                     : "unverified"

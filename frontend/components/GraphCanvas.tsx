@@ -65,7 +65,7 @@ export default function GraphCanvas({
   clusterColors,
   edgeColors,
   darkMode = false,
-  hideVerificationBadges = false,
+  hideVerificationBadges = true,   // GenLayer badges off on the site since 2026-11-12
   fitOnSettle = false,
   size,
   isMobile = false,
