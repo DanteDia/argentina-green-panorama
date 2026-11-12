@@ -33,7 +33,7 @@ python3 programas_curados.py    # curated list L + OVERRIDES; rewrites every cur
 python3 artealdia_calls.py      # Arte al Día news
 python3 fuentes.py              # listing sites with real deadlines (below)
 python3 verificar_curados.py    # Claude re-reads the curated programmes' pages; must run after programas_curados.py
-python3 oportunidades_pdf.py    # finds the city's monthly "Oportunidades" PDF and loads it with programas.py
+python3 oportunidades_pdf.py    # finds the city's monthly "Oportunidades" PDF at its known addresses, loads it with programas.py
 python3 convocatorias_ig.py     # open calls announced on Instagram; must run after programas_curados.py. Either
                                 # order with verificar_curados.py works: a deadline announced on Instagram is protected
 python3 sync_supabase.py --solo programas
@@ -127,44 +127,68 @@ Telegram) that says which of these happened:
   committed one after the other. Run it again; the sync is idempotent.
 - **Another run was still going**: the new one does not start. If nobody launched one by hand, it is hung.
 
-A step that uses Claude is an extra: when `verificar_curados.py` or `oportunidades_pdf.py` exits with an error (a
-rejected key, no credit, the API down), or the check of new accounts ran without Claude, the run goes on, syncs, and
-then sends a warning naming the step. After a synced run, `semanal.sh` also sends two kinds of notice (severity
-`info`): the deadlines that changed in the curated list, and, from the 15th, that the month's "Oportunidades" PDF has
-not appeared.
+Two steps are extras: `verificar_curados.py` and `oportunidades_pdf.py`. When either exits with an error (for the
+first: a rejected key, no credit, the API down), or when the check of new accounts ran without Claude, the run goes
+on, syncs, and then sends a warning naming the step. The warning's text asks about the Anthropic key even when the
+step named is `oportunidades_pdf.py`, which uses none. After a synced run, `semanal.sh` also sends two kinds of notice (severity `info`): the deadlines that
+changed in the curated list, and, from the 15th, that the month's "Oportunidades" PDF has not appeared.
+
+### City "Oportunidades" PDF
+
+`oportunidades_pdf.py` makes no paid request. It tries the addresses past editions had
+(`static.buenosaires.gob.ar/sites/default/files/<upload month>/Oportunidades … .pdf`, uploaded the month before or
+the same month, under a handful of names). A file is downloaded only from `buenosaires.gob.ar` and loaded only when
+its first two pages name that month and year. An edition counts as loaded when its file is in `raw/` and its entries
+are in `arte.db`; a file left behind by a restored run is loaded again. From the 15th, this month's edition still
+missing is a notice (last month's and next month's never are). Then either add the new file name to `directas()` in
+`oportunidades_pdf.py`, or put the PDF in `raw/` with "oportunidades", the month and the year in its name: the next
+run loads it. A file in `raw/` from which no entry could be read is also a notice, on any day. A fallback that asked Claude to search the city's site ran on
+2026-11-11 and 12, never found an edition the addresses had missed, and was removed.
 
 ### Steps that use Claude
 
-All three call the Anthropic API through the official SDK (`ia.py`; model `claude-opus-5-5`, or the one named in
+The owner's rule for the Anthropic key (2026-11-12): it is for scheduled, recurring steps whose prompt and rules were
+already settled by hand. Research, one-off searches and trial runs are not done with it, and no scheduled step uses
+the API's web search. Rehearse a change in a copy of the folder that holds `arte.db`, `raw/ia.db` and `raw/cache`
+(the paths are fixed next to the code). Answers are reused only for programmes whose fetched texts are identical;
+anything else is a paid request. A change to the instructions has no effect on programmes already read unless
+`VERSION` is bumped in `verificar_curados.py`, which re-reads every programme once; so does a change of `ARTE_MODELO`.
+
+Two steps call the Anthropic API through the official SDK (`ia.py`; model `claude-opus-5-5`, or the one named in
 `ARTE_MODELO`), and each run prints its token use and an estimated cost in the log. What was already asked is kept in
 `raw/ia.db`, apart from `arte.db`, so a failed run that restores the database does not pay for the same answers again.
 
-- **Curated dates** (`verificar_curados.py`). For each curated programme it fetches the official page and up to four
-  links of the same site that look like the call page, and asks what they state about the current or next call. The
-  answer is used only when the sentence it quotes is literally on a fetched page and contains the deadline's day
-  number. It is dropped when a date does not parse or is years away, when the call is restricted to people an artist
-  living in Argentina cannot be, or when it belongs to another programme of the same organiser. A deadline read by
-  hand (`OVERRIDES` in `programas_curados.py`) or announced on Instagram (`convocatorias_ig.py`) is never replaced by
-  an older edition or by a page without dates, and a hand-written note stays while its date does. A past deadline is
-  kept when the page only announces the next call; a future date that only the regexes of `programas_curados.py`
-  picked is dropped when the reading finds no date. The row's description becomes "Leído en la página: …" with the
-  quoted sentence. A page that did not change since the last reading is not sent again (`ia_curados` in
-  `raw/ia.db`); its last answer is re-applied, which also restores the dates after a by-hand run of
-  `programas_curados.py`. A full first reading of the 65 programmes cost about USD 3 on 2026-11-11; later runs only
-  pay for pages whose text changed. After five answers lost in a row the step stops with an error.
-- **City PDF** (`oportunidades_pdf.py`). It first tries the addresses past editions had
-  (`static.buenosaires.gob.ar/sites/default/files/<upload month>/Oportunidades … .pdf`), which costs nothing. Only if
-  this month's edition is still missing from the 10th on does Claude search the city's site for it (the notice
-  about a missing edition starts on the 15th, and next month's edition is looked for from the 20th). A file is downloaded
-  only from `buenosaires.gob.ar` and loaded only when its first two pages name that month and year. An edition counts
-  as loaded when its file is in `raw/` and its entries are in `arte.db`; a file left behind by a restored run is
-  loaded again.
+- **Curated dates** (`verificar_curados.py`). For each curated programme it fetches the official page, up to four
+  links of the same site that look like the call page, and up to two PDFs of the same site whose address reads like
+  the call's rules ("bases", "reglamento"…), because many Argentine prizes state their dates only there (Premio
+  Klemm). Links are found whether or not the `href` is quoted. It asks what those texts state about the current or
+  next call. The answer is used only when the sentence it quotes is literally in a fetched text and contains the
+  deadline's day number, clock times aside ("hasta las 23.59 h del 4/09" backs day 4, not 23). It is dropped when a
+  date does not parse or is more than 800 days away, when the call is restricted to residents or nationals of
+  another country (a call limited to one Argentine province or city is kept; the summary says the limit), or when it
+  belongs to another programme of the same organiser. A deadline read by hand (`OVERRIDES` in `programas_curados.py`) or announced on Instagram
+  (`convocatorias_ig.py`) is never replaced by an older edition or by a page without dates, and a hand-written note
+  stays while its date does. A past deadline is kept when the page only announces the next call. A date that only
+  the regexes of `programas_curados.py` picked is dropped when the pages describe the call without a deadline; when
+  they say nothing about applying, or the call is another programme's or closed to artists in Argentina, it is
+  dropped if it is still ahead and the row is not protected. The row's description becomes "Leído en la página: …"
+  or "Leído en las bases (PDF): …" with the quoted sentence; when the quote comes from the PDF the card's link stays
+  where it was, never on the PDF. When the row's usual window (`frecuencia` in `arte.db`) is a bare "anual", the row
+  is not protected, and the reading gave an opening day and a deadline at most 200 days apart, the window becomes
+  "anual; convocatoria ~jun–sep (según la edición 2026)", which the app can project. Rules PDFs are read with the
+  system's `pdftotext` (first 40 pages, up to 15 MB); one that cannot be read is skipped and counted in the log
+  line "PDF de bases que no se pudieron leer", which is how a programme silently loses its dates. A programme none
+  of whose texts changed since the last reading is not sent again (`ia_curados` in `raw/ia.db`); its last answer is
+  re-applied, which also restores the dates after a by-hand run of `programas_curados.py`. When one text changes,
+  all of that programme's texts are sent. A full first reading of the 75 programmes costs USD 3 to 4 (estimated from
+  the readings of 2026-11-11 and 12: about USD 2.90 for 59 programmes); later runs only pay for the programmes where
+  some text changed. After five answers lost in a row the step stops with an error.
 - **New artists** (`revisar` in `enrich.py`, weekly pass only). The accounts the pass meets for the first time are
   sent in batches with the caption they appeared in. An account already in the map under another name is linked
   without asking; an account judged in the last 90 days is not asked about again (`ia_cuentas` in `raw/ia.db`). The
   log lists who was approved and who was discarded. Without Claude (no key, an error) the pass does what it did
   before, a caption that names someone adds them and a tag alone adds nobody, and the run ends with a warning. On
-  2026-11-11 it approved 97 of 403 new accounts.
+  2026-11-11 it approved 84 of 403 new accounts.
 
 The first run of each day also keeps a dated copy of the database, `logs/arte-YYYY-MM-DD.db`, deleted after 35 days by
 a later passing run, which also deletes cache files older than 75 days. To go back to one, with no run in progress:
@@ -181,10 +205,16 @@ Known limits:
   could not tell from the caption are discarded and not reconsidered for 90 days. Artists added before 2026-11-11
   were never reviewed this way, so a few are not people ("Los Vencedores"). The by-hand pass (`enrich.py ig`) still
   adds every tagged account as an artist, about one non-artist in four: review its result before a synced run.
-- Curated programmes whose site does not answer from the VPS are not re-read (six on 2026-11-11, UTDT, Premio Itaú
-  and Salón Nacional among them; each run's log lists them), and about half of the pages say nothing about applying,
-  so those rows keep their hand-read or regex-read dates. Programmes announced only on Instagram (Manglar) still
-  depend on `OVERRIDES`.
+- Curated programmes whose site does not answer from the VPS are not re-read (three on 2026-11-12: Premio Itaú, HISK
+  and FLORA), nor is one whose only address is an Instagram profile (Beca Constelaciones); each run's log lists them
+  under "sin página". And about half of the pages say nothing about applying,
+  so those rows keep their hand-read dates or none. Programmes announced only on Instagram (Manglar) still depend on
+  `OVERRIDES`.
+- Many curated addresses are the page of one edition (ten on 2026-11-12, named in the comment above `L` in
+  `programas_curados.py`; seven of them among the ten programmes added that day): each has to be replaced by hand
+  when the next edition gets its own page, and nothing warns when one goes stale.
+- The same programme can exist twice, once curated and once from another source under a longer name (Premio Klemm
+  and the entry of the city's "Oportunidades" PDF, "Premio Federico Jorge Klemm a las Artes Visuales"): nothing merges them.
 - The regexes of `programas_curados.py` only recognise dates in 2026 and 2027.
 - A venue's Instagram handle is whatever a crawler found. `calidad.py` removes a directory's or the city's account
   from the venues it was pinned on (`web.NO_IG`; the directory's own node keeps it, `DUENOS`) and the handles read by
@@ -199,14 +229,14 @@ Known limits:
   other folder (the owner's Mac has the code and an old `arte.db`) would then overwrite production with stale data.
 - Code goes up with `./deploy_vps.sh` (rsync without `--delete`; it never copies the database or `raw/`, and installs
   no packages: the venv was built by hand with scrapling[fetchers], curl_cffi, psycopg2-binary, pypdf, requests,
-  anthropic).
+  anthropic; `requirements.txt` in the pipeline repo lists them. The system package `poppler-utils` gives `pdftotext`).
 
 ```bash
 ssh personal-vps 'cd /root/projects/escena-arte/logs && tail -20 "$(ls -t semanal-*.log | head -1)"'   # last run
 ssh personal-vps '/root/projects/escena-arte/semanal.sh'              # Thursday's run now (listing sites, sync programs)
 ssh personal-vps '/root/projects/escena-arte/semanal.sh ig'           # Monday's run now (adds Instagram; paid HikerAPI requests)
 ssh personal-vps '/root/projects/escena-arte/semanal.sh --sin-sync'   # read sources only, no sync
-# every one of these also runs the Claude steps, which are paid when a page changed or a new account appears
+# every one of these also runs the Claude steps, which are paid when a page or rules PDF changed or a new account appears
 ssh personal-vps 'crontab -l | grep escena-arte'                      # the schedule
 ```
 
