@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -14,19 +14,23 @@ interface ActivityEntry {
   rel?: string;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   if (!supabase) {
     return NextResponse.json([]);
   }
+  // ?industries=green,arte limits the feed to the nodes of those clusters (lib/clusters.ts); without it, everything
+  const industries = (request.nextUrl.searchParams.get("industries") || "").split(",").map((s) => s.trim()).filter(Boolean);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const scoped = <Q extends { overlaps: (column: string, value: string[]) => any }>(q: Q): Q => (industries.length ? q.overlaps("industries", industries) : q);
 
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(); // last 7 days
   const entries: ActivityEntry[] = [];
 
   try {
     // 1. New nodes added recently
-    const { data: newNodes } = await supabase
+    const { data: newNodes } = await scoped(supabase
       .from("nodes")
-      .select("nombre, cluster, source, created_at")
+      .select("nombre, cluster, source, created_at"))
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(15);
@@ -44,9 +48,9 @@ export async function GET() {
     }
 
     // 2. Recently verified nodes
-    const { data: verifiedNodes } = await supabase
+    const { data: verifiedNodes } = await scoped(supabase
       .from("nodes")
-      .select("nombre, cluster, verification_date, verification_status")
+      .select("nombre, cluster, verification_date, verification_status"))
       .eq("verified", true)
       .not("verification_date", "is", null)
       .gte("verification_date", since)
@@ -65,9 +69,9 @@ export async function GET() {
     }
 
     // 3. Recently failed/grey nodes
-    const { data: failedNodes } = await supabase
+    const { data: failedNodes } = await scoped(supabase
       .from("nodes")
-      .select("nombre, cluster, verification_status, updated_at")
+      .select("nombre, cluster, verification_status, updated_at"))
       .in("verification_status", ["failed", "grey"])
       .gte("updated_at", since)
       .order("updated_at", { ascending: false })
@@ -90,7 +94,7 @@ export async function GET() {
       .select("source_id, target_id, relationship_type, source, created_at")
       .gte("created_at", since)
       .order("created_at", { ascending: false })
-      .limit(10);
+      .limit(industries.length ? 80 : 10);   // scoped: read more, keep the ten whose two ends are in the cluster
 
     if (newEdges && newEdges.length > 0) {
       // Resolve node IDs to names
@@ -99,9 +103,9 @@ export async function GET() {
         nodeIds.add(e.source_id);
         nodeIds.add(e.target_id);
       }
-      const { data: nodeNames } = await supabase
+      const { data: nodeNames } = await scoped(supabase
         .from("nodes")
-        .select("id, nombre")
+        .select("id, nombre"))
         .in("id", Array.from(nodeIds));
 
       const idToName: Record<string, string> = {};
@@ -109,7 +113,8 @@ export async function GET() {
         for (const n of nodeNames) idToName[n.id] = n.nombre;
       }
 
-      for (const e of newEdges) {
+      const shown = industries.length ? newEdges.filter((e) => idToName[e.source_id] && idToName[e.target_id]).slice(0, 10) : newEdges;
+      for (const e of shown) {
         entries.push({
           type: "edge_added",
           name: `${idToName[e.source_id] || "?"} - ${idToName[e.target_id] || "?"}`,

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { CLUSTERS, newestCluster } from "../clusters";
+import { CLUSTERS, edgeTypesToShow, mapClusters, newestCluster } from "../clusters";
 
 describe("clusters registry", () => {
   it("is the one place an industry or event is added: unique slugs, a link, copy in both languages", () => {
@@ -21,6 +21,21 @@ describe("clusters registry", () => {
     expect(CLUSTERS.map((c) => c.slug)).toEqual(["green-panorama", "arte", "blockchainrio-2026"]);
     expect(CLUSTERS.find((c) => c.slug === "arte")?.href).toBe("/arte");
     expect(newestCluster()?.slug).toBe("arte");   // the banner announces the newest one
+  });
+});
+
+describe("the live map on the landing", () => {
+  // 2026-11-12: unfiltered, the map loaded the first 2,000 nodes of every industry and showed artists under "Green Industry"
+  it("shows one cluster at a time: each cluster names the industry tags of its nodes", () => {
+    expect(mapClusters().map((c) => [c.slug, c.industries])).toEqual([["green-panorama", ["green"]], ["arte", ["arte"]], ["blockchainrio-2026", ["blockchain"]]]);
+    for (const c of mapClusters()) expect(c.mapTitle.en.length).toBeGreaterThan(5);
+  });
+
+  it("keeps the green map's relationship filter, and shows every relationship of a cluster with another vocabulary", () => {
+    const green = ["funds", "partners_with", "client_of", "portfolio", "regulates"];
+    expect(edgeTypesToShow(["funds", "regulates", "mentions"], green)).toEqual(green);
+    expect(edgeTypesToShow(["expuso_en", "curo", "organiza"], green)).toEqual(["expuso_en", "curo", "organiza"]);
+    expect(edgeTypesToShow([], green)).toEqual(green);
   });
 });
 

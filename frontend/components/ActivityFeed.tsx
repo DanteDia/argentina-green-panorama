@@ -17,6 +17,7 @@ interface ActivityEntry {
 interface ActivityFeedProps {
   lang: "es" | "en";
   onNodeClick?: (name: string) => void;
+  industries?: string[];   // show only the activity of these clusters (the `industries` tags of their nodes)
 }
 
 const t = {
@@ -66,23 +67,24 @@ function timeAgo(dateStr: string, lang: "es" | "en"): string {
   return `${days}d`;
 }
 
-export default function ActivityFeed({ lang, onNodeClick }: ActivityFeedProps) {
+export default function ActivityFeed({ lang, onNodeClick, industries }: ActivityFeedProps) {
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [expanded, setExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const labels = t[lang];
   const relLabels = REL_LABELS[lang];
 
+  const scope = (industries || []).join(",");   // the feed of one cluster of the map
   const fetchActivity = useCallback(async () => {
     try {
-      const res = await fetch("/api/activity");
+      const res = await fetch(scope ? `/api/activity?industries=${encodeURIComponent(scope)}` : "/api/activity");
       if (res.ok) {
         const data = await res.json();
         setEntries(data);
       }
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     fetchActivity();
