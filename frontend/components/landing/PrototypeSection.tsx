@@ -38,7 +38,8 @@ export default function PrototypeSection({
   const scope = industries ?? active?.industries;
   const scopeKey = (scope || []).join(",");
   const mapTitle = industries ? (choices.find((c) => c.industries.join(",") === scopeKey)?.mapTitle[lang] ?? "") : active?.mapTitle[lang] ?? "";
-  const usesGreenEdges = [...activeEdgeTypes].every((t) => GREEN_EDGE_TYPES.includes(t));
+  // a host-fixed scope (the embed) keeps the original relationship filter; a chosen cluster brings its own or none
+  const edgeFilter = industries ? GREEN_EDGE_TYPES : active?.edgeFilter;
   const pickCluster = (slug: string) => {
     if (slug === clusterSlug) return;
     setLoading(true); setSelectedNode(null); setSelectedCluster(null); setSearchQuery(""); setHighlightedNodes([]);
@@ -55,11 +56,13 @@ export default function PrototypeSection({
         if (!current) return;
         setNodes(data.nodes);
         setEdges(data.edges);
-        setActiveEdgeTypes(new Set(edgeTypesToShow(data.edges.map((e) => e.relationship_type), GREEN_EDGE_TYPES)));
+        setActiveEdgeTypes(new Set(edgeTypesToShow(data.edges.map((e) => e.relationship_type), edgeFilter)));
       })
       .catch(console.error)
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
+    // edgeFilter belongs to the chosen cluster, which scopeKey already identifies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scopeKey]);
 
   const clusters = [...new Set(nodes.map((n) => n.cluster))].sort();
@@ -401,7 +404,7 @@ export default function PrototypeSection({
                 if (isMobile) setSidebarOpen(false);
               }}
               activeEdgeTypes={activeEdgeTypes}
-              onToggleEdgeType={usesGreenEdges ? handleToggleEdgeType : undefined}
+              onToggleEdgeType={edgeFilter ? handleToggleEdgeType : undefined}
               industries={scope}
             />
           </div>

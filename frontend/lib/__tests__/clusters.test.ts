@@ -26,16 +26,21 @@ describe("clusters registry", () => {
 
 describe("the live map on the landing", () => {
   // 2026-11-12: unfiltered, the map loaded the first 2,000 nodes of every industry and showed artists under "Green Industry"
-  it("shows one cluster at a time: each cluster names the industry tags of its nodes", () => {
-    expect(mapClusters().map((c) => [c.slug, c.industries])).toEqual([["green-panorama", ["green"]], ["arte", ["arte"]], ["blockchainrio-2026", ["blockchain"]]]);
+  it("shows one cluster at a time: each cluster in the toggle names the industry tag of its nodes", () => {
+    expect(mapClusters().map((c) => [c.slug, c.industries])).toEqual([["green-panorama", ["green"]], ["blockchainrio-2026", ["blockchain"]]]);
     for (const c of mapClusters()) expect(c.mapTitle.en.length).toBeGreaterThan(5);
   });
 
-  it("keeps the green map's relationship filter, and shows every relationship of a cluster with another vocabulary", () => {
-    const green = ["funds", "partners_with", "client_of", "portfolio", "regulates"];
-    expect(edgeTypesToShow(["funds", "regulates", "mentions"], green)).toEqual(green);
-    expect(edgeTypesToShow(["expuso_en", "curo", "organiza"], green)).toEqual(["expuso_en", "curo", "organiza"]);
-    expect(edgeTypesToShow([], green)).toEqual(green);
+  it("leaves Arte out of the toggle until the map can load it: 6,000 actors came back as 1,000 nodes without a single link", () => {
+    const arte = CLUSTERS.find((c) => c.slug === "arte")!;
+    expect(arte.industries).toEqual(["arte"]);   // its tag is still known, for scoping
+    expect(arte.liveMap).toBe(false);
+  });
+
+  it("draws the relationships each cluster asks for: the green map's five, and all of an event's (sponsors, ecosystem)", () => {
+    const green = CLUSTERS.find((c) => c.slug === "green-panorama")!.edgeFilter;
+    expect(edgeTypesToShow(["funds", "partners_with", "mentions"], green)).toEqual(["funds", "partners_with", "client_of", "portfolio", "regulates"]);
+    expect(edgeTypesToShow(["sponsors", "partners_with", "ecosystem", "sponsors"], undefined)).toEqual(["sponsors", "partners_with", "ecosystem"]);
   });
 });
 

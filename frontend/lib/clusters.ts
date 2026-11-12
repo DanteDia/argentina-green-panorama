@@ -19,7 +19,9 @@ export interface Cluster {
   audience: Copy;    // who it is built for
   cta: Copy;
   stat?: Copy;       // a short figure shown on its card
-  industries?: string[];   // the `industries` tag(s) of its nodes; without it the cluster is not in the live map's toggle
+  industries?: string[];   // the `industries` tag(s) of its nodes
+  liveMap?: boolean;       // offered in the landing's live map toggle (needs `industries`, and a graph /api/graph can load whole)
+  edgeFilter?: string[];   // relationship types the live map draws for this cluster; without it, every type it has
   mapTitle: Copy;    // the live map's heading for this cluster
   since: string;     // YYYY-MM-DD it joined the map; the newest one is announced in the banner
 }
@@ -37,6 +39,8 @@ const INDUSTRIES: Cluster[] = [
     audience: { es: "Para quienes trabajan o invierten en el sector", en: "For people working or investing in the sector" },
     cta: { es: "Explorar el mapa", en: "Explore the map" },
     industries: ["green"],
+    liveMap: true,
+    edgeFilter: ["funds", "partners_with", "client_of", "portfolio", "regulates"],
     mapTitle: { es: "Sector verde · Argentina", en: "Green industry · Argentina" },
     since: "2026-03-21",
   },
@@ -53,6 +57,9 @@ const INDUSTRIES: Cluster[] = [
     cta: { es: "Abrir Arte", en: "Open Arte" },
     stat: { es: "6.000+ actores", en: "6,000+ actors" },
     industries: ["arte"],
+    // not in the live map yet: /api/graph returns at most 1,000 nodes and reads edges unscoped, so for Arte's 6,000 actors
+    // and 13,000 links it gave the oldest 1,000 nodes (mostly media outlets) and no edges (measured 2026-11-12)
+    liveMap: false,
     mapTitle: { es: "Escena del arte · Argentina", en: "Art scene · Argentina" },
     since: "2026-10-30",
   },
@@ -71,6 +78,7 @@ const EVENTS: Cluster[] = Object.entries(EVENT_CONFIGS).map(([slug, e]) => ({
   cta: { es: "Ver mapa", en: "View map" },
   stat: slug === "blockchainrio-2026" ? { es: "65+ actores", en: "65+ actors" } : undefined,
   industries: e.industries,
+  liveMap: !!e.industries?.length,
   mapTitle: { es: `${e.name} · ${e.location}`, en: `${e.name} · ${e.location}` },
   since: "2026-04-17",   // the day the events registry was added; an event has no date of its own there
 }));
@@ -79,11 +87,10 @@ export const CLUSTERS: Cluster[] = [...INDUSTRIES, ...EVENTS];
 
 /** The clusters the landing's live map can show, in registry order; the first one is shown first. */
 export const mapClusters = (): (Cluster & { industries: string[] })[] =>
-  CLUSTERS.filter((c): c is Cluster & { industries: string[] } => !!c.industries?.length);
+  CLUSTERS.filter((c): c is Cluster & { industries: string[] } => !!c.liveMap && !!c.industries?.length);
 
-/** Relationship types the map draws: the defaults when the loaded edges use that vocabulary (the green map's filter),
- *  otherwise every type present, so a cluster with other relationship names is not drawn without its edges. */
-export const edgeTypesToShow = (present: string[], defaults: string[]): string[] =>
-  !present.length || present.some((t) => defaults.includes(t)) ? defaults : [...new Set(present)];
+/** Relationship types the live map draws for a cluster: its own filter when it has one, otherwise every type present
+ *  (an event's "sponsors" would be hidden by the green map's list). */
+export const edgeTypesToShow = (present: string[], filter?: string[]): string[] => filter ?? [...new Set(present)];
 
 export const newestCluster = (): Cluster | undefined => [...CLUSTERS].sort((a, b) => b.since.localeCompare(a.since))[0];
