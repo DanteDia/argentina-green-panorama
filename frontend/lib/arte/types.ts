@@ -118,6 +118,8 @@ export interface Program {
   verified_at: string | null;
   /** What the stay costs, only when the listing states it: the artist is paid, pays nothing, or pays a low fee. */
   cost: ProgramCost | null;
+  /** When the tool first listed it (set on insert, kept by the sync's upsert): what the weekly mail calls new. */
+  first_seen_at?: string | null;
 }
 
 export type ProgramCost = "funded" | "free" | "low";
