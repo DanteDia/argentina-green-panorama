@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createAdminSupabase } from "@/lib/arte/supabase-server";
 import { validUnsubscribe } from "@/lib/arte/digest";
 
-const signing = () => process.env.SUPABASE_JWT_SECRET || process.env.CRON_SECRET || "";
+const signing = () => process.env.SUPABASE_JWT_SECRET || "";   // the same secret the mail signs with
 
 export async function setDigest(form: FormData) {
   const u = String(form.get("u") || ""), t = String(form.get("t") || ""), off = form.get("off") === "1";
