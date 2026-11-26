@@ -5,17 +5,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { supabase } from "@/lib/supabase";
-import { decodeEntities, PUBLIC_CATEGORIES, publicLink, redactContacts, relationSections, SHOWN_TYPES, UUID } from "@/lib/arte/escena";
+import { contactLines, decodeEntities, PUBLIC_CATEGORIES, publicLink, redactContacts, relationSections, SHOWN_TYPES, UUID } from "@/lib/arte/escena";
 import { formatDay } from "@/lib/arte/dates";
 import { claimNode } from "../actions";
 
-type Node = { id: string; nombre: string; cluster: string | null; categoria: string | null; link: string | null; descripcion: string | null };
+type Node = { id: string; nombre: string; cluster: string | null; categoria: string | null; link: string | null; descripcion: string | null; contact_info: Record<string, unknown> | null };
 const SHOW = 60;
 
 // one query per request even though metadata and the page both ask
 const load = cache(async (id: string) => {
   if (!supabase || !UUID.test(id)) return null;
-  const { data } = await supabase.from("nodes").select("id, nombre, cluster, categoria, link, descripcion")
+  const { data } = await supabase.from("nodes").select("id, nombre, cluster, categoria, link, descripcion, contact_info")
     .eq("id", id).overlaps("industries", ["arte"]).in("categoria", PUBLIC_CATEGORIES).maybeSingle();
   return data as Node | null;
 });
@@ -40,6 +40,7 @@ export default async function Ficha({ params, searchParams }: { params: Promise<
   for (const { data } of pages) for (const r of data || []) names.set(r.id, decodeEntities(r.nombre));
   const sections = relationSections(id, edges || [], names);
   const site = publicLink(n.link);
+  const contacto = contactLines(n.contact_info);
   const nombre = decodeEntities(n.nombre);
   const bio = n.descripcion ? redactContacts(decodeEntities(n.descripcion)) : "";
 
@@ -53,6 +54,19 @@ export default async function Ficha({ params, searchParams }: { params: Promise<
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-4">
+          {contacto.length > 0 && (
+            <section className="card p-5">
+              <h2 className="eyebrow">Contacto</h2>
+              <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+                {contacto.map((c, i) => (
+                  <div key={i} className="contents">
+                    <dt className="muted">{c.label}</dt>
+                    <dd className="min-w-0 break-words">{c.href ? <a href={c.href} className="underline" rel="nofollow">{c.text}</a> : c.text}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          )}
           {sections.map((s) => (
             <section key={s.title} className="card p-5">
               <h2 className="eyebrow">{s.title} · {s.items.length}</h2>

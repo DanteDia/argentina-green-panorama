@@ -78,3 +78,21 @@ export const redactContacts = (s: string) =>
 /** A node's link is shown only when it is a web address, never a WhatsApp, phone or mail link. */
 export const publicLink = (link: string | null) =>
   link && /^https?:\/\//i.test(link) && !/wa\.me|whatsapp\.com/i.test(link) ? link : null;
+
+export type ContactLine = { label: string; text: string; href?: string };
+
+/** The contact block of a public page (shown by the owner's decision of 2026-11-26, to help the map grow). */
+export function contactLines(c: Record<string, unknown> | null | undefined): ContactLine[] {
+  if (!c) return [];
+  const str = (k: string) => (typeof c[k] === "string" ? (c[k] as string).trim() : "");
+  const out: ContactLine[] = [];
+  const mails = [...new Set([str("email"), ...str("emails").split(/[,;\s]+/), str("ig_email")].map((m) => m.toLowerCase()).filter((m) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m)))];
+  for (const m of mails) out.push({ label: "Mail", text: m, href: `mailto:${m}` });
+  const tel = str("telefono");
+  if (tel) out.push({ label: "Teléfono", text: tel, href: `tel:${tel.replace(/[^\d+]/g, "")}` });
+  const ig = str("instagram").replace(/^@/, "");
+  if (/^[\w.]{1,30}$/.test(ig)) out.push({ label: "Instagram", text: `@${ig}`, href: `https://instagram.com/${ig}` });
+  if (str("direccion")) out.push({ label: "Dirección", text: str("direccion") });
+  if (str("horarios")) out.push({ label: "Horarios", text: str("horarios") });
+  return out;
+}

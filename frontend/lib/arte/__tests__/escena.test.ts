@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeEntities, publicLink, redactContacts, relationSections, SHOWN_TYPES } from "../escena";
+import { contactLines, decodeEntities, publicLink, redactContacts, relationSections, SHOWN_TYPES } from "../escena";
 
 const e = (source_id: string, target_id: string, relationship_type: string) => ({ source_id, target_id, relationship_type });
 const names = new Map([["gal", "Galería Sur"], ["a1", "Ana"], ["a2", "Beto"], ["mus", "Museo Norte"], ["ig", "Cuenta"]]);
@@ -61,5 +61,24 @@ describe("what a public page never shows", () => {
     for (const t of ["en_coleccion_de", "adquirio_obra_de", "vendio_obra_de", "dono_a", "miembro_comite_adquisiciones", "es_titular_de"]) {
       expect(SHOWN_TYPES).not.toContain(t);
     }
+  });
+});
+
+describe("contactLines", () => {
+  it("lists a space's contact data with links, one line each, without repeats or internal ids", () => {
+    expect(contactLines({ email: "info@sur.com", emails: "info@sur.com, prensa@sur.com", telefono: "4555-1234", instagram: "galeriasur",
+                          direccion: "Defensa 1200, CABA", horarios: "Mar a sáb 14 a 19", ig_pk: "123", ig_bio: "bio" })).toEqual([
+      { label: "Mail", text: "info@sur.com", href: "mailto:info@sur.com" },
+      { label: "Mail", text: "prensa@sur.com", href: "mailto:prensa@sur.com" },
+      { label: "Teléfono", text: "4555-1234", href: "tel:45551234" },
+      { label: "Instagram", text: "@galeriasur", href: "https://instagram.com/galeriasur" },
+      { label: "Dirección", text: "Defensa 1200, CABA" },
+      { label: "Horarios", text: "Mar a sáb 14 a 19" },
+    ]);
+  });
+
+  it("is empty with no contact data", () => {
+    expect(contactLines(null)).toEqual([]);
+    expect(contactLines({ ig_pk: "1" })).toEqual([]);
   });
 });
