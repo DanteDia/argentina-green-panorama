@@ -1,5 +1,5 @@
 // Public page of one space or person in the art scene map: who they work with, recent shows, and a way for the people
-// behind it to join as co-authors of the map. Contact data in the map is never shown here.
+// behind it to join as co-authors of the map, with the contact data they publish and a way to ask for its removal.
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -65,6 +65,7 @@ export default async function Ficha({ params, searchParams }: { params: Promise<
                   </div>
                 ))}
               </dl>
+              <p className="mt-3 text-xs muted">¿Son tus datos? <Link href={`/arte/datos?ficha=${n.id}#pedido`} className="underline">Pedí que los corrijamos o los saquemos</Link>.</p>
             </section>
           )}
           {sections.map((s) => (
@@ -111,6 +112,7 @@ export default async function Ficha({ params, searchParams }: { params: Promise<
               <button className="btn w-full justify-center bg-white text-[var(--accent)]">Sumarme</button>
             </form>
           )}
+          <Link href={`/arte/datos?ficha=${n.id}#pedido`} className="mt-4 block text-xs underline opacity-80">¿Preferís que saquemos esta ficha?</Link>
         </aside>
       </div>
     </main>

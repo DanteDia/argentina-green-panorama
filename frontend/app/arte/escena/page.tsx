@@ -1,4 +1,4 @@
-// Public: the art scene map as a directory. No account needed; only what the map shows publicly (no contact data).
+// Public: the art scene map as a directory. No account needed; only what the map shows publicly.
 import type { Metadata } from "next";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -62,6 +62,7 @@ export default async function Escena({ searchParams }: { searchParams: Promise<R
         ))}
       </ul>
       {!rows.length && <p className="card mt-6 p-6 muted">No encontramos a nadie con ese nombre. Probá con una parte del nombre.</p>}
+      <p className="mt-10 text-sm muted">¿Aparecés en el mapa? <Link href="/arte/datos" className="underline">Cómo armamos estos datos y cómo pedir una corrección o una baja</Link>.</p>
     </main>
   );
 }

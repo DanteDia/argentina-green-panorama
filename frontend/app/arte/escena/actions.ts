@@ -20,3 +20,23 @@ export async function claimNode(form: FormData) {
   if (error) { console.error("[arte/escena] claim", error.message); redirect(`${back}?error=1#sumate`); }
   redirect(`${back}?gracias=1#sumate`);
 }
+
+const KINDS = ["Corregir datos", "Sacar mis datos de contacto", "Borrar la ficha"];
+
+/** A correction or removal request (Ley 25.326) from /arte/datos. Stored in arte_claims with the kind as its role. */
+export async function requestCorrection(form: FormData) {
+  const raw = txt(form.get("node_id"), 40);
+  const id = UUID.test(raw) ? raw : null;
+  const back = `/arte/datos?${id ? `ficha=${id}&` : ""}`;
+  if (txt(form.get("website"), 10)) redirect(`${back}gracias=1#pedido`);
+  const email = txt(form.get("email"), 200);
+  const name = txt(form.get("name"), 200);
+  const message = txt(form.get("message"), 2000);
+  if (!name || !message || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) redirect(`${back}falta=1#pedido`);
+  const kind = txt(form.get("kind"), 60);
+  const { error } = await createAdminSupabase().from("arte_claims").insert({
+    node_id: id, name, email, role: KINDS.includes(kind) ? kind : KINDS[0], message,
+  });
+  if (error) { console.error("[arte/datos] request", error.message); redirect(`${back}error=1#pedido`); }
+  redirect(`${back}gracias=1#pedido`);
+}
