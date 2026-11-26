@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ArteProfile, CvItem } from "./types";
 import type { DiscoverCtx, GEdge, GNode } from "./discover";
+import { createAdminSupabase } from "./supabase-server";
 
 type NodeRow = { id: string; nombre: string; categoria: string; descripcion: string | null; link: string | null; contact_info: { email?: string; instagram?: string; ig_bio?: string } | null };
 const COLS = "id, nombre, categoria, descripcion, link, contact_info";
@@ -21,6 +22,9 @@ async function edgesTouching(supabase: SupabaseClient, ids: string[]): Promise<G
 
 /** The artist's neighborhood of the scene graph: who they follow, where they showed, two hops out, and theme matches. */
 export async function loadDiscover(supabase: SupabaseClient, userId: string, profile: ArteProfile, cv: CvItem[]): Promise<DiscoverCtx & { rows: Map<string, NodeRow> }> {
+  // contact_info (for invitations) is server-only: node rows come through the admin client; the artist's own follows
+  // still go through their client and its row policies
+  const graph = createAdminSupabase();
   const { data: f } = await supabase.from("arte_follows").select("node_id").eq("user_id", userId).not("node_id", "is", null);
   const follows = [...new Set((f || []).map((x) => x.node_id as string))];
 
@@ -34,13 +38,13 @@ export async function loadDiscover(supabase: SupabaseClient, userId: string, pro
 
   const themes = profile.themes.filter((t) => t.length >= 4).slice(0, 6);
   const { data: themed } = themes.length
-    ? await supabase.from("nodes").select(COLS).contains("industries", ["arte"]).or(themes.map((t) => `descripcion.ilike.%${t.replace(/[,()%]/g, "")}%`).join(",")).limit(400)
+    ? await graph.from("nodes").select(COLS).contains("industries", ["arte"]).or(themes.map((t) => `descripcion.ilike.%${t.replace(/[,()%]/g, "")}%`).join(",")).limit(400)
     : { data: [] };
 
   const rows = new Map<string, NodeRow>(((themed || []) as NodeRow[]).map((n) => [n.id, { ...n, descripcion: unescape(n.descripcion) }]));
   const ids = [...new Set([...seeds, ...near, ...hop2.flatMap((e) => [e.source, e.target])])].filter((id) => !rows.has(id)).slice(0, 4000);
   for (const c of chunks(ids)) {
-    const { data } = await supabase.from("nodes").select(COLS).in("id", c);
+    const { data } = await graph.from("nodes").select(COLS).in("id", c);
     for (const n of (data || []) as NodeRow[]) rows.set(n.id, { ...n, descripcion: unescape(n.descripcion) });
   }
   // The artist's own CV venues count as "theirs" even without a graph node: attach them to a virtual self

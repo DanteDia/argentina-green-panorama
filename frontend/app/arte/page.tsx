@@ -30,6 +30,7 @@ export default function ArteLanding() {
         </p>
         <div className="mt-8 flex gap-3">
           <Link href="/arte/login" className="btn btn-primary">Crear mi perfil</Link>
+          <Link href="/arte/escena" className="btn btn-ghost">Explorar la escena</Link>
           <a href="#como" className="btn btn-ghost">Cómo funciona</a>
         </div>
       </section>

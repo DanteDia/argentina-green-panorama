@@ -2,10 +2,14 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GraphNodeImport } from "./import-map";
 import { escapeLike } from "./guards";
+import { createAdminSupabase } from "./supabase-server";
 
 const norm = (s: string) => s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 
-export async function findGraphNode(supabase: SupabaseClient, handle: string | null, name: string | null): Promise<GraphNodeImport | null> {
+// Reads contact_info, which only the server may read (closed to the public and signed-in keys): the admin client, not
+// the caller's, whatever is passed in.
+export async function findGraphNode(_caller: SupabaseClient, handle: string | null, name: string | null): Promise<GraphNodeImport | null> {
+  const supabase = createAdminSupabase();
   let node = null as null | { id: string; nombre: string; descripcion: string | null; link: string | null; extra: Record<string, string>; contact_info: Record<string, string> };
   if (handle) {
     const { data } = await supabase.from("nodes").select("id, nombre, descripcion, link, extra, contact_info")
