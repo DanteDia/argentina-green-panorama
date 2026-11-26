@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerSupabase } from "@/lib/arte/supabase-server";
+import { createAdminSupabase, createServerSupabase } from "@/lib/arte/supabase-server";
 import { fetchIgFollowing, fetchIgProfile } from "@/lib/arte/hiker";
 import { followRows } from "@/lib/arte/import-map";
 
@@ -34,7 +34,8 @@ export async function POST(request: NextRequest) {
   const handles = [...new Set(follows.map((f) => f.username.toLowerCase()))];
   const byHandle = new Map<string, string>();
   for (let i = 0; i < handles.length; i += 100) {   // short lists keep the query string well under URL limits
-    const { data, error } = await supabase.from("nodes").select("id, contact_info").contains("industries", ["arte"]).in("contact_info->>instagram", handles.slice(i, i + 100));
+    // contact_info is server-only: matched with the admin client, only ids and handles leave this route
+    const { data, error } = await createAdminSupabase().from("nodes").select("id, contact_info").contains("industries", ["arte"]).in("contact_info->>instagram", handles.slice(i, i + 100));
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });   // storing unmatched rows would hide them from Descubrir for good
     for (const m of data || []) byHandle.set(String((m.contact_info as Record<string, string>).instagram).toLowerCase(), m.id);
   }

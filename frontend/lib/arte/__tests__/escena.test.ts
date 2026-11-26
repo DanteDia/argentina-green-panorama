@@ -43,6 +43,11 @@ describe("what a public page never shows", () => {
       .toBe("Artista visual. Contacto: · WhatsApp · · Buenos Aires");
     expect(redactContacts("Pintura y grabado desde 2010")).toBe("Pintura y grabado desde 2010");
     expect(redactContacts("Residencias 2010 - 2020, taller 2019-2023")).toBe("Residencias 2010 - 2020, taller 2019-2023");
+    expect(redactContacts("Abierto 1998-2024 - 2025")).toBe("Abierto 1998-2024 - 2025");
+    for (const bio of ["Escribinos 4555-1234", "Tel:4555-1234", "tel 4555 1234 int 12", "(011) 4555-1234", "11 5555 1234 / 4555 1234",
+                       "info [at] galeria.com", "info(at)galeria.com", "IG:@galeria", "Seguinos (@galeria)"]) {
+      expect(redactContacts(bio)).not.toMatch(/\d{4}|galeria/);
+    }
   });
 
   it("shows a link only when it is a web address", () => {

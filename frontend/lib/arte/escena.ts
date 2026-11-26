@@ -61,11 +61,18 @@ export const decodeEntities = (s: string) =>
 export const PUBLIC_CATEGORIES = ["galeria", "museo", "espacio", "centro_cultural", "fundacion", "institucion", "feria", "escuela", "artista", "curador"];
 
 /** Bios scraped from Instagram carry emails, phones and WhatsApp links: never on a public page. */
+const YEAR = /^(19|20)\d\d$/;
+// a run of 8+ digits is a phone unless every group in it is a year ("1998-2024 - 2025")
+const phone = (m: string) => {
+  const groups = m.match(/\d+/g) || [];
+  return groups.join("").length >= 8 && !groups.every((g) => YEAR.test(g)) ? "" : m;
+};
 export const redactContacts = (s: string) =>
-  s.replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "")
+  s.replace(/[\w.+-]+\s*(?:@|[[(]\s*(?:at|arroba)\s*[\])])\s*[\w-]+\.[\w.-]+/gi, "")
     .replace(/(?:https?:\/\/)?(?:wa\.me|api\.whatsapp\.com|chat\.whatsapp\.com)\S*/gi, "")
-    .replace(/\+?\d[\d\s().-]{6,}\d/g, (m) => (m.replace(/\D/g, "").length >= 10 ? "" : m))   // a phone has 10+ digits; "2010 - 2020" stays
-    .replace(/(^|\s)@[\w.]{2,}/g, "$1")
+    .replace(/\+?\(?\d[\d\s().\/-]{5,}\d(?:\s*(?:int\.?|interno)\s*\d+)?/gi, phone)
+    .replace(/(^|[^\w@])@[\w.]{2,}/g, "$1")
+    .replace(/\(\s*\)|\[\s*\]/g, "")
     .replace(/\s{2,}/g, " ").replace(/\s+([,.;:])/g, "$1").trim();
 
 /** A node's link is shown only when it is a web address, never a WhatsApp, phone or mail link. */
