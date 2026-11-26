@@ -73,7 +73,8 @@ export async function GET(request: Request) {
   const list = profiles || [];
   for (let i = 0; i < list.length; i += POOL) {
     if (Date.now() - started > BUDGET_MS) { out.left = list.length - i; console.warn("[arte/resumen] out of time,", out.left, "left for next run"); break; }
-    await Promise.all(list.slice(i, i + POOL).map(one));
+    // one artist's error (network, bad data) is logged and counted; it never stops the others
+    await Promise.all(list.slice(i, i + POOL).map((p) => one(p).catch((e) => { out.failed++; console.error("[arte/resumen]", p.user_id, e); })));
   }
   return NextResponse.json(out);
 }
