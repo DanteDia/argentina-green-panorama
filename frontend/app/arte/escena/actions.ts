@@ -1,7 +1,7 @@
 "use server";
 import { redirect } from "next/navigation";
 import { createAdminSupabase } from "@/lib/arte/supabase-server";
-import { PUBLIC_CATEGORIES, UUID } from "@/lib/arte/escena";
+import { decodeEntities, PUBLIC_CATEGORIES, UUID } from "@/lib/arte/escena";
 
 const txt = (v: FormDataEntryValue | null, max: number) => String(v ?? "").trim().slice(0, max);
 
@@ -44,7 +44,7 @@ export async function requestCorrection(form: FormData) {
     node_id: id, name, email, role: `datos:${kind}`, message: lookup ? `[ficha ${raw}] ${message}` : message,
   });
   if (error) { console.error("[arte/datos] request", error.message); redirect(`${back}error=1#pedido`); }
-  await notifyTeam(`Pedido de datos: ${kind}${node ? ` (${node.nombre})` : ""}`, `${name} <${email}>\n${kind}\n${id ? `https://industriesverified.com/arte/escena/${id}\n` : ""}\n${message}`);
+  await notifyTeam(`Pedido de datos: ${kind}${node ? ` (${decodeEntities(node.nombre)})` : ""}`, `${name} <${email}>\n${kind}\n${id ? `${(process.env.NEXT_PUBLIC_SITE_URL || "https://industriesverified.com").replace(/\/$/, "")}/arte/escena/${id}\n` : ""}\n${message}`);
   redirect(`${back}gracias=1#pedido`);
 }
 
@@ -57,7 +57,8 @@ async function notifyTeam(subject: string, text: string) {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: "Arte <arte@industriesverified.com>", to, subject, text }),
+      body: JSON.stringify({ from: process.env.ARTE_MAIL_FROM || "Arte · IndustriesVerified <arte@industriesverified.com>", to, subject, text }),
+      signal: AbortSignal.timeout(5000),   // a hung mail never keeps the visitor waiting: the request is already saved
     });
     if (!res.ok) console.error("[arte/datos] Resend", res.status, await res.text());
   } catch (e) { console.error("[arte/datos] Resend", e); }   // the request is saved; a failed mail never loses it

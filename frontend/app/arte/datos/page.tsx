@@ -50,8 +50,8 @@ export default async function Datos({ searchParams }: { searchParams: Promise<Re
             <select name="kind" className="input" aria-label="Qué querés pedir" defaultValue="Corregir datos">
               <option>Corregir datos</option><option>Sacar mis datos de contacto</option><option>Borrar la ficha</option><option>Saber qué datos tienen de mí</option>
             </select>
-            <textarea name="message" rows={4} required placeholder={node ? "Contanos qué hay que cambiar." : "Contanos qué ficha es y qué hay que cambiar."}
-              className="input" aria-label="Qué hay que cambiar" />
+            <textarea name="message" rows={4} required placeholder={node ? "Contanos qué necesitás." : "Contanos qué ficha es y qué necesitás."}
+              className="input" aria-label="Qué necesitás" />
             {sp.falta && <p className="text-sm">Falta tu nombre, un mail válido o el pedido.</p>}
             {sp.error && <p className="text-sm">No pudimos guardarlo, probá de nuevo.</p>}
             <button className="btn btn-primary">Enviar pedido</button>
