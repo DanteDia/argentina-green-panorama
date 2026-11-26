@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { escapeLike } from "@/lib/arte/guards";
+import { decodeEntities } from "@/lib/arte/escena";
 
 export const metadata: Metadata = {
   title: "La escena del arte argentino · Arte",
@@ -53,7 +54,7 @@ export default async function Escena({ searchParams }: { searchParams: Promise<R
         {rows.map((r) => (
           <li key={r.id}>
             <Link href={`/arte/escena/${r.id}`} className="card block p-4 transition hover:shadow-sm">
-              <p className="font-medium leading-snug">{r.nombre}</p>
+              <p className="font-medium leading-snug">{decodeEntities(r.nombre)}</p>
               {r.cluster && <p className="mt-1 text-sm muted">{r.cluster}</p>}
             </Link>
           </li>

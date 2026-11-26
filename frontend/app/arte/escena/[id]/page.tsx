@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { relationSections, SHOWN_TYPES, UUID } from "@/lib/arte/escena";
+import { decodeEntities, relationSections, SHOWN_TYPES, UUID } from "@/lib/arte/escena";
 import { formatDay } from "@/lib/arte/dates";
 import { claimNode } from "../actions";
 
@@ -35,7 +35,7 @@ export default async function Ficha({ params, searchParams }: { params: Promise<
   const names = new Map<string, string>();
   for (let i = 0; i < ids.length; i += 100) {   // a long id list overflows the URL
     const { data } = await supabase.from("nodes").select("id, nombre").in("id", ids.slice(i, i + 100)).overlaps("industries", ["arte"]);
-    for (const r of data || []) names.set(r.id, r.nombre);
+    for (const r of data || []) names.set(r.id, decodeEntities(r.nombre));
   }
   const sections = relationSections(id, edges || [], names);
   const site = n.link && /^https?:\/\//.test(n.link) ? n.link : null;
@@ -44,8 +44,8 @@ export default async function Ficha({ params, searchParams }: { params: Promise<
     <main className="mx-auto max-w-5xl px-5 py-10 md:py-16">
       <Link href="/arte/escena" className="eyebrow">← La escena</Link>
       <p className="mt-8 text-sm muted">{n.cluster}</p>
-      <h1 className="display mt-1 text-4xl md:text-5xl">{n.nombre}</h1>
-      {n.descripcion && <p className="mt-3 max-w-2xl text-[var(--ink-2)]">{n.descripcion}</p>}
+      <h1 className="display mt-1 text-4xl md:text-5xl">{decodeEntities(n.nombre)}</h1>
+      {n.descripcion && <p className="mt-3 max-w-2xl text-[var(--ink-2)]">{decodeEntities(n.descripcion)}</p>}
       {site && <a href={site} target="_blank" rel="noopener noreferrer nofollow" className="mt-3 inline-block text-sm underline">{site.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}</a>}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">

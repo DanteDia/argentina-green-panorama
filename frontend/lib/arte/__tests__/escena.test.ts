@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { relationSections } from "../escena";
+import { decodeEntities, relationSections } from "../escena";
 
 const e = (source_id: string, target_id: string, relationship_type: string) => ({ source_id, target_id, relationship_type });
 const names = new Map([["gal", "Galería Sur"], ["a1", "Ana"], ["a2", "Beto"], ["mus", "Museo Norte"], ["ig", "Cuenta"]]);
@@ -27,5 +27,12 @@ describe("relationSections", () => {
   it("orders sections by how much they say about a space: who it represents and shows first", () => {
     const s = relationSections("gal", [e("gal", "mus", "participo_en"), e("a1", "gal", "expuso_en"), e("a2", "gal", "representado_por")], names);
     expect(s.map((x) => x.title)).toEqual(["Representa a", "Expusieron acá", "Participó en"]);
+  });
+});
+
+describe("decodeEntities", () => {
+  it("turns the HTML entities scraped descriptions carry back into letters", () => {
+    expect(decodeEntities("contempor&#225;neo, librer&#237;a &amp; caf&eacute; &#x27;sur&#x27;")).toBe("contemporáneo, librería & café 'sur'");
+    expect(decodeEntities("sin entidades")).toBe("sin entidades");
   });
 });
