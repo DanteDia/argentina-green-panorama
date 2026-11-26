@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createAdminSupabase } from "@/lib/arte/supabase-server";
 import { CV_KINDS } from "@/lib/arte/cv";
-import { ownPaths } from "@/lib/arte/guards";
+import { escapeLike, ownPaths } from "@/lib/arte/guards";
+import { PUBLIC_CATEGORIES } from "@/lib/arte/escena";
 import type { ArteProfile, ArteWork, CvItem } from "@/lib/arte/types";
 
 // Public portfolio: read with the service role, but only rows the artist marked public.
@@ -11,17 +12,21 @@ async function load(slug: string) {
   const { data: p } = await db.from("arte_profiles").select("*").eq("slug", slug).eq("portfolio_public", true).maybeSingle();
   if (!p) return null;
   const profile = p as ArteProfile;
-  const [w, c, t] = await Promise.all([
+  const handle = (profile.instagram || "").replace(/^@/, "").trim();
+  const [w, c, t, scene] = await Promise.all([
     db.from("arte_works").select("*").eq("user_id", profile.user_id).eq("public", true).order("sort"),
     db.from("arte_cv_items").select("*").eq("user_id", profile.user_id).eq("confirmed", true).order("year", { ascending: false }),
     db.from("arte_texts").select("kind, body").eq("user_id", profile.user_id).is("application_id", null).eq("lang", "es").in("kind", ["bio_long", "statement"]).order("version", { ascending: false }),
+    // the artist's entry in the scene map, matched by Instagram handle only: a name can belong to someone else
+    handle ? db.from("nodes").select("id").overlaps("industries", ["arte"]).in("categoria", PUBLIC_CATEGORIES)
+      .ilike("contact_info->>instagram", escapeLike(handle)).limit(1) : Promise.resolve({ data: [] as { id: string }[] }),
   ]);
   const works = (w.data || []) as ArteWork[];
   const paths = ownPaths(works.map((x) => x.images[0]).filter(Boolean), profile.user_id);
   const { data: signed } = paths.length ? await db.storage.from("arte-private").createSignedUrls(paths, 3600) : { data: [] };
   const url = new Map((signed || []).map((s) => [s.path, s.signedUrl]));
   const text = (k: string) => (t.data || []).find((x) => x.kind === k)?.body ?? "";
-  return { profile, works: works.map((x) => ({ ...x, src: url.get(x.images[0]) ?? null })), cv: (c.data || []) as CvItem[], bio: text("bio_long"), statement: text("statement") };
+  return { profile, works: works.map((x) => ({ ...x, src: url.get(x.images[0]) ?? null })), cv: (c.data || []) as CvItem[], bio: text("bio_long"), statement: text("statement"), sceneId: scene.data?.[0]?.id ?? null };
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -43,6 +48,7 @@ export default async function Portfolio({ params }: { params: Promise<{ slug: st
         {p.website && <a href={p.website} className="underline" target="_blank" rel="noreferrer">Web</a>}
         {p.instagram && <a href={`https://instagram.com/${p.instagram}`} className="underline" target="_blank" rel="noreferrer">Instagram</a>}
         {p.email_public && <a href={`mailto:${p.email_public}`} className="underline">{p.email_public}</a>}
+        {d.sceneId && <a href={`/arte/escena/${d.sceneId}`} className="underline">Ver en la escena</a>}
       </p>
       {d.statement && <p className="mt-10 max-w-3xl text-lg leading-relaxed text-[var(--ink-2)] whitespace-pre-line">{d.statement}</p>}
       {d.works.length > 0 && (
