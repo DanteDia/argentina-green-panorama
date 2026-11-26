@@ -31,7 +31,7 @@ export default async function Datos({ searchParams }: { searchParams: Promise<Re
           Nunca mostramos coleccionistas ni quién compró o donó obra de quién.
         </p>
         <p>
-          Si una ficha es tuya o habla de vos, podés pedir que corrijamos algo, que saquemos tus datos de contacto o que borremos la ficha
+          Si una ficha es tuya o habla de vos, podés pedir saber qué datos tenemos, que corrijamos algo, que saquemos tus datos de contacto o que borremos la ficha
           entera. Es tu derecho según la Ley 25.326 de Protección de Datos Personales, y lo resolvemos dentro de los 5 días hábiles.
         </p>
       </div>
@@ -48,7 +48,7 @@ export default async function Datos({ searchParams }: { searchParams: Promise<Re
             <input name="name" required placeholder="Tu nombre" className="input" aria-label="Tu nombre" />
             <input name="email" type="email" required placeholder="Tu mail" className="input" aria-label="Tu mail" />
             <select name="kind" className="input" aria-label="Qué querés pedir" defaultValue="Corregir datos">
-              <option>Corregir datos</option><option>Sacar mis datos de contacto</option><option>Borrar la ficha</option>
+              <option>Corregir datos</option><option>Sacar mis datos de contacto</option><option>Borrar la ficha</option><option>Saber qué datos tienen de mí</option>
             </select>
             <textarea name="message" rows={4} required placeholder={node ? "Contanos qué hay que cambiar." : "Contanos qué ficha es y qué hay que cambiar."}
               className="input" aria-label="Qué hay que cambiar" />
