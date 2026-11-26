@@ -77,6 +77,15 @@ describe("contactLines", () => {
     ]);
   });
 
+  it("copes with how scraped fields arrive: lists of phones, URLs, mailto:, arrays and numbers", () => {
+    expect(contactLines({ telefono: "4555-1234 / 4555-5678" })).toEqual([{ label: "Teléfono", text: "4555-1234 / 4555-5678", href: "tel:45551234" }]);
+    expect(contactLines({ telefono: "consultar" })).toEqual([{ label: "Teléfono", text: "consultar" }]);
+    expect(contactLines({ telefono: 1145551234 })).toEqual([{ label: "Teléfono", text: "1145551234", href: "tel:1145551234" }]);
+    expect(contactLines({ instagram: "https://www.instagram.com/galeriasur/" })[0]).toEqual({ label: "Instagram", text: "@galeriasur", href: "https://instagram.com/galeriasur" });
+    expect(contactLines({ email: "mailto:info@sur.com.", emails: ["prensa@sur.com"] }).map((c) => c.text)).toEqual(["info@sur.com", "prensa@sur.com"]);
+    expect(contactLines({ email: "a@b.com?body=hola" })).toEqual([]);
+  });
+
   it("is empty with no contact data", () => {
     expect(contactLines(null)).toEqual([]);
     expect(contactLines({ ig_pk: "1" })).toEqual([]);
