@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createAdminSupabase } from "@/lib/arte/supabase-server";
 import { CV_KINDS } from "@/lib/arte/cv";
-import { escapeLike, ownPaths } from "@/lib/arte/guards";
+import { ownPaths } from "@/lib/arte/guards";
 import { PUBLIC_CATEGORIES } from "@/lib/arte/escena";
 import type { ArteProfile, ArteWork, CvItem } from "@/lib/arte/types";
 
@@ -12,14 +12,17 @@ async function load(slug: string) {
   const { data: p } = await db.from("arte_profiles").select("*").eq("slug", slug).eq("portfolio_public", true).maybeSingle();
   if (!p) return null;
   const profile = p as ArteProfile;
-  const handle = (profile.instagram || "").replace(/^@/, "").trim();
+  // the artist's entry in the scene map: the one onboarding linked, else the one with their Instagram handle (never by name)
+  const handle = (profile.instagram || "").trim().replace(/^(https?:\/\/)?(www\.)?instagram\.com\//i, "").replace(/^@/, "").replace(/\/.*$/, "");
+  const nodes = () => db.from("nodes").select("id").overlaps("industries", ["arte"]).in("categoria", PUBLIC_CATEGORIES);
   const [w, c, t, scene] = await Promise.all([
     db.from("arte_works").select("*").eq("user_id", profile.user_id).eq("public", true).order("sort"),
     db.from("arte_cv_items").select("*").eq("user_id", profile.user_id).eq("confirmed", true).order("year", { ascending: false }),
     db.from("arte_texts").select("kind, body").eq("user_id", profile.user_id).is("application_id", null).eq("lang", "es").in("kind", ["bio_long", "statement"]).order("version", { ascending: false }),
-    // the artist's entry in the scene map, matched by Instagram handle only: a name can belong to someone else
-    handle ? db.from("nodes").select("id").overlaps("industries", ["arte"]).in("categoria", PUBLIC_CATEGORIES)
-      .ilike("contact_info->>instagram", escapeLike(handle)).limit(1) : Promise.resolve({ data: [] as { id: string }[] }),
+    profile.node_id ? nodes().eq("id", profile.node_id).limit(1)
+      : /^[\w.]{1,30}$/.test(handle)   // also keeps PostgREST's * wildcard out
+        ? nodes().or(`contact_info->>instagram.ilike.${handle},contact_info->>instagram.ilike.@${handle},contact_info->>instagram.ilike.*instagram.com/${handle},contact_info->>instagram.ilike.*instagram.com/${handle}/*`).limit(1)
+        : Promise.resolve({ data: [] as { id: string }[] }),
   ]);
   const works = (w.data || []) as ArteWork[];
   const paths = ownPaths(works.map((x) => x.images[0]).filter(Boolean), profile.user_id);
