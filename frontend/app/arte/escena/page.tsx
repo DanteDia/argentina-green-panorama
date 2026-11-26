@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { escapeLike } from "@/lib/arte/guards";
-import { decodeEntities } from "@/lib/arte/escena";
+import { decodeEntities, PUBLIC_CATEGORIES } from "@/lib/arte/escena";
 
 export const metadata: Metadata = {
   title: "La escena del arte argentino · Arte",
@@ -21,7 +21,8 @@ export default async function Escena({ searchParams }: { searchParams: Promise<R
   let rows: Row[] = [];
   if (supabase) {
     let query = supabase.from("nodes").select("id, nombre, cluster, categoria").overlaps("industries", ["arte"]);
-    query = sp.tipo ? query.eq("categoria", sp.tipo) : q ? query : query.in("categoria", SPACES);
+    const tipo = sp.tipo && PUBLIC_CATEGORIES.includes(sp.tipo) ? sp.tipo : null;
+    query = tipo ? query.eq("categoria", tipo) : query.in("categoria", q ? PUBLIC_CATEGORIES : SPACES);
     if (q) query = query.ilike("nombre", `%${escapeLike(q)}%`);
     const { data } = await query.order("followers", { ascending: false, nullsFirst: false }).limit(q ? 60 : 48);
     rows = (data as Row[]) || [];

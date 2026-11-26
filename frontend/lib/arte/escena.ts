@@ -4,11 +4,11 @@
 type Edge = { source_id: string; target_id: string; relationship_type: string };
 export type Section = { title: string; items: { id: string; name: string }[] };
 
+// Who buys, owns or donates whose work is private: collectors and those relationships are never on a public page.
 // [type, title when the page's node is the source, title when it is the target], in the order they are shown
 const TYPES: [string, string, string][] = [
   ["representado_por", "Representado por", "Representa a"],
   ["expuso_en", "Expuso en", "Expusieron acá"],
-  ["en_coleccion_de", "En la colección de", "Obra en su colección"],
   ["premiado_en", "Premiado en", "Premiados"],
   ["curo", "Curó", "Curado por"],
   ["organiza", "Organiza", "Organizado por"],
@@ -20,12 +20,7 @@ const TYPES: [string, string, string][] = [
   ["formado_en", "Se formó en", "Se formaron acá"],
   ["trabaja_en", "Trabaja en", "Trabajan acá"],
   ["miembro_de", "Miembro de", "Miembros"],
-  ["miembro_comite_adquisiciones", "Comité de adquisiciones de", "Comité de adquisiciones"],
   ["jurado_de", "Jurado de", "Jurados"],
-  ["adquirio_obra_de", "Adquirió obra de", "Coleccionistas de su obra"],
-  ["vendio_obra_de", "Vendió obra de", "Vendieron su obra"],
-  ["dono_a", "Donó a", "Donaciones de"],
-  ["es_titular_de", "Titular de", "Titular"],
   ["colabora_con", "Colabora con", "Colabora con"],
   ["escribio_sobre", "Escribió sobre", "Escribieron sobre"],
 ];
@@ -61,3 +56,18 @@ const NAMED: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', a
 export const decodeEntities = (s: string) =>
   s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e: string) =>
     e[0] === "#" ? String.fromCodePoint(e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : Number(e.slice(1))) : NAMED[e.toLowerCase()] ?? m);
+
+/** The categories with a public page: spaces, artists and curators. Collectors, media and private people are left out. */
+export const PUBLIC_CATEGORIES = ["galeria", "museo", "espacio", "centro_cultural", "fundacion", "institucion", "feria", "escuela", "artista", "curador"];
+
+/** Bios scraped from Instagram carry emails, phones and WhatsApp links: never on a public page. */
+export const redactContacts = (s: string) =>
+  s.replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "")
+    .replace(/(?:https?:\/\/)?(?:wa\.me|api\.whatsapp\.com|chat\.whatsapp\.com)\S*/gi, "")
+    .replace(/\+?\d[\d\s().-]{6,}\d/g, (m) => (m.replace(/\D/g, "").length >= 10 ? "" : m))   // a phone has 10+ digits; "2010 - 2020" stays
+    .replace(/(^|\s)@[\w.]{2,}/g, "$1")
+    .replace(/\s{2,}/g, " ").replace(/\s+([,.;:])/g, "$1").trim();
+
+/** A node's link is shown only when it is a web address, never a WhatsApp, phone or mail link. */
+export const publicLink = (link: string | null) =>
+  link && /^https?:\/\//i.test(link) && !/wa\.me|whatsapp\.com/i.test(link) ? link : null;

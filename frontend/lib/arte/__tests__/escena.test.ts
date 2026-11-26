@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeEntities, relationSections } from "../escena";
+import { decodeEntities, publicLink, redactContacts, relationSections, SHOWN_TYPES } from "../escena";
 
 const e = (source_id: string, target_id: string, relationship_type: string) => ({ source_id, target_id, relationship_type });
 const names = new Map([["gal", "Galería Sur"], ["a1", "Ana"], ["a2", "Beto"], ["mus", "Museo Norte"], ["ig", "Cuenta"]]);
@@ -34,5 +34,27 @@ describe("decodeEntities", () => {
   it("turns the HTML entities scraped descriptions carry back into letters", () => {
     expect(decodeEntities("contempor&#225;neo, librer&#237;a &amp; caf&eacute; &#x27;sur&#x27;")).toBe("contemporáneo, librería & café 'sur'");
     expect(decodeEntities("sin entidades")).toBe("sin entidades");
+  });
+});
+
+describe("what a public page never shows", () => {
+  it("removes emails, phones, WhatsApp links and handles from a bio", () => {
+    expect(redactContacts("Artista visual. Contacto: ana.perez@gmail.com · WhatsApp +54 9 11 5555-1234 · wa.me/5491155551234 · @ana.arte. Buenos Aires"))
+      .toBe("Artista visual. Contacto: · WhatsApp · · Buenos Aires");
+    expect(redactContacts("Pintura y grabado desde 2010")).toBe("Pintura y grabado desde 2010");
+    expect(redactContacts("Residencias 2010 - 2020, taller 2019-2023")).toBe("Residencias 2010 - 2020, taller 2019-2023");
+  });
+
+  it("shows a link only when it is a web address", () => {
+    expect(publicLink("https://proa.org")).toBe("https://proa.org");
+    expect(publicLink("https://wa.me/5491155551234")).toBeNull();
+    expect(publicLink("mailto:a@b.com")).toBeNull();
+    expect(publicLink(null)).toBeNull();
+  });
+
+  it("leaves out who buys, owns or donates whose work", () => {
+    for (const t of ["en_coleccion_de", "adquirio_obra_de", "vendio_obra_de", "dono_a", "miembro_comite_adquisiciones", "es_titular_de"]) {
+      expect(SHOWN_TYPES).not.toContain(t);
+    }
   });
 });
