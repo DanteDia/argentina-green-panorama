@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contactLines, decodeEntities, publicLink, redactContacts, relationSections, SHOWN_TYPES } from "../escena";
+import { contactLines, decodeEntities, igHandle, publicLink, redactContacts, relationSections, SHOWN_TYPES } from "../escena";
 
 const e = (source_id: string, target_id: string, relationship_type: string) => ({ source_id, target_id, relationship_type });
 const names = new Map([["gal", "Galería Sur"], ["a1", "Ana"], ["a2", "Beto"], ["mus", "Museo Norte"], ["ig", "Cuenta"]]);
@@ -61,6 +61,16 @@ describe("what a public page never shows", () => {
     for (const t of ["en_coleccion_de", "adquirio_obra_de", "vendio_obra_de", "dono_a", "miembro_comite_adquisiciones", "es_titular_de"]) {
       expect(SHOWN_TYPES).not.toContain(t);
     }
+  });
+});
+
+describe("igHandle", () => {
+  it("reads a handle however it was typed or scraped, and nothing else", () => {
+    for (const v of ["ana_luz", "@Ana_Luz", "https://www.instagram.com/ana_luz/", "instagram.com/ana_luz?igsh=abc", "m.instagram.com/ana_luz", " @ana_luz "]) {
+      expect(igHandle(v)).toBe("ana_luz");
+    }
+    expect(igHandle("ana.luz")).not.toBe(igHandle("ana_luz"));
+    for (const v of ["", "*", "a*", "ana luz", "a,b", "https://example.com/ana", null, 12]) expect(igHandle(v)).toBe("");
   });
 });
 

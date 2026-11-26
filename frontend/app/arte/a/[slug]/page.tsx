@@ -2,9 +2,21 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createAdminSupabase } from "@/lib/arte/supabase-server";
 import { CV_KINDS } from "@/lib/arte/cv";
-import { ownPaths } from "@/lib/arte/guards";
-import { PUBLIC_CATEGORIES } from "@/lib/arte/escena";
+import { escapeLike, ownPaths } from "@/lib/arte/guards";
+import { igHandle, PUBLIC_CATEGORIES } from "@/lib/arte/escena";
 import type { ArteProfile, ArteWork, CvItem } from "@/lib/arte/types";
+
+/** The artist's entry in the scene map, only when its Instagram is exactly theirs: never by name, never a namesake.
+ *  node_id (set at onboarding, possibly by name, and writable by the artist) is trusted only under the same check. */
+async function sceneEntry(db: ReturnType<typeof createAdminSupabase>, profile: ArteProfile): Promise<string | null> {
+  const handle = igHandle(profile.instagram);
+  if (!handle) return null;
+  const q = db.from("nodes").select("id, ig:contact_info->>instagram").overlaps("industries", ["arte"]).in("categoria", PUBLIC_CATEGORIES);
+  const { data } = await (profile.node_id ? q.eq("id", profile.node_id) : q.ilike("contact_info->>instagram", `%${escapeLike(handle)}%`).limit(20));
+  const hits = (data || []).filter((n) => igHandle(n.ig) === handle);
+  if (hits.length === 1) return hits[0].id;
+  return profile.node_id && !hits.length ? sceneEntry(db, { ...profile, node_id: null }) : null;   // two entries with one handle: no guess
+}
 
 // Public portfolio: read with the service role, but only rows the artist marked public.
 async function load(slug: string) {
@@ -12,24 +24,18 @@ async function load(slug: string) {
   const { data: p } = await db.from("arte_profiles").select("*").eq("slug", slug).eq("portfolio_public", true).maybeSingle();
   if (!p) return null;
   const profile = p as ArteProfile;
-  // the artist's entry in the scene map: the one onboarding linked, else the one with their Instagram handle (never by name)
-  const handle = (profile.instagram || "").trim().replace(/^(https?:\/\/)?(www\.)?instagram\.com\//i, "").replace(/^@/, "").replace(/\/.*$/, "");
-  const nodes = () => db.from("nodes").select("id").overlaps("industries", ["arte"]).in("categoria", PUBLIC_CATEGORIES);
   const [w, c, t, scene] = await Promise.all([
     db.from("arte_works").select("*").eq("user_id", profile.user_id).eq("public", true).order("sort"),
     db.from("arte_cv_items").select("*").eq("user_id", profile.user_id).eq("confirmed", true).order("year", { ascending: false }),
     db.from("arte_texts").select("kind, body").eq("user_id", profile.user_id).is("application_id", null).eq("lang", "es").in("kind", ["bio_long", "statement"]).order("version", { ascending: false }),
-    profile.node_id ? nodes().eq("id", profile.node_id).limit(1)
-      : /^[\w.]{1,30}$/.test(handle)   // also keeps PostgREST's * wildcard out
-        ? nodes().or(`contact_info->>instagram.ilike.${handle},contact_info->>instagram.ilike.@${handle},contact_info->>instagram.ilike.*instagram.com/${handle},contact_info->>instagram.ilike.*instagram.com/${handle}/*`).limit(1)
-        : Promise.resolve({ data: [] as { id: string }[] }),
+    sceneEntry(db, profile),
   ]);
   const works = (w.data || []) as ArteWork[];
   const paths = ownPaths(works.map((x) => x.images[0]).filter(Boolean), profile.user_id);
   const { data: signed } = paths.length ? await db.storage.from("arte-private").createSignedUrls(paths, 3600) : { data: [] };
   const url = new Map((signed || []).map((s) => [s.path, s.signedUrl]));
   const text = (k: string) => (t.data || []).find((x) => x.kind === k)?.body ?? "";
-  return { profile, works: works.map((x) => ({ ...x, src: url.get(x.images[0]) ?? null })), cv: (c.data || []) as CvItem[], bio: text("bio_long"), statement: text("statement"), sceneId: scene.data?.[0]?.id ?? null };
+  return { profile, works: works.map((x) => ({ ...x, src: url.get(x.images[0]) ?? null })), cv: (c.data || []) as CvItem[], bio: text("bio_long"), statement: text("statement"), sceneId: scene };
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {

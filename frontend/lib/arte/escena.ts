@@ -79,6 +79,12 @@ export const redactContacts = (s: string) =>
 export const publicLink = (link: string | null) =>
   link && /^https?:\/\//i.test(link) && !/wa\.me|whatsapp\.com/i.test(link) ? link : null;
 
+/** An Instagram handle from how it gets typed or scraped (@foo, instagram.com/foo/, a URL with ?igsh=…), or "" when it is not one. */
+export function igHandle(v: unknown): string {
+  const h = String(typeof v === "string" ? v : "").trim().replace(/^(https?:\/\/)?((www|m)\.)?instagram\.com\//i, "").replace(/^@/, "").replace(/[/?#].*$/, "").toLowerCase();
+  return /^[\w.]{1,30}$/.test(h) ? h : "";
+}
+
 export type ContactLine = { label: string; text: string; href?: string };
 
 /** The contact block of a public page (shown by the owner's decision of 2026-11-26, to help the map grow). */
@@ -96,8 +102,8 @@ export function contactLines(c: Record<string, unknown> | null | undefined): Con
     const first = (tel.split(/[\/,;]| y | o /)[0] || "").replace(/[^\d+]/g, "");   // a field may list several numbers
     out.push({ label: "Teléfono", text: tel, ...(first.replace(/\D/g, "").length >= 6 ? { href: `tel:${first}` } : {}) });
   }
-  const ig = str("instagram").replace(/^(https?:\/\/)?(www\.)?instagram\.com\//i, "").replace(/^@/, "").replace(/\/.*$/, "");
-  if (/^[\w.]{1,30}$/.test(ig)) out.push({ label: "Instagram", text: `@${ig}`, href: `https://instagram.com/${ig}` });
+  const ig = igHandle(str("instagram"));
+  if (ig) out.push({ label: "Instagram", text: `@${ig}`, href: `https://instagram.com/${ig}` });
   if (str("direccion")) out.push({ label: "Dirección", text: str("direccion") });
   if (str("horarios")) out.push({ label: "Horarios", text: str("horarios") });
   return out;
